@@ -61,7 +61,7 @@
         <p class="cabeca-galeria__sub">Quem já caminhou por Draevor, nas mesas de hoje e nas antigas. Os que caíram continuam aqui.</p>
       </div>
       <div class="cabeca-galeria__acoes">
-        <button id="botao-mesas-antigas" class="botao botao--leve" type="button" hidden>Mesas antigas</button>
+        <button id="botao-mesas" class="botao botao--leve" type="button" hidden>Mesas</button>
         <button id="botao-novo" class="botao botao--principal botao--brasa" type="button" hidden>+ Personagem</button>
       </div>
       <span class="cabeca-galeria__regua" aria-hidden="true"></span>
@@ -148,7 +148,7 @@
         <fieldset id="grupo-mesas" class="grupo">
           <legend class="campo__rotulo">Mesas</legend>
           <div id="escolha-mesas" class="escolhas"></div>
-          <!-- "+ Mesa antiga": só o administrador. Sem form próprio, porque já está dentro de um. -->
+          <!-- "+ Mesa": só o administrador. Sem form próprio, porque já está dentro de um. -->
           <div id="nova-mesa" class="nova-mesa" hidden>
             <div class="painel__linha painel__linha--sigla">
               <label class="campo">
@@ -247,9 +247,9 @@
     </form>
   </dialog>
 
-  <!-- ============ Mesas antigas (só o administrador; montado pelo personagens.js) ============ -->
+  <!-- ============ Mesas (só o administrador; montado pelo personagens.js) ============ -->
   <dialog id="dialogo-painel" class="dialogo dialogo--largo" aria-labelledby="painel-titulo">
-    <h2 id="painel-titulo" class="dialogo__titulo">Mesas antigas</h2>
+    <h2 id="painel-titulo" class="dialogo__titulo">Mesas</h2>
     <div id="painel-conteudo" class="painel"></div>
     <div class="dialogo__acoes">
       <button id="painel-fechar" class="botao botao--leve" type="button">Fechar</button>

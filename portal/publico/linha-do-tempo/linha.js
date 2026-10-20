@@ -75,8 +75,9 @@ const apiDoServidor = {
   mudarAnoAtual: (ano) => pedir("PUT", "/api/linha/ano-atual", { ano }),
   criarTipo: (tipo) => pedir("POST", "/api/linha/tipos", tipo),
   apagarTipo: (id) => pedir("DELETE", caminhoDe("/api/linha/tipos", id)),
-  salvarMesaAntiga: (mesa) => pedir(mesa.id ? "PUT" : "POST", caminhoDe("/api/linha/mesas-antigas", mesa.id), mesa),
-  apagarMesaAntiga: (id) => pedir("DELETE", caminhoDe("/api/linha/mesas-antigas", id)),
+  // As mesas são as da Administração; aqui mudam só o nome e a cor
+  salvarMesa: (mesa) => pedir(mesa.id ? "PUT" : "POST", caminhoDe("/api/admin/mesas", mesa.id), mesa),
+  apagarMesa: (id) => pedir("DELETE", caminhoDe("/api/admin/mesas", id)),
 };
 
 /* =================================================================
@@ -112,9 +113,9 @@ function exemplosDaPrevia() {
     anoAtual: 366,
     tipos: TIPOS_PADRAO.map((t) => ({ ...t })),
     mesas: [
-      { id: "ode-to-sleep", nome: "Ode to Sleep", cor: "#2e3756" },
-      { id: "remissao", nome: "Remissão do Flagelo Esvanescente", cor: "#5a2a26" },
-      { id: "antiga-1", nome: "Primeira mesa (exemplo)", cor: "#6b6b45", antiga: true },
+      { id: "ode-to-sleep", nome: "Ode to Sleep", cor: "#2e3756", naPaginaMesas: true },
+      { id: "remissao", nome: "Remissão do Flagelo Esvanescente", cor: "#5a2a26", naPaginaMesas: true },
+      { id: "primeira-mesa", nome: "Primeira mesa (exemplo)", cor: "#6b6b45", naPaginaMesas: false },
     ],
     personagens: [
       ...[
@@ -125,8 +126,8 @@ function exemplosDaPrevia() {
         { id: "p5", nome: "Personagem de Comuna", campanha: "remissao" },
         { id: "p6", nome: "Personagem de Neia", campanha: "remissao" },
       ].map((p) => ({ imagem: null, ...p, mesas: [p.campanha] })),
-      // Um NPC cadastrado na página Personagens, de uma mesa antiga
-      { id: "npc-0a1b2c3d", nome: "Ysolde, a Guardiã", imagem: null, mesas: ["antiga-1"] },
+      // Um NPC cadastrado na página Personagens, de uma mesa fora da página Mesas
+      { id: "npc-0a1b2c3d", nome: "Ysolde, a Guardiã", imagem: null, mesas: ["primeira-mesa"] },
     ],
     acontecimentos: [
       ev({
@@ -190,9 +191,9 @@ function exemplosDaPrevia() {
         titulo: "Ruínas encontradas sob o gelo",
         data: { ano: 331, mes: 9 },
         tipo: "descoberta",
-        mesas: ["antiga-1"],
+        mesas: ["primeira-mesa"],
         personagens: ["npc-0a1b2c3d"],
-        descricao: "Exemplo de mesa antiga citada: ela entra só com nome e cor.",
+        descricao: "Exemplo de mesa fora da página Mesas: ela é citada como as outras.",
       }),
       ev({
         id: "e8",
@@ -459,24 +460,33 @@ function criarApiDePrevia() {
       banco.tipos = banco.tipos.filter((t) => t.id !== id);
       return {};
     },
-    async salvarMesaAntiga(mesa) {
+    // Como no servidor/admin.js: a mesa nova fica fora da página Mesas
+    async salvarMesa(mesa) {
       await esperar(160);
       if (!ehAdmin()) throw proibido();
       const nome = String(mesa.nome || "").trim();
-      if (!nome) throw erroComCodigo("Dê um nome à mesa.");
+      if (!nome) throw erroComCodigo("Preencha o campo Nome da mesa.");
       if (mesa.id) {
-        Object.assign(banco.mesas.find((m) => m.id === mesa.id), { nome, cor: mesa.cor });
-      } else {
-        banco.mesas.push({ id: `antiga-${proximoId++}`, nome, cor: mesa.cor, antiga: true });
+        const atual = banco.mesas.find((m) => m.id === mesa.id);
+        if (!atual) throw erroComCodigo("Essa mesa não existe mais.", "nao-encontrado");
+        Object.assign(atual, { nome, cor: mesa.cor });
+        return { ok: true };
       }
-      return {};
+      const id = `mesa-${proximoId++}`;
+      banco.mesas.push({ id, nome, cor: mesa.cor, naPaginaMesas: false });
+      return { mesa: { id } };
     },
-    async apagarMesaAntiga(id) {
+    // Como no servidor: a mesa com personagens do portal fica; as outras saem de quem as cita
+    async apagarMesa(id) {
       await esperar(160);
       if (!ehAdmin()) throw proibido();
+      if (banco.personagens.some((p) => p.campanha === id)) {
+        throw erroComCodigo("Essa mesa ainda tem personagens. Exclua os personagens ou mova para outra mesa antes.");
+      }
       banco.mesas = banco.mesas.filter((m) => m.id !== id);
       for (const ev of banco.acontecimentos) ev.mesas = ev.mesas.filter((m) => m !== id);
-      return {};
+      for (const p of banco.personagens) p.mesas = p.mesas.filter((m) => m !== id);
+      return { ok: true };
     },
   };
 }
@@ -604,17 +614,15 @@ const acontecimentosVisiveis = () => estado.acontecimentos.filter(passaNosFiltro
 function renderizarFiltros() {
   const f = estado.filtros;
 
-  // Mesas: só as que existem; as que sumiram saem do filtro
+  // Mesas: só as que existem, na ordem da lista; as que sumiram saem do filtro
   for (const id of [...f.mesas]) if (!mesaPorId(id)) f.mesas.delete(id);
-  const mesas = [...estado.mesas].sort((a, b) => Number(Boolean(a.antiga)) - Number(Boolean(b.antiga)));
   $("#filtro-mesas").replaceChildren(
-    ...mesas.map((mesa) => {
+    ...estado.mesas.map((mesa) => {
       const chip = criar("button", "etiqueta-mesa", mesa.nome);
       chip.type = "button";
       chip.dataset.id = mesa.id;
       chip.style.setProperty("--cor", corVisivel(mesa.cor));
       chip.setAttribute("aria-pressed", String(f.mesas.has(mesa.id)));
-      if (mesa.antiga) chip.append(criar("small", null, "antiga"));
       chip.addEventListener("click", () => {
         if (f.mesas.has(mesa.id)) f.mesas.delete(mesa.id);
         else f.mesas.add(mesa.id);
@@ -1526,9 +1534,7 @@ function abrirRegistro(ev = null) {
   form.importancia.value = ev?.importancia ?? "comum";
 
   // Citações
-  const mesas = [...estado.mesas]
-    .sort((a, b) => Number(Boolean(a.antiga)) - Number(Boolean(b.antiga)))
-    .map((m) => ({ id: m.id, rotulo: m.nome, cor: m.cor }));
+  const mesas = estado.mesas.map((m) => ({ id: m.id, rotulo: m.nome, cor: m.cor }));
   escolhas($("#escolha-mesas"), mesas, registro.mesas, { comCor: true });
   const personagens = [...estado.personagens]
     .sort((a, b) => nomeDoPersonagem(a).localeCompare(nomeDoPersonagem(b), "pt-BR"))
@@ -1849,20 +1855,27 @@ function abrirTipos() {
   });
 }
 
-function abrirMesasAntigas(emEdicao = null) {
-  abrirPainel("mesas", "Mesas antigas", (raiz) => {
-    raiz.append(criar("p", "painel__texto", "As mesas atuais vêm do portal. Aqui ficam as antigas, só com nome e cor, para poderem ser citadas nos acontecimentos."));
-    const antigas = estado.mesas.filter((m) => m.antiga);
+// Todas as mesas do portal, mas só o nome e a cor; o resto fica na Administração
+function abrirMesas(emEdicao = null) {
+  abrirPainel("mesas", "Mesas", (raiz) => {
+    raiz.append(
+      criar(
+        "p",
+        "painel__texto",
+        "Todas as mesas do portal. Aqui mudam só o nome e a cor. Mundo do Foundry, imagens e a página Mesas ficam em Administração, na aba Mesas.",
+      ),
+    );
     const lista = criar("div", "painel__lista");
-    if (!antigas.length) lista.append(criar("p", "painel__texto", "Nenhuma mesa antiga ainda."));
-    for (const mesa of antigas) {
+    if (!estado.mesas.length) lista.append(criar("p", "painel__texto", "Nenhuma mesa ainda."));
+    for (const mesa of estado.mesas) {
       const citacoes = estado.acontecimentos.filter((a) => a.mesas?.includes(mesa.id)).length;
+      const detalhe = citacoes === 1 ? "Citada em 1 acontecimento" : `Citada em ${citacoes} acontecimentos`;
       const item = criar("div", "painel__item");
       const ponto = criar("span", "ponto-cor");
       ponto.style.setProperty("--cor", corVisivel(mesa.cor));
       const acoes = criar("div", "painel__acoes");
       acoes.append(
-        botao("Alterar", "botao--leve", () => abrirMesasAntigas(mesa)),
+        botao("Alterar", "botao--leve", () => abrirMesas(mesa)),
         botao("Apagar", "botao--leve botao--perigo", async () => {
           const confirmado = await perguntar({
             titulo: "Apagar esta mesa?",
@@ -1873,21 +1886,22 @@ function abrirMesasAntigas(emEdicao = null) {
             cancelar: "Cancelar",
             perigo: true,
           });
-          if (!confirmado) return abrirMesasAntigas();
+          if (!confirmado) return abrirMesas();
           try {
-            await api.apagarMesaAntiga(mesa.id);
+            await api.apagarMesa(mesa.id);
             await recarregar();
             avisoRapido("Mesa apagada.");
           } catch (falha) {
-            avisoRapido(falha.message);
+            // Uma mesa com personagens do portal não sai: o servidor explica
+            await avisarFalha(falha);
           }
-          abrirMesasAntigas();
+          abrirMesas();
         }),
       );
       item.append(
         ponto,
         criar("span", "painel__nome", mesa.nome),
-        criar("span", "painel__detalhe", citacoes === 1 ? "Citada em 1 acontecimento" : `Citada em ${citacoes} acontecimentos`),
+        criar("span", "painel__detalhe", mesa.naPaginaMesas ? `${detalhe} · na página Mesas` : detalhe),
         acoes,
       );
       lista.append(item);
@@ -1903,15 +1917,15 @@ function abrirMesasAntigas(emEdicao = null) {
     salvar.type = "submit";
     const linha = criar("div", "painel__linha");
     linha.append(campoTexto("Nome da mesa", "nome", emEdicao?.nome ?? "", { max: 80 }), campoCor, salvar);
-    form.append(criar("h3", "painel__form-titulo", emEdicao ? `Alterar ${emEdicao.nome}` : "Nova mesa antiga"), linha, erro);
-    if (emEdicao) form.append(botao("Cancelar a alteração", "botao--leve", () => abrirMesasAntigas()));
+    form.append(criar("h3", "painel__form-titulo", emEdicao ? `Alterar ${emEdicao.nome}` : "Nova mesa"), linha, erro);
+    if (emEdicao) form.append(botao("Cancelar a alteração", "botao--leve", () => abrirMesas()));
     form.addEventListener("submit", async (evento) => {
       evento.preventDefault();
       salvar.disabled = true;
       try {
-        await api.salvarMesaAntiga({ id: emEdicao?.id, nome: form.nome.value.trim(), cor: form.cor.value });
+        await api.salvarMesa({ id: emEdicao?.id, nome: form.nome.value.trim(), cor: form.cor.value });
         await recarregar();
-        abrirMesasAntigas();
+        abrirMesas();
         avisoRapido(emEdicao ? "Mesa alterada." : "Mesa adicionada.");
       } catch (falha) {
         erro.textContent = falha.message;
@@ -1932,7 +1946,7 @@ function renderizarAcoes() {
   $("#botao-registrar").hidden = !podeRegistrar();
   const admin = ehAdmin();
   $("#botao-tipos-admin").hidden = !admin;
-  $("#botao-mesas-antigas").hidden = !admin;
+  $("#botao-mesas").hidden = !admin;
   const pendencias = $("#botao-pendencias");
   pendencias.hidden = !admin;
   const quantas = estado.pendencias.length;
@@ -1991,7 +2005,7 @@ function configurarEventos() {
   $("#botao-registrar").addEventListener("click", () => abrirRegistro());
   $("#botao-pendencias").addEventListener("click", abrirPendencias);
   $("#botao-tipos-admin").addEventListener("click", abrirTipos);
-  $("#botao-mesas-antigas").addEventListener("click", () => abrirMesasAntigas());
+  $("#botao-mesas").addEventListener("click", () => abrirMesas());
 
   // Filtros
   $("#botao-filtro-tipos").addEventListener("click", () => alternarPainelTipos());
