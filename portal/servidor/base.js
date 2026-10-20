@@ -155,13 +155,15 @@ const senhaFalsa = () => hashFalso;
    Ganchos entre as partes
    -----------------------------------------------------------------
    Quando uma conta muda de usuário ou é excluída, cada página que
-   guarda usuários de contas acerta os próprios registros. O módulo
-   da página se inscreve aqui; quem muda a conta só avisa.
+   guarda usuários de contas acerta os próprios registros. Quando uma
+   mesa é apagada, cada página tira o id dela de onde a cita. O módulo
+   da página se inscreve aqui; quem muda a conta ou a mesa só avisa.
    ================================================================= */
 
 const ganchos = {
   renomearConta: [], // (usuarioAntigo, usuarioNovo)
   excluirConta: [], // (conta), antes de a conta sair da lista
+  excluirMesa: [], // (id), antes de a mesa sair da lista
 };
 
 /* =================================================================
@@ -499,6 +501,7 @@ function campanhaPublica(c, comLoginDoMestre = false) {
     capa: c.capa || null,
     titulo: c.titulo || null,
     arte: c.arte || null,
+    naPaginaMesas: c.naPaginaMesas !== false,
   };
   if (comLoginDoMestre) {
     publica.mestreUsuario = c.mestreUsuario || "";

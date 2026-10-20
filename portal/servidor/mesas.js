@@ -37,12 +37,15 @@ const {
 const { estadoAtual, mundoExiste, pedirTroca } = require("./foundry");
 const { contarNovidades } = require("./regras");
 
-// Todo mundo vê todas as campanhas que têm personagens, e todos os personagens delas.
+// Só entram as mesas marcadas para a página Mesas, para todo mundo. Delas, todo mundo vê
+// as que têm personagens, e todos os personagens delas (o administrador vê todas).
 // Entrar no mundo continua só com o próprio personagem (o /api/abrir confere isso),
 // e o login do Foundry de cada personagem só vai para o dono dele.
 function dadosDoPortal(conta) {
   const comPersonagens = new Set(dados.personagens.map((p) => p.campanha));
-  const campanhas = dados.campanhas.filter((c) => conta.admin || comPersonagens.has(c.id));
+  const campanhas = dados.campanhas.filter(
+    (c) => c.naPaginaMesas !== false && (conta.admin || comPersonagens.has(c.id)),
+  );
   const visiveis = new Set(campanhas.map((c) => c.id));
   const personagens = dados.personagens
     .filter((p) => visiveis.has(p.campanha))

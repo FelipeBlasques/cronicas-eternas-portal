@@ -20,7 +20,6 @@ const {
   lerFormulario,
   texto,
   semAcentos,
-  REGEX_COR,
   TIPOS_IMAGEM,
   arquivoEnviado,
   guardarImagem,
@@ -48,7 +47,7 @@ const GLIFOS = new Set([
   "lua", "olho", "escudo", "montanha", "sol", "gota", "navio", "torre",
 ]);
 const VISIBILIDADES = new Set(["todos", "revelar", "admin"]);
-const LIMITES_LINHA = { citados: 60, frases: 100, tipos: 60, mesasAntigas: 200 };
+const LIMITES_LINHA = { citados: 60, frases: 100, tipos: 60 };
 
 const chaveDaData = (data) => data.ano * 10000 + (data.mes || 0) * 100 + (data.dia || 0);
 const carimbo = () => new Date().toISOString();
@@ -102,9 +101,36 @@ function garantirLinha() {
     linha.anoAtual = ANO_INICIAL_DA_LINHA;
     mudou = true;
   }
-  for (const lista of ["tipos", "mesasAntigas", "acontecimentos", "pendencias"]) {
+  for (const lista of ["tipos", "acontecimentos", "pendencias"]) {
     if (!Array.isArray(linha[lista])) {
       linha[lista] = [];
+      mudou = true;
+    }
+  }
+  // As mesas antigas viram mesas como as outras, fora da página Mesas. O id fica o mesmo,
+  // para as citações na Linha, nos Personagens e nos Mapas continuarem valendo.
+  if ("mesasAntigas" in linha) {
+    for (const m of Array.isArray(linha.mesasAntigas) ? linha.mesasAntigas : []) {
+      if (dados.campanhas.some((c) => c.id === m.id)) continue;
+      dados.campanhas.push({
+        id: m.id,
+        nome: m.nome,
+        mundo: "",
+        cor: m.cor,
+        naPaginaMesas: false,
+        mestreUsuario: "",
+        mestreSenha: null,
+        capa: null,
+        titulo: null,
+        arte: null,
+      });
+    }
+    delete linha.mesasAntigas;
+    mudou = true;
+  }
+  for (const mesa of dados.campanhas) {
+    if (!("naPaginaMesas" in mesa)) {
+      mesa.naPaginaMesas = true;
       mudou = true;
     }
   }
@@ -130,8 +156,8 @@ function garantirLinha() {
 }
 
 const tiposDaLinha = () => [...TIPOS_PADRAO, ...dados.linha.tipos];
-const idsDasMesas = () => new Set([...dados.campanhas.map((c) => c.id), ...dados.linha.mesasAntigas.map((m) => m.id)]);
-// Os outros personagens (NPCs e de mesas antigas) vêm da página Personagens; os ocultos são só do administrador
+const idsDasMesas = () => new Set(dados.campanhas.map((c) => c.id));
+// Os outros personagens (NPCs e os que não têm conta no portal) vêm da página Personagens; os ocultos são só do administrador
 const outrosVisiveis = (conta) => (dados.outrosPersonagens ?? []).filter((p) => conta.admin || p.visibilidade !== "admin");
 const idsDosPersonagens = (conta) => new Set([...dados.personagens, ...outrosVisiveis(conta)].map((p) => p.id));
 
@@ -268,12 +294,15 @@ function dadosDaLinha(conta) {
 
   // Os jogadores veem as mesas que têm personagens, como na página das mesas, e as citadas na linha
   const comPersonagens = new Set(dados.personagens.map((p) => p.campanha));
-  const mesas = [
-    ...dados.campanhas
-      .filter((c) => cargo !== "jogador" || comPersonagens.has(c.id) || citadas.has(c.id))
-      .map((c) => ({ id: c.id, nome: c.nome, cor: c.cor || "#2e3756", mundo: c.mundo || "" })),
-    ...linha.mesasAntigas.map((m) => ({ id: m.id, nome: m.nome, cor: m.cor, antiga: true })),
-  ];
+  const mesas = dados.campanhas
+    .filter((c) => cargo !== "jogador" || comPersonagens.has(c.id) || citadas.has(c.id))
+    .map((c) => ({
+      id: c.id,
+      nome: c.nome,
+      cor: c.cor || "#2e3756",
+      mundo: c.mundo || "",
+      naPaginaMesas: c.naPaginaMesas !== false,
+    }));
 
   return {
     conta: { usuario: conta.usuario, nome: conta.nome, cargo },
@@ -438,11 +467,6 @@ async function tratarLinha(req, res, rota, metodo, conta) {
     if (recurso === "tipos" && !acao) {
       if (!id && metodo === "POST") return criarTipo(req, res, conta);
       if (id && metodo === "DELETE") return apagarTipo(res, conta, id);
-    }
-    if (recurso === "mesas-antigas" && !acao) {
-      if (!id && metodo === "POST") return salvarMesaAntiga(req, res, conta, null);
-      if (id && metodo === "PUT") return salvarMesaAntiga(req, res, conta, id);
-      if (id && metodo === "DELETE") return apagarMesaAntiga(res, conta, id);
     }
   }
   throw new ErroHttp(404, "Endereço não encontrado.");
@@ -671,48 +695,6 @@ async function apagarTipo(res, conta, id) {
   enviarJson(res, 200, { ok: true });
 }
 
-// Mesas antigas entram só com nome e cor, para poderem ser citadas
-async function salvarMesaAntiga(req, res, conta, id) {
-  exigirAdmin(conta);
-  const corpo = await lerJson(req);
-  const nome = textoOpcional(corpo.nome, "Nome da mesa", 80);
-  if (!nome) throw new ErroHttp(400, "Dê um nome à mesa.");
-  if (typeof corpo.cor !== "string" || !REGEX_COR.test(corpo.cor)) throw new ErroHttp(400, "Escolha uma cor válida.");
-  const cor = corpo.cor.toLowerCase();
-  const linha = dados.linha;
-  // Criar devolve o id, para a página Personagens marcar a mesa nova no formulário
-  let resposta = { ok: true };
-  if (id) {
-    const mesa = linha.mesasAntigas.find((m) => m.id === id);
-    if (!mesa) throw new ErroHttp(404, "Essa mesa não existe mais.", "nao-encontrado");
-    Object.assign(mesa, { nome, cor });
-  } else {
-    if (linha.mesasAntigas.length >= LIMITES_LINHA.mesasAntigas) throw new ErroHttp(400, "Há mesas antigas demais.");
-    const nova = { id: novoId("antiga-", idsDasMesas()), nome, cor };
-    linha.mesasAntigas.push(nova);
-    resposta = { mesa: { id: nova.id } };
-  }
-  await salvarDados();
-  enviarJson(res, id ? 200 : 201, resposta);
-}
-
-// Apagar uma mesa antiga tira também as citações dela e a tira dos outros personagens
-async function apagarMesaAntiga(res, conta, id) {
-  exigirAdmin(conta);
-  const linha = dados.linha;
-  if (!linha.mesasAntigas.some((m) => m.id === id)) throw new ErroHttp(404, "Essa mesa não existe mais.", "nao-encontrado");
-  linha.mesasAntigas = linha.mesasAntigas.filter((m) => m.id !== id);
-  for (const ev of linha.acontecimentos) ev.mesas = ev.mesas.filter((m) => m !== id);
-  for (const p of linha.pendencias) {
-    if (Array.isArray(p.dados?.mesas)) p.dados.mesas = p.dados.mesas.filter((m) => m !== id);
-  }
-  for (const p of dados.outrosPersonagens ?? []) {
-    if (Array.isArray(p.mesas)) p.mesas = p.mesas.filter((m) => m !== id);
-  }
-  await salvarDados();
-  enviarJson(res, 200, { ok: true });
-}
-
 // Quando alguém troca o próprio usuário, os registros dele na linha acompanham
 function renomearNaLinha(antigo, novo) {
   const linha = dados.linha;
@@ -737,8 +719,21 @@ function desligarContaDaLinha(conta) {
   for (const p of linha.pendencias) if (p.por === conta.usuario) Object.assign(p, { por: null, porNome: conta.nome });
 }
 
+// Mesa apagada: sai dos acontecimentos e dos pedidos que a citam
+function tirarMesaDaLinha(id) {
+  const linha = dados.linha;
+  if (!linha) return;
+  for (const ev of linha.acontecimentos) {
+    if (Array.isArray(ev.mesas)) ev.mesas = ev.mesas.filter((m) => m !== id);
+  }
+  for (const p of linha.pendencias) {
+    if (Array.isArray(p.dados?.mesas)) p.dados.mesas = p.dados.mesas.filter((m) => m !== id);
+  }
+}
+
 ganchos.renomearConta.push(renomearNaLinha);
 ganchos.excluirConta.push(desligarContaDaLinha);
+ganchos.excluirMesa.push(tirarMesaDaLinha);
 
 // Os endereços /api/linha/... são desta página. "iniciar" confere os dados ao ligar o portal
 // e devolve true quando precisou mudar alguma coisa. O resto serve à página Personagens.
