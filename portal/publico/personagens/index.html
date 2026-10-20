@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Personagens · Crônicas Eternas</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alegreya:ital,wght@0,400;0,500;0,700;1,400;1,500&family=Grenze+Gotisch:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="../style.css">
+  <link rel="stylesheet" href="personagens.css">
+  <script src="../comum.js" defer></script>
+  <script src="../calendario.js" defer></script>
+  <script src="personagens.js" defer></script>
+</head>
+<body class="com-barra" data-pagina="personagens" data-raiz="../">
+
+  <!-- ============ Cenário: arte de fundo, névoa e cinzas ============ -->
+  <div class="cenario" aria-hidden="true">
+    <div class="cenario__arte"></div>
+    <div class="cenario__nevoa"></div>
+    <canvas id="cinzas" class="cenario__cinzas"></canvas>
+    <div class="cenario__vinheta"></div>
+    <div class="cenario__grao"></div>
+  </div>
+
+  <!-- ============ Desenhos usados pela página ============ -->
+  <svg class="simbolos" aria-hidden="true" focusable="false">
+    <defs>
+      <symbol id="vigia" viewBox="0 0 24 24"><path d="M2.5 12C5.5 7.4 8.6 5.6 12 5.6S18.5 7.4 21.5 12C18.5 16.6 15.4 18.4 12 18.4S5.5 16.6 2.5 12Z"/><circle cx="12" cy="12" r="3.2"/><path d="M12 1.8V3.4M12 20.6V22.2"/></symbol>
+      <symbol id="icone-lupa" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.4 15.4L21 21"/></symbol>
+      <symbol id="icone-oculto" viewBox="0 0 24 24"><path d="M2.5 12C5.5 7.4 8.6 5.6 12 5.6S18.5 7.4 21.5 12C18.5 16.6 15.4 18.4 12 18.4S5.5 16.6 2.5 12ZM4 20L20 4"/></symbol>
+    </defs>
+  </svg>
+
+  <!-- ============ Cabeçalho ============ -->
+  <header id="topo" class="topo">
+    <a class="topo__marca topo__marca--link" href="../">Crônicas Eternas</a>
+
+    <p id="status" class="status" role="status" aria-live="polite">
+      <svg class="status__vigia" aria-hidden="true"><use href="#vigia"/></svg>
+      <span id="status-texto">Consultando o servidor…</span>
+    </p>
+
+    <nav class="topo__conta" aria-label="Sua conta">
+      <span id="nome-conta" class="topo__nome"></span>
+      <span id="cargo-conta" class="topo__cargo" hidden></span>
+      <button id="botao-sair" class="botao botao--leve" type="button">Sair</button>
+    </nav>
+  </header>
+
+  <!-- ============ Barra lateral (montada pelo comum.js) ============ -->
+  <nav class="barra-lateral" aria-label="Páginas do grupo"></nav>
+
+  <!-- ============ A página ============ -->
+  <main id="pagina" class="pagina-galeria" hidden>
+    <div class="cabeca-galeria">
+      <div class="cabeca-galeria__texto">
+        <h1 class="cabeca-galeria__titulo">Personagens</h1>
+        <p class="cabeca-galeria__sub">Quem já caminhou por Draevor, nas mesas de hoje e nas antigas. Os que caíram continuam aqui.</p>
+      </div>
+      <div class="cabeca-galeria__acoes">
+        <button id="botao-novo" class="botao botao--principal botao--brasa" type="button" hidden>+ Personagem</button>
+      </div>
+      <span class="cabeca-galeria__regua" aria-hidden="true"></span>
+    </div>
+
+    <!-- Filtros -->
+    <div id="filtros" class="filtros">
+      <button id="filtros-alternar" class="filtros__alternar botao botao--leve" type="button" aria-expanded="false" aria-controls="filtros-corpo">
+        Filtros <span id="filtros-contador" class="contador" hidden></span>
+      </button>
+      <div id="filtros-corpo" class="filtros__corpo">
+        <div id="filtro-mesas" class="filtros__mesas" role="group" aria-label="Mesas"></div>
+
+        <div class="filtros__controles">
+          <fieldset id="filtro-papel" class="segmentos">
+            <legend class="sr">Papel</legend>
+            <label><input type="radio" name="papel" value="" checked><span>Todos</span></label>
+            <label><input type="radio" name="papel" value="jogador"><span>Jogadores</span></label>
+            <label><input type="radio" name="papel" value="npc"><span>NPCs</span></label>
+          </fieldset>
+
+          <fieldset id="filtro-situacao" class="segmentos">
+            <legend class="sr">Situação</legend>
+            <label><input type="radio" name="situacao" value="" checked><span>Todos</span></label>
+            <label><input type="radio" name="situacao" value="vivo"><span>Vivos</span></label>
+            <label><input type="radio" name="situacao" value="caido"><span>Caídos</span></label>
+            <label><input type="radio" name="situacao" value="desaparecido"><span>Desaparecidos</span></label>
+            <label><input type="radio" name="situacao" value="aposentado"><span>Aposentados</span></label>
+          </fieldset>
+
+          <label class="filtro-campo filtro-campo--busca">
+            <svg aria-hidden="true"><use href="#icone-lupa"/></svg>
+            <span class="sr">Buscar pelo nome ou pelo resumo</span>
+            <input id="filtro-busca" type="search" placeholder="Buscar" autocomplete="off" spellcheck="false">
+          </label>
+
+          <button id="limpar-filtros" class="botao botao--leve" type="button" hidden>Limpar filtros</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- A galeria -->
+    <div id="galeria" class="galeria" aria-label="Personagens"></div>
+  </main>
+
+  <!-- ============ Aviso e confirmação ============ -->
+  <dialog id="dialogo-aviso" class="dialogo">
+    <form method="dialog">
+      <h2 id="aviso-titulo" class="dialogo__titulo"></h2>
+      <p id="aviso-texto" class="dialogo__texto"></p>
+      <div class="dialogo__acoes">
+        <button id="aviso-cancelar" class="botao botao--leve" value="cancelar" hidden></button>
+        <button id="aviso-confirmar" class="botao botao--principal" value="confirmar">Entendi</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="aviso-rapido" class="aviso-rapido" role="status" aria-live="polite" hidden></div>
+
+  <!-- ============ Só na prévia ============ -->
+  <details id="simulacao" class="simulacao" hidden>
+    <summary id="simulacao-resumo">Prévia</summary>
+    <label class="campo">
+      <span class="campo__rotulo">Ver a página como</span>
+      <select id="sim-cargo">
+        <option value="admin">Administrador (mestre)</option>
+        <option value="editor">Editor (Takezo)</option>
+        <option value="jogador">Jogador (Neia)</option>
+      </select>
+    </label>
+    <button id="sim-restaurar" class="botao botao--leve" type="button">Restaurar os exemplos</button>
+    <p class="simulacao__nota">Só existe na prévia. Os personagens são exemplos para ver o visual; os NPCs ocultos só aparecem para o administrador.</p>
+  </details>
+</body>
+</html>
