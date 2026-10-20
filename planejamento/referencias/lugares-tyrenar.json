@@ -1,0 +1,495 @@
+{
+ "mapa": "Tyrenar",
+ "nota": "Lugares do Atlas de Tyrenar. x, y, raio e caixa em proporção da imagem (0 a 1): x e a largura, y e a altura. caixa = [x0, y0, x1, y1], o retângulo sobre o nome escrito no mapa.",
+ "lugares": [
+  {
+   "nome": "Westna",
+   "tipo": "capital",
+   "x": 0.61875,
+   "y": 0.6435,
+   "impresso": true,
+   "raio": 0.005,
+   "caixa": [
+    0.5785,
+    0.65383,
+    0.65675,
+    0.67767
+   ],
+   "descricao": "Capital de Tyrenar e único lugar marcado com o símbolo de capital. Fica no centro-sul do reino, onde várias estradas se cruzam, entre a floresta central, ao norte, e a grande floresta do leste."
+  },
+  {
+   "nome": "Greywater",
+   "tipo": "cidade",
+   "x": 0.52075,
+   "y": 0.08783,
+   "impresso": true,
+   "raio": 0.00275,
+   "caixa": [
+    0.48688,
+    0.09467,
+    0.55725,
+    0.10983
+   ],
+   "descricao": "A cidade mais ao norte do reino, perto da costa e ao lado de um pequeno bosque."
+  },
+  {
+   "nome": "Sail’s Portico",
+   "tipo": "vila",
+   "x": 0.34013,
+   "y": 0.14083,
+   "impresso": true,
+   "raio": 0.00275,
+   "caixa": [
+    0.30775,
+    0.15367,
+    0.3785,
+    0.16667
+   ],
+   "descricao": "Vila perto da costa norte, entre a grande floresta do noroeste e a floresta sinuosa."
+  },
+  {
+   "nome": "Hando",
+   "tipo": "cidade",
+   "x": 0.18513,
+   "y": 0.2095,
+   "impresso": true,
+   "raio": 0.00275,
+   "caixa": [
+    0.16225,
+    0.2215,
+    0.20575,
+    0.23583
+   ],
+   "descricao": "Cidade do noroeste, ao pé de uma grande floresta costeira e a leste da fronteira com Monaron."
+  },
+  {
+   "nome": "Valtara",
+   "tipo": "cidade",
+   "x": 0.31475,
+   "y": 0.24083,
+   "impresso": true,
+   "raio": 0.00275,
+   "caixa": [
+    0.28775,
+    0.24883,
+    0.33887,
+    0.26417
+   ],
+   "descricao": "Cidade do norte, em campos de colinas baixas entre Hando e a floresta sinuosa."
+  },
+  {
+   "nome": "Aylesbury",
+   "tipo": "vila",
+   "x": 0.47425,
+   "y": 0.2635,
+   "impresso": true,
+   "raio": 0.00275,
+   "caixa": [
+    0.44838,
+    0.2695,
+    0.50013,
+    0.28167
+   ],
+   "descricao": "Vila na ponta sul da floresta sinuosa, a oeste de Sedgecourt."
+  },
+  {
+   "nome": "Fairlock",
+   "tipo": "cidade",
+   "x": 0.78812,
+   "y": 0.22183,
+   "impresso": true,
+   "raio": 0.00275,
+   "caixa": [
+    0.76187,
+    0.2265,
+    0.8195,
+    0.24167
+   ],
+   "descricao": "Cidade do nordeste, em campos abertos perto da costa."
+  },
+  {
+   "nome": "Sedgecourt",
+   "tipo": "cidade",
+   "x": 0.617,
+   "y": 0.29667,
+   "impresso": true,
+   "raio": 0.00275,
+   "caixa": [
+    0.58125,
+    0.30317,
+    0.65587,
+    0.319
+   ],
+   "descricao": "Cidade do centro-norte, logo acima da grande floresta central."
+  },
+  {
+   "nome": "Penshaw",
+   "tipo": "vila",
+   "x": 0.86562,
+   "y": 0.32917,
+   "impresso": true,
+   "raio": 0.00275,
+   "caixa": [
+    0.84525,
+    0.33783,
+    0.88838,
+    0.34983
+   ],
+   "descricao": "A vila mais a leste do reino, perto da costa."
+  },
+  {
+   "nome": "Olkdiff",
+   "tipo": "cidade",
+   "x": 0.23763,
+   "y": 0.3195,
+   "impresso": true,
+   "raio": 0.00275,
+   "caixa": [
+    0.2105,
+    0.32483,
+    0.26125,
+    0.34017
+   ],
+   "descricao": "Cidade do oeste, ao lado de um pequeno bosque."
+  },
+  {
+   "nome": "Vellow",
+   "tipo": "vila",
+   "x": 0.3835,
+   "y": 0.38583,
+   "impresso": true,
+   "raio": 0.00275,
+   "caixa": [
+    0.36788,
+    0.39467,
+    0.3995,
+    0.40467
+   ],
+   "descricao": "Vila na orla oeste da floresta central."
+  },
+  {
+   "nome": "Dornwich",
+   "tipo": "vila",
+   "x": 0.1215,
+   "y": 0.43133,
+   "impresso": true,
+   "raio": 0.00275,
+   "caixa": [
+    0.09688,
+    0.4415,
+    0.14888,
+    0.45383
+   ],
+   "descricao": "Vila do oeste, entre a fronteira com Monaron e uma grande mata em forma de cunha."
+  },
+  {
+   "nome": "Hardenmoor",
+   "tipo": "cidade",
+   "x": 0.76338,
+   "y": 0.40567,
+   "impresso": true,
+   "raio": 0.00275,
+   "caixa": [
+    0.72275,
+    0.4145,
+    0.80612,
+    0.43017
+   ],
+   "descricao": "Cidade do leste, na orla norte da grande floresta do leste."
+  },
+  {
+   "nome": "Aubreth",
+   "tipo": "vila",
+   "x": 0.38175,
+   "y": 0.46667,
+   "impresso": true,
+   "raio": 0.00275,
+   "caixa": [
+    0.35988,
+    0.474,
+    0.4045,
+    0.486
+   ],
+   "descricao": "Vila do centro-oeste, entre faixas de floresta, ao sul de Vellow."
+  },
+  {
+   "nome": "Drumrane",
+   "tipo": "cidade",
+   "x": 0.577,
+   "y": 0.51133,
+   "impresso": true,
+   "raio": 0.00275,
+   "caixa": [
+    0.54525,
+    0.51667,
+    0.61187,
+    0.532
+   ],
+   "descricao": "Cidade logo abaixo da escarpa que fecha a floresta central, ao norte de Westna."
+  },
+  {
+   "nome": "Hadleigh",
+   "tipo": "vila",
+   "x": 0.193,
+   "y": 0.56333,
+   "impresso": true,
+   "raio": 0.00275,
+   "caixa": [
+    0.16825,
+    0.57417,
+    0.217,
+    0.586
+   ],
+   "descricao": "Vila do sudoeste, em campo aberto entre Dornwich e Co Rapids."
+  },
+  {
+   "nome": "Wakafield",
+   "tipo": "vila",
+   "x": 0.45238,
+   "y": 0.60117,
+   "impresso": true,
+   "raio": 0.00275,
+   "caixa": [
+    0.4255,
+    0.60667,
+    0.47837,
+    0.61917
+   ],
+   "descricao": "Vila na encosta nordeste do maciço central, a oeste de Westna."
+  },
+  {
+   "nome": "Didsshaw",
+   "tipo": "cidade",
+   "x": 0.27463,
+   "y": 0.62017,
+   "impresso": true,
+   "raio": 0.00275,
+   "caixa": [
+    0.2465,
+    0.62683,
+    0.30575,
+    0.64217
+   ],
+   "descricao": "Cidade do sudoeste, a oeste do maciço central."
+  },
+  {
+   "nome": "Co Rapids",
+   "tipo": "vila",
+   "x": 0.1375,
+   "y": 0.6405,
+   "impresso": true,
+   "raio": 0.00275,
+   "caixa": [
+    0.11313,
+    0.6475,
+    0.1635,
+    0.66
+   ],
+   "descricao": "Vila do extremo sudoeste, perto de onde se encontram as fronteiras com Monaron e Feneck."
+  },
+  {
+   "nome": "Balerno",
+   "tipo": "vila",
+   "x": 0.50413,
+   "y": 0.67567,
+   "impresso": true,
+   "raio": 0.00275,
+   "caixa": [
+    0.48237,
+    0.685,
+    0.52487,
+    0.697
+   ],
+   "descricao": "Vila a oeste de Westna, perto da borda leste do maciço central."
+  },
+  {
+   "nome": "Wolfville",
+   "tipo": "cidade",
+   "x": 0.72688,
+   "y": 0.6755,
+   "impresso": true,
+   "raio": 0.00275,
+   "caixa": [
+    0.6935,
+    0.683,
+    0.759,
+    0.6985
+   ],
+   "descricao": "Cidade a leste de Westna, ao pé da escarpa sul da floresta do leste."
+  },
+  {
+   "nome": "Ardennac",
+   "tipo": "cidade",
+   "x": 0.283,
+   "y": 0.76683,
+   "impresso": true,
+   "raio": 0.00275,
+   "caixa": [
+    0.25275,
+    0.77683,
+    0.316,
+    0.79217
+   ],
+   "descricao": "Cidade no sopé das serras do sudoeste, perto da fronteira com Feneck."
+  },
+  {
+   "nome": "Lanercost",
+   "tipo": "vila",
+   "x": 0.50487,
+   "y": 0.80217,
+   "impresso": true,
+   "raio": 0.00275,
+   "caixa": [
+    0.47663,
+    0.8105,
+    0.53087,
+    0.82283
+   ],
+   "descricao": "Vila do sul, entre o maciço central e bosques esparsos."
+  },
+  {
+   "nome": "Brudermell",
+   "tipo": "cidade",
+   "x": 0.65187,
+   "y": 0.85333,
+   "impresso": true,
+   "raio": 0.00275,
+   "caixa": [
+    0.612,
+    0.861,
+    0.68925,
+    0.87667
+   ],
+   "descricao": "A cidade mais ao sul do reino, junto ao bosque de árvores mortas que acompanha a fronteira com as Eclipsed Lands."
+  },
+  {
+   "nome": "Tyrenar",
+   "tipo": "reino",
+   "x": 0.8175,
+   "y": 0.08333,
+   "impresso": true,
+   "caixa": [
+    0.65875,
+    0.02667,
+    0.97625,
+    0.14
+   ],
+   "descricao": "O reino deste mapa. Faz fronteira com Monaron a oeste, com Feneck a sudoeste e com as Eclipsed Lands ao sul; ao norte e a leste fica o mar."
+  },
+  {
+   "nome": "Monaron",
+   "tipo": "regiao",
+   "x": 0.03587,
+   "y": 0.36783,
+   "impresso": true,
+   "caixa": [
+    0.01875,
+    0.26417,
+    0.05312,
+    0.47167
+   ],
+   "descricao": "Terras a oeste de Tyrenar. A fronteira desce da costa norte até perto de Co Rapids."
+  },
+  {
+   "nome": "Feneck",
+   "tipo": "regiao",
+   "x": 0.108,
+   "y": 0.916,
+   "impresso": true,
+   "caixa": [
+    0.02775,
+    0.8825,
+    0.18837,
+    0.94967
+   ],
+   "descricao": "Terras a sudoeste, do outro lado das serras que fecham essa ponta de Tyrenar."
+  },
+  {
+   "nome": "Eclipsed Lands",
+   "tipo": "regiao",
+   "x": 0.6635,
+   "y": 0.96167,
+   "impresso": true,
+   "caixa": [
+    0.52425,
+    0.92717,
+    0.80288,
+    0.99617
+   ],
+   "apelido": "Em português: Terras Eclipsadas",
+   "descricao": "Terras ao sul de Tyrenar. Do lado de cá da fronteira, perto de Brudermell, a mata vira um bosque de árvores mortas."
+  },
+  {
+   "nome": "Floresta do Noroeste",
+   "tipo": "relevo",
+   "x": 0.19437,
+   "y": 0.15367,
+   "impresso": false,
+   "glifo": "floresta",
+   "descricao": "Mata fechada entre a costa norte e Hando."
+  },
+  {
+   "nome": "Floresta Sinuosa",
+   "tipo": "relevo",
+   "x": 0.39787,
+   "y": 0.18083,
+   "impresso": false,
+   "glifo": "floresta",
+   "descricao": "Faixa de floresta que desce em curvas da costa norte até Aylesbury."
+  },
+  {
+   "nome": "Floresta Central",
+   "tipo": "relevo",
+   "x": 0.52438,
+   "y": 0.41583,
+   "impresso": false,
+   "glifo": "floresta",
+   "descricao": "A grande mata do centro do reino, entre Sedgecourt e Drumrane. A borda sul termina numa escarpa."
+  },
+  {
+   "nome": "Floresta do Leste",
+   "tipo": "relevo",
+   "x": 0.859,
+   "y": 0.57267,
+   "impresso": false,
+   "glifo": "floresta",
+   "descricao": "A maior floresta do mapa, de Hardenmoor até a costa leste. A borda sul também cai numa escarpa, e no meio da mata há uma cratera."
+  },
+  {
+   "nome": "Cratera",
+   "tipo": "relevo",
+   "x": 0.76062,
+   "y": 0.51167,
+   "impresso": false,
+   "glifo": "cratera",
+   "descricao": "Uma depressão de bordas íngremes no coração da floresta do leste. Nenhuma estrada do mapa chega até ela."
+  },
+  {
+   "nome": "Maciço Central",
+   "tipo": "relevo",
+   "x": 0.40687,
+   "y": 0.67517,
+   "impresso": false,
+   "glifo": "montanha",
+   "descricao": "Os picos mais altos do mapa. Sobem do sul até perto de Aubreth e Wakafield."
+  },
+  {
+   "nome": "Serras do Sudoeste",
+   "tipo": "relevo",
+   "x": 0.25312,
+   "y": 0.83183,
+   "impresso": false,
+   "glifo": "montanha",
+   "descricao": "Cordilheira que acompanha a fronteira com Feneck, de Co Rapids até o maciço central."
+  },
+  {
+   "nome": "Bosque Morto",
+   "tipo": "relevo",
+   "x": 0.63287,
+   "y": 0.90233,
+   "impresso": false,
+   "glifo": "arvore-morta",
+   "descricao": "Faixa de árvores mortas ao longo da fronteira com as Eclipsed Lands, logo ao sul de Brudermell."
+  }
+ ]
+}
