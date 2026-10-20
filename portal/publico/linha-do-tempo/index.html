@@ -98,62 +98,64 @@
       <span class="cabeca-linha__regua" aria-hidden="true"></span>
     </div>
 
-    <!-- Filtros, presos no topo enquanto a linha rola -->
-    <div id="filtros" class="filtros">
-      <button id="filtros-alternar" class="filtros__alternar botao botao--leve" type="button" aria-expanded="false" aria-controls="filtros-corpo">
-        Filtros <span id="filtros-contador" class="contador" hidden></span>
-      </button>
-      <div id="filtros-corpo" class="filtros__corpo">
-        <div id="filtro-mesas" class="filtros__mesas" role="group" aria-label="Mesas citadas"></div>
+    <!-- Filtros e Panorama, presos no topo enquanto a linha rola -->
+    <div id="presos" class="presos">
+      <div id="filtros" class="filtros">
+        <button id="filtros-alternar" class="filtros__alternar botao botao--leve" type="button" aria-expanded="false" aria-controls="filtros-corpo">
+          Filtros <span id="filtros-contador" class="contador" hidden></span>
+        </button>
+        <div id="filtros-corpo" class="filtros__corpo">
+          <div id="filtro-mesas" class="filtros__mesas" role="group" aria-label="Mesas citadas"></div>
 
-        <div class="filtros__controles">
-          <div class="filtro-tipos">
-            <button id="botao-filtro-tipos" class="filtro-campo filtro-campo--botao" type="button" aria-expanded="false" aria-controls="painel-tipos">
-              <span id="rotulo-filtro-tipos">Todos os tipos</span>
-            </button>
-            <div id="painel-tipos" class="painel-tipos" hidden></div>
-          </div>
+          <div class="filtros__controles">
+            <div class="filtro-tipos">
+              <button id="botao-filtro-tipos" class="filtro-campo filtro-campo--botao" type="button" aria-expanded="false" aria-controls="painel-tipos">
+                <span id="rotulo-filtro-tipos">Todos os tipos</span>
+              </button>
+              <div id="painel-tipos" class="painel-tipos" hidden></div>
+            </div>
 
-          <label class="filtro-campo">
-            <span class="sr">Personagem</span>
-            <select id="filtro-personagem"></select>
-          </label>
-
-          <label class="caixa filtro-marcos">
-            <input id="filtro-marcos" type="checkbox">
-            <span class="caixa__marca" aria-hidden="true"></span>
-            <span>Só marcos</span>
-          </label>
-
-          <label class="filtro-campo filtro-campo--busca">
-            <svg aria-hidden="true"><use href="#icone-lupa"/></svg>
-            <span class="sr">Buscar</span>
-            <input id="filtro-busca" type="search" placeholder="Buscar" autocomplete="off" spellcheck="false">
-          </label>
-
-          <form id="form-ir-ano" class="filtro-campo filtro-campo--ano" novalidate>
-            <label>
-              <span class="sr">Ir para o ano</span>
-              <input id="ir-ano" type="number" inputmode="numeric" min="0" placeholder="Ir para o ano">
+            <label class="filtro-campo">
+              <span class="sr">Personagem</span>
+              <select id="filtro-personagem"></select>
             </label>
-            <span class="filtro-campo__sufixo" aria-hidden="true">ED</span>
-          </form>
 
-          <button id="limpar-filtros" class="botao botao--leve" type="button" hidden>Limpar filtros</button>
+            <label class="caixa filtro-marcos">
+              <input id="filtro-marcos" type="checkbox">
+              <span class="caixa__marca" aria-hidden="true"></span>
+              <span>Só marcos</span>
+            </label>
+
+            <label class="filtro-campo filtro-campo--busca">
+              <svg aria-hidden="true"><use href="#icone-lupa"/></svg>
+              <span class="sr">Buscar</span>
+              <input id="filtro-busca" type="search" placeholder="Buscar" autocomplete="off" spellcheck="false">
+            </label>
+
+            <form id="form-ir-ano" class="filtro-campo filtro-campo--ano" novalidate>
+              <label>
+                <span class="sr">Ir para o ano</span>
+                <input id="ir-ano" type="number" inputmode="numeric" min="0" placeholder="Ir para o ano">
+              </label>
+              <span class="filtro-campo__sufixo" aria-hidden="true">ED</span>
+            </form>
+
+            <button id="limpar-filtros" class="botao botao--leve" type="button" hidden>Limpar filtros</button>
+          </div>
         </div>
       </div>
-    </div>
 
-    <!-- Panorama: a régua de 0 ED até hoje -->
-    <section class="panorama" aria-label="Panorama da história">
-      <div class="panorama__cabeca">
-        <span class="panorama__titulo">Panorama</span>
-        <span id="panorama-legenda" class="panorama__legenda"></span>
-      </div>
-      <div id="panorama-trilho" class="panorama__trilho">
-        <div id="panorama-janela" class="panorama__janela" aria-hidden="true"></div>
-      </div>
-    </section>
+      <!-- Panorama: a régua de 0 ED até hoje -->
+      <section class="panorama" aria-label="Panorama da história">
+        <div class="panorama__cabeca">
+          <span class="panorama__titulo">Panorama</span>
+          <span id="panorama-legenda" class="panorama__legenda"></span>
+        </div>
+        <div id="panorama-trilho" class="panorama__trilho">
+          <div id="panorama-janela" class="panorama__janela" aria-hidden="true"></div>
+        </div>
+      </section>
+    </div>
 
     <div id="ano-fixo" class="ano-fixo" aria-hidden="true" hidden></div>
 
