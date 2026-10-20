@@ -38,6 +38,8 @@
       <symbol id="icone-alvo" viewBox="0 0 24 24"><circle cx="12" cy="12" r="6.5"/><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/><path d="M12 2v3.5M12 18.5V22M2 12h3.5M18.5 12H22"/></symbol>
       <symbol id="icone-lupa" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.4 15.4L21 21"/></symbol>
       <symbol id="icone-corrente" viewBox="0 0 24 24"><rect x="8.5" y="1.5" width="7" height="8.5" rx="3.5"/><rect x="8.5" y="14" width="7" height="8.5" rx="3.5"/><path d="M4.5 12h3M16.5 12h3"/></symbol>
+      <symbol id="icone-marcar" viewBox="0 0 24 24"><path d="M12 21.5s-6.5-6.2-6.5-11.5a6.5 6.5 0 0 1 13 0c0 5.3-6.5 11.5-6.5 11.5Z"/><path d="M12 7v6M9 10h6"/></symbol>
+      <symbol id="icone-importar" viewBox="0 0 24 24"><path d="M12 3v11M7.5 9.5 12 14l4.5-4.5M4 15.5v4.5h16v-4.5"/></symbol>
 
       <!-- Os ícones do índice para os lugares impressos, com o desenho do atlas -->
       <symbol id="icone-capital" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.2" stroke-width="2.4"/><circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/></symbol>
@@ -165,6 +167,14 @@
         <button id="visor-destacar" class="botao visor__ferramenta visor__ferramenta--separada" type="button" title="Destacar lugares" aria-label="Destacar lugares" aria-pressed="false">
           <svg aria-hidden="true"><use href="#icone-destacar"/></svg>
         </button>
+        <!-- Só para o administrador e os editores; importar, só o administrador -->
+        <button id="visor-editar" class="botao visor__ferramenta visor__ferramenta--separada" type="button" title="Editar lugares" aria-label="Editar lugares" aria-pressed="false" hidden>
+          <svg aria-hidden="true"><use href="#icone-marcar"/></svg>
+        </button>
+        <button id="visor-importar" class="botao visor__ferramenta" type="button" title="Importar lugares" aria-label="Importar lugares" hidden>
+          <svg aria-hidden="true"><use href="#icone-importar"/></svg>
+        </button>
+        <input id="arquivo-lugares" type="file" accept=".json,application/json" hidden>
       </div>
 
       <p id="visor-ajuda" class="sr">Arraste para mover o mapa. A roda do mouse ou a pinça aproximam. No teclado: + e − para o zoom, as setas para mover e 0 para ver o mapa inteiro. Os lugares do mapa estão no painel; a tecla / leva à busca e Esc fecha o lugar aberto.</p>
@@ -220,6 +230,67 @@
         <button id="edicao-apagar" class="botao botao--leve botao--perigo dialogo__apagar" type="button" hidden>Apagar</button>
         <button id="edicao-cancelar" class="botao botao--leve" type="button">Cancelar</button>
         <button id="edicao-enviar" class="botao botao--principal" type="submit">Enviar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- ============ Marcar ou alterar um lugar (administrador e editores) ============ -->
+  <dialog id="dialogo-lugar" class="dialogo dialogo--edicao">
+    <form id="form-lugar" class="dialogo__form" novalidate>
+      <h2 id="lugar-titulo" class="dialogo__titulo">Novo lugar</h2>
+
+      <div class="edicao__campos">
+        <label class="campo">
+          <span class="campo__rotulo">Nome</span>
+          <input name="nome" maxlength="60" autocomplete="off" required>
+        </label>
+
+        <label class="campo">
+          <span class="campo__rotulo">Tipo</span>
+          <select name="tipo">
+            <option value="lugar">Lugar</option>
+            <option value="capital">Capital</option>
+            <option value="cidade">Cidade</option>
+            <option value="vila">Vila</option>
+            <option value="reino">Reino</option>
+            <option value="regiao">Região</option>
+            <option value="relevo">Relevo</option>
+          </select>
+        </label>
+
+        <!-- Só nos marcadores visíveis: os impressos já estão desenhados na imagem -->
+        <fieldset id="grupo-glifo" class="grupo">
+          <legend class="campo__rotulo">Glifo</legend>
+          <div id="escolha-glifo" class="glifos"></div>
+        </fieldset>
+
+        <label class="campo">
+          <span class="campo__rotulo">Apelido</span>
+          <input name="apelido" maxlength="80" autocomplete="off">
+          <span class="campo__ajuda">Outros nomes do lugar, usados na busca.</span>
+        </label>
+
+        <label class="campo">
+          <span class="campo__rotulo">Descrição</span>
+          <textarea name="descricao" rows="4" maxlength="600"></textarea>
+          <span class="campo__ajuda">Use **negrito** e *itálico*. Uma linha em branco separa parágrafos; linhas que começam com "- " ou "1. " viram lista.</span>
+        </label>
+
+        <fieldset id="grupo-visibilidade-lugar" class="grupo">
+          <legend class="campo__rotulo">Visibilidade</legend>
+          <div class="segmentos">
+            <label><input type="radio" name="visibilidade" value="todos" checked><span>Todos</span></label>
+            <label><input type="radio" name="visibilidade" value="admin"><span>Só o administrador</span></label>
+          </div>
+          <span class="campo__ajuda">Para o lugar que o grupo ainda não descobriu.</span>
+        </fieldset>
+      </div>
+
+      <p id="erro-lugar" class="mensagem-erro" role="alert" hidden></p>
+      <div class="dialogo__acoes">
+        <button id="lugar-apagar" class="botao botao--leve botao--perigo dialogo__apagar" type="button" hidden>Apagar</button>
+        <button id="lugar-cancelar" class="botao botao--leve" type="button">Cancelar</button>
+        <button id="lugar-enviar" class="botao botao--principal" type="submit">Marcar</button>
       </div>
     </form>
   </dialog>

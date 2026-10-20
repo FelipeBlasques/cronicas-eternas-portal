@@ -15,6 +15,10 @@
    áreas invisíveis sobre o que já está desenhado na imagem, e só os
    marcados depois pelo portal ganham um marcador visível.
 
+   Com "Editar lugares" ligado, o administrador e os editores marcam
+   lugares novos, arrastam e alteram os seus. Só o administrador
+   apaga lugares e importa os de um arquivo.
+
    No servidor, conversa com o servidor/mapas.js. Aberta fora dele
    (arquivo no PC ou prévia), usa o mapa de Tyrenar de exemplo e um
    painel para ver a página como administrador, editor ou jogador.
@@ -28,9 +32,38 @@ const CONFIG = {
   maxMapa: 25 * 1024 * 1024, // 25 MB, o mesmo limite do servidor
   ladoMaximo: 30000, // largura e altura da imagem, em pixels, o mesmo limite do servidor
   ladoMiniatura: 640, // o lado maior da miniatura da galeria, em pixels
+  maxImportacao: 1024 * 1024, // 1 MB, o arquivo de lugares a importar, o mesmo limite do servidor
 };
 
 const TIPOS_ACEITOS = ["image/png", "image/jpeg", "image/webp", "image/gif", "image/avif"];
+
+// Os tipos de lugar que o servidor aceita
+const TIPOS_DOS_LUGARES = ["capital", "cidade", "vila", "reino", "regiao", "relevo", "lugar"];
+
+// Os glifos dos marcadores visíveis, na ordem da grade do formulário: os da Linha do Tempo e três com o desenho do atlas
+const GLIFOS_DOS_MARCADORES = [
+  { id: "marco", nome: "Marco" },
+  { id: "guerra", nome: "Guerra" },
+  { id: "queda", nome: "Queda" },
+  { id: "fundacao", nome: "Fundação" },
+  { id: "catastrofe", nome: "Catástrofe" },
+  { id: "poder", nome: "Poder" },
+  { id: "pacto", nome: "Pacto" },
+  { id: "arcano", nome: "Arcano" },
+  { id: "descoberta", nome: "Descoberta" },
+  { id: "feito", nome: "Feito" },
+  { id: "lua", nome: "Lua" },
+  { id: "olho", nome: "Olho" },
+  { id: "escudo", nome: "Escudo" },
+  { id: "montanha", nome: "Montanha" },
+  { id: "sol", nome: "Sol" },
+  { id: "gota", nome: "Gota" },
+  { id: "navio", nome: "Navio" },
+  { id: "torre", nome: "Torre" },
+  { id: "floresta", nome: "Floresta" },
+  { id: "cratera", nome: "Cratera" },
+  { id: "arvore-morta", nome: "Árvore morta" },
+];
 
 /* =================================================================
    Conversa com o servidor
@@ -48,6 +81,8 @@ function formularioDe(dados) {
   return form;
 }
 
+const marcadoresDe = (mapa) => `${caminhoDe("/api/mapas", mapa)}/marcadores`;
+
 const apiDoServidor = {
   mapas: () => pedir("GET", "/api/mapas"),
   estado: () => pedir("GET", "/api/estado", undefined, { silencioso: true }),
@@ -55,6 +90,10 @@ const apiDoServidor = {
   enviar: (dados) => pedir("POST", "/api/mapas", formularioDe(dados)),
   alterar: (id, dados) => pedir("PUT", caminhoDe("/api/mapas", id), formularioDe(dados)),
   apagar: (id) => pedir("DELETE", caminhoDe("/api/mapas", id)),
+  criarMarcador: (mapa, dados) => pedir("POST", marcadoresDe(mapa), dados),
+  alterarMarcador: (mapa, marca, dados) => pedir("PUT", caminhoDe(marcadoresDe(mapa), marca), dados),
+  apagarMarcador: (mapa, marca) => pedir("DELETE", caminhoDe(marcadoresDe(mapa), marca)),
+  importarLugares: (mapa, lugares) => pedir("POST", `${marcadoresDe(mapa)}/importar`, { lugares }),
 };
 
 /* =================================================================
@@ -527,13 +566,21 @@ function criarApiDePrevia() {
   const podeEditarMarcador = (m) => conta.cargo === "admin" || (conta.cargo === "editor" && m.registradoPor === conta.usuario);
 
   const proibido = () => erroComCodigo("Só o administrador pode fazer isso.", "proibido");
+  const soEditores = () => erroComCodigo("Só os editores e o administrador marcam lugares nos mapas.", "proibido");
   const semMapa = () => erroComCodigo("Esse mapa não existe mais. Recarregue a página.", "nao-encontrado");
+  const semLugar = () => erroComCodigo("Esse lugar não existe mais. Recarregue a página.", "nao-encontrado");
   const idAleatorio = () => Array.from(crypto.getRandomValues(new Uint8Array(4)), (b) => b.toString(16).padStart(2, "0")).join("");
 
   function acharMapa(id) {
     const mapa = banco.mapas.find((m) => m.id === id);
     if (!mapa || !podeVer(mapa)) throw semMapa();
     return mapa;
+  }
+
+  function acharMarcador(mapa, id) {
+    const marcador = mapa.marcadores.find((m) => m.id === id);
+    if (!marcador || !podeVer(marcador)) throw semLugar();
+    return marcador;
   }
 
   /* ---------- O que chega do formulário, conferido como no servidor ---------- */
@@ -560,6 +607,97 @@ function criarApiDePrevia() {
     largura: imagem.largura,
     altura: imagem.altura,
   });
+
+  /* ---------- O que chega sobre um lugar, conferido como no servidor ---------- */
+
+  function textoDoLugar(valor, campo, max, { obrigatorio = false } = {}) {
+    const limpo = typeof valor === "string" ? valor.replace(/\r\n?/g, "\n").trim() : "";
+    if (obrigatorio && !limpo) throw erroComCodigo(`Preencha o campo ${campo}.`);
+    if (limpo.length > max) throw erroComCodigo(`O campo ${campo} pode ter no máximo ${max} caracteres.`);
+    return limpo;
+  }
+
+  function textosDoLugar(dados) {
+    if (!TIPOS_DOS_LUGARES.includes(dados.tipo)) {
+      throw erroComCodigo("Escolha o tipo do lugar: capital, cidade, vila, reino, região, relevo ou lugar.");
+    }
+    return {
+      nome: textoDoLugar(dados.nome, "Nome", 60, { obrigatorio: true }),
+      tipo: dados.tipo,
+      apelido: textoDoLugar(dados.apelido, "Apelido", 80).replace(/\s*\n\s*/g, " "),
+      descricao: textoDoLugar(dados.descricao, "Descrição", 600),
+    };
+  }
+
+  // Posições e tamanhos em proporção da imagem, guardados com 5 casas
+  const entre = (valor, min, max) => typeof valor === "number" && Number.isFinite(valor) && valor >= min && valor <= max;
+  const proporcao = (valor) => Math.round(valor * 100000) / 100000;
+
+  function posicaoDe(dados) {
+    if (!entre(dados.x, 0, 1) || !entre(dados.y, 0, 1)) throw erroComCodigo("A posição do lugar precisa estar dentro do mapa.");
+    return { x: proporcao(dados.x), y: proporcao(dados.y) };
+  }
+
+  function glifoDe(dados) {
+    if (!GLIFOS_DOS_MARCADORES.some((g) => g.id === dados.glifo)) throw erroComCodigo("Escolha um dos glifos da lista.");
+    return dados.glifo;
+  }
+
+  // Só o administrador escolhe quem vê; o que um editor marca é para todos, e ele não muda depois
+  function visibilidadeDe(dados, atual) {
+    if (conta.cargo !== "admin") return atual ?? "todos";
+    const visibilidade = dados.visibilidade ?? atual ?? "todos";
+    if (visibilidade !== "todos" && visibilidade !== "admin") {
+      throw erroComCodigo("Escolha quem vê o lugar: todos ou só o administrador.");
+    }
+    return visibilidade;
+  }
+
+  // Num impresso, o círculo em volta do ponto e o retângulo sobre o nome escrito; um dos dois precisa existir
+  function areaImpressa(lugar) {
+    let raio = null;
+    if (lugar.raio !== undefined && lugar.raio !== null) {
+      if (!entre(lugar.raio, 0, 0.05)) throw erroComCodigo("O raio do lugar precisa ir de 0 a 0,05.");
+      raio = proporcao(lugar.raio);
+    }
+    let caixa = null;
+    if (lugar.caixa !== undefined && lugar.caixa !== null) {
+      const c = lugar.caixa;
+      const valida = Array.isArray(c) && c.length === 4 && c.every((v) => entre(v, 0, 1)) && c[0] < c[2] && c[1] < c[3];
+      if (!valida) throw erroComCodigo("A caixa do nome precisa ser [x0, y0, x1, y1], dentro do mapa.");
+      caixa = c.map(proporcao);
+    }
+    if (!raio && !caixa) throw erroComCodigo("Um lugar impresso precisa de raio, de caixa ou dos dois.");
+    return { raio, caixa };
+  }
+
+  // Um lugar do arquivo de importação, no formato de lugares-tyrenar.json
+  function lugarImportado(lugar) {
+    if (!lugar || typeof lugar !== "object" || Array.isArray(lugar)) throw erroComCodigo("O lugar não está num formato válido.");
+    const impresso = lugar.impresso === true;
+    return {
+      ...textosDoLugar(lugar),
+      ...posicaoDe(lugar),
+      impresso,
+      ...(impresso ? { ...areaImpressa(lugar), glifo: null } : { raio: null, caixa: null, glifo: glifoDe(lugar) }),
+      visibilidade: visibilidadeDe(lugar, null),
+    };
+  }
+
+  function novoMarcador(mapa, valores) {
+    const ocupados = new Set(mapa.marcadores.map((m) => m.id));
+    let id;
+    do id = `marca-${idAleatorio()}`;
+    while (ocupados.has(id));
+    const quando = new Date().toISOString();
+    return { id, ...valores, registradoPor: conta.usuario, registradoNome: conta.nome, criadoEm: quando, alteradoEm: quando };
+  }
+
+  function cabeNoMapa(mapa, quantos) {
+    if (mapa.marcadores.length + quantos > 300) {
+      throw erroComCodigo(`Um mapa pode ter no máximo 300 lugares. Este tem ${mapa.marcadores.length}.`);
+    }
+  }
 
   /* ---------- O formato enviado à página ---------- */
 
@@ -652,6 +790,74 @@ function criarApiDePrevia() {
       const mapa = acharMapa(id);
       banco.mapas = banco.mapas.filter((m) => m !== mapa);
       return { ok: true };
+    },
+    async criarMarcador(idMapa, dados) {
+      await esperar(250);
+      if (conta.cargo === "jogador") throw soEditores();
+      const mapa = acharMapa(idMapa);
+      const valores = {
+        ...textosDoLugar(dados),
+        ...posicaoDe(dados),
+        impresso: false,
+        raio: null,
+        caixa: null,
+        glifo: glifoDe(dados),
+        visibilidade: visibilidadeDe(dados, null),
+      };
+      cabeNoMapa(mapa, 1);
+      const marcador = novoMarcador(mapa, valores);
+      mapa.marcadores.push(marcador);
+      return { marcador: { id: marcador.id } };
+    },
+    // O que não vem no pedido continua como está: para mover, basta mandar x e y.
+    // Num impresso, a posição e a área continuam as da importação.
+    async alterarMarcador(idMapa, idMarca, dados) {
+      await esperar(200);
+      if (conta.cargo === "jogador") throw soEditores();
+      const mapa = acharMapa(idMapa);
+      const marcador = acharMarcador(mapa, idMarca);
+      if (!podeEditarMarcador(marcador)) {
+        throw erroComCodigo("Só quem marcou o lugar, ou o administrador, pode alterá-lo.", "proibido");
+      }
+      const junto = { ...marcador, ...dados };
+      const valores = { ...textosDoLugar(junto), visibilidade: visibilidadeDe(junto, marcador.visibilidade) };
+      if (!marcador.impresso) Object.assign(valores, posicaoDe(junto), { glifo: glifoDe(junto) });
+      Object.assign(marcador, valores, { alteradoEm: new Date().toISOString() });
+      return { ok: true };
+    },
+    async apagarMarcador(idMapa, idMarca) {
+      await esperar(200);
+      if (conta.cargo !== "admin") throw proibido();
+      const mapa = acharMapa(idMapa);
+      const marcador = acharMarcador(mapa, idMarca);
+      mapa.marcadores = mapa.marcadores.filter((m) => m !== marcador);
+      return { ok: true };
+    },
+    // Confere todos antes de guardar qualquer um; pula os que já existem com o mesmo nome
+    async importarLugares(idMapa, lista) {
+      await esperar(400);
+      if (conta.cargo !== "admin") throw proibido();
+      const mapa = acharMapa(idMapa);
+      if (!Array.isArray(lista) || !lista.length) throw erroComCodigo("O arquivo não tem lugares para importar.");
+      if (lista.length > 300) throw erroComCodigo("Um mapa pode ter no máximo 300 lugares.");
+      const doArquivo = lista.map((bruto, i) => {
+        try {
+          return lugarImportado(bruto);
+        } catch (erro) {
+          const nome = typeof bruto?.nome === "string" && bruto.nome.trim() ? ` (${bruto.nome.trim().slice(0, 60)})` : "";
+          throw erroComCodigo(`Lugar ${i + 1}${nome}: ${erro.message}`);
+        }
+      });
+      const nomes = new Set(mapa.marcadores.map((m) => normalizar(m.nome)));
+      const novos = doArquivo.filter((lugar) => {
+        const chave = normalizar(lugar.nome);
+        if (nomes.has(chave)) return false;
+        nomes.add(chave);
+        return true;
+      });
+      cabeNoMapa(mapa, novos.length);
+      for (const lugar of novos) mapa.marcadores.push(novoMarcador(mapa, lugar));
+      return { entraram: novos.length, pulados: doArquivo.length - novos.length };
     },
   };
 }
@@ -980,6 +1186,7 @@ const lugares = {
   busca: "",
   destacar: false,
   gaveta: false, // no celular, a gaveta do painel aberta
+  editando: false, // "Editar lugares" ligado
 };
 
 // Um rótulo só, que vai para o lugar com o mouse em cima
@@ -998,7 +1205,9 @@ function alvoDoLugar(m, classe) {
     if (lugares.aceso.mapa === m.id) acender("mapa", null);
     if (rotulo.id === m.id) esconderRotulo();
   });
-  alvo.addEventListener("click", () => selecionarLugar(m.id));
+  alvo.addEventListener("click", () => {
+    if (!cliqueDoArraste) selecionarLugar(m.id);
+  });
   return alvo;
 }
 
@@ -1007,6 +1216,7 @@ function montarLugar(m, { largura, altura }) {
   if (semPonto(m)) classes.push("lugar--sem-ponto");
   if (m.glifo === "arcano") classes.push("lugar--arcano");
   if (ehOculto(m)) classes.push("lugar--oculto");
+  if (!m.impresso && m.podeEditar) classes.push("lugar--movel");
   const elemento = criar("div", classes.join(" "));
   elemento.dataset.id = m.id;
   elemento.style.setProperty("left", `${m.x * largura}px`);
@@ -1035,6 +1245,7 @@ function montarLugar(m, { largura, altura }) {
   if (!m.impresso) {
     const marca = alvoDoLugar(m, "lugar__marca");
     marca.append(simbolo(`glifo-${m.glifo}`));
+    if (m.podeEditar) prepararArraste(marca, m);
     ponto.append(marca);
   }
 
@@ -1066,6 +1277,9 @@ function mostrarLugares(mapa, { novo = false } = {}) {
 function limparLugares() {
   esconderRotulo();
   desmarcarLugar();
+  arrasteDoLugar = null;
+  ligarEdicao(false);
+  if ($("#dialogo-lugar").open) $("#dialogo-lugar").close();
   Object.assign(lugares, { mapa: null, porId: new Map(), aceso: { lista: null, mapa: null }, busca: "" });
   $("#busca-lugares").value = "";
   $("#visor-lugares").replaceChildren();
@@ -1338,6 +1552,16 @@ function mostrarDetalhe(m, { focar = false } = {}) {
   nome.id = "detalhe-nome";
   titulos.append(nome, criar("p", "detalhe-lugar__tipo", NOMES_DOS_TIPOS[m.tipo]));
   cabeca.append(icone, titulos);
+  // Com "Editar lugares" ligado, o lápis abre o formulário do lugar
+  if (lugares.editando && m.podeEditar) {
+    const lapis = criar("button", "botao botao-icone detalhe-lugar__lapis");
+    lapis.type = "button";
+    lapis.title = "Alterar o lugar";
+    lapis.setAttribute("aria-label", `Alterar ${m.nome}`);
+    lapis.append(simbolo("icone-lapis"));
+    lapis.addEventListener("click", () => abrirFormLugar(m));
+    cabeca.append(lapis);
+  }
 
   const partes = [voltar, cabeca];
   if (m.apelido) partes.push(criar("p", "detalhe-lugar__apelido", m.apelido));
@@ -1406,6 +1630,288 @@ function configurarLugares() {
   document.addEventListener("keydown", aoTeclarNosLugares);
   // O painel cobre parte do mapa: quando ele muda de tamanho (a gaveta abrindo, por exemplo), o visor se ajusta
   new ResizeObserver(() => visor.ajustar()).observe($("#painel-lugares"));
+}
+
+/* =================================================================
+   Editar e importar lugares
+   -----------------------------------------------------------------
+   O administrador e os editores ligam "Editar lugares" nas
+   ferramentas do visor. Ligado, clicar num ponto vazio do mapa
+   marca ali um lugar novo, com marcador visível; arrastar um
+   marcador visível que a conta pode editar muda o lugar dele (salva
+   ao soltar); e o detalhe do lugar ganha o lápis, que abre o mesmo
+   formulário. Os impressos já estão desenhados na imagem: no
+   formulário deles não há glifo, e eles não saem do ponto.
+
+   Só o administrador apaga lugares, escolhe quem vê e importa os
+   lugares de um arquivo .json, no formato de lugares-tyrenar.json.
+   ================================================================= */
+
+const edicaoLugar = {
+  mapa: null, // o id do mapa do lugar no formulário
+  marcador: null, // o lugar sendo alterado, ou null para um novo
+  posicao: null, // { x, y } do lugar novo, em proporção da imagem
+  glifo: "marco", // o escolhido na grade
+};
+
+let arrasteDoLugar = null; // o marcador sendo arrastado: { id, ponteiro, inicio, posicao }
+let cliqueDoArraste = false; // logo depois de arrastar, o clique que o navegador manda ao soltar não abre o lugar
+
+const podeEditarLugares = () => ehAdmin() || ehEditor();
+
+// O ponto da tela em proporção da imagem (0 a 1). A camada dos lugares anda com o mapa, já no zoom atual.
+function pontoNoMapa(evento) {
+  const camada = $("#visor-lugares").getBoundingClientRect();
+  return { x: (evento.clientX - camada.left) / camada.width, y: (evento.clientY - camada.top) / camada.height };
+}
+
+/* ---------- O modo "Editar lugares" ---------- */
+
+function ligarEdicao(ligada, { avisar = false } = {}) {
+  lugares.editando = ligada;
+  $("#visor-editar").setAttribute("aria-pressed", String(ligada));
+  $("#visor").classList.toggle("visor--editando", ligada);
+  // O lápis do detalhe aparece ou some
+  const item = lugares.selecionado && lugares.porId.get(lugares.selecionado);
+  if (item) mostrarDetalhe(item.marcador);
+  if (ligada && avisar) {
+    avisoRapido("Clique num ponto vazio do mapa para marcar um lugar. Arraste os seus marcadores para mudá-los de lugar.");
+  }
+}
+
+// "Editar lugares" para o administrador e os editores; "Importar lugares", só para o administrador
+function atualizarFerramentasDeEdicao() {
+  $("#visor-editar").hidden = !podeEditarLugares();
+  $("#visor-importar").hidden = !ehAdmin();
+  if (lugares.editando && !podeEditarLugares()) ligarEdicao(false);
+}
+
+// Um ponto vazio do mapa, com a edição ligada: um lugar novo ali.
+// O clique que termina um arraste do mapa nem chega aqui: o visor.js engole.
+function aoClicarNoMapa(evento) {
+  if (!lugares.editando || !lugares.mapa || evento.target.closest(".lugar__alvo")) return;
+  const { x, y } = pontoNoMapa(evento);
+  if (x < 0 || x > 1 || y < 0 || y > 1) return;
+  abrirFormLugar(null, { x, y });
+}
+
+/* ---------- Arrastar um marcador visível ---------- */
+
+function colocarLugar(item, { x, y }) {
+  item.elemento.style.setProperty("left", `${x * lugares.mapa.largura}px`);
+  item.elemento.style.setProperty("top", `${y * lugares.mapa.altura}px`);
+}
+
+// Nos marcadores visíveis que a conta pode editar. Com a edição desligada, o visor arrasta o mapa como sempre.
+function prepararArraste(alvo, m) {
+  alvo.addEventListener("pointerdown", (evento) => {
+    if (!lugares.editando || !evento.isPrimary || (evento.pointerType === "mouse" && evento.button !== 0)) return;
+    // Quem anda é o marcador, não o mapa
+    evento.stopPropagation();
+    try {
+      alvo.setPointerCapture(evento.pointerId);
+    } catch {
+      // o dedo já saiu
+    }
+    arrasteDoLugar = { id: m.id, ponteiro: evento.pointerId, inicio: { x: evento.clientX, y: evento.clientY }, posicao: null };
+  });
+
+  alvo.addEventListener("pointermove", (evento) => {
+    const arraste = arrasteDoLugar;
+    const item = lugares.porId.get(m.id);
+    if (arraste?.id !== m.id || arraste.ponteiro !== evento.pointerId || !item) return;
+    if (!arraste.posicao) {
+      const andou = Math.hypot(evento.clientX - arraste.inicio.x, evento.clientY - arraste.inicio.y);
+      if (andou < AJUSTES_DO_VISOR.limiarDoArraste) return;
+      esconderRotulo();
+      item.elemento.classList.add("lugar--arrastado");
+    }
+    const ponto = pontoNoMapa(evento);
+    arraste.posicao = { x: Math.min(1, Math.max(0, ponto.x)), y: Math.min(1, Math.max(0, ponto.y)) };
+    colocarLugar(item, arraste.posicao);
+  });
+
+  alvo.addEventListener("pointerup", (evento) => soltarArraste(evento, m, { salvar: true }));
+  alvo.addEventListener("pointercancel", (evento) => soltarArraste(evento, m, { salvar: false }));
+}
+
+// Ao soltar, salva o lugar novo; se não der certo (ou o arraste for cancelado), o marcador volta
+async function soltarArraste(evento, m, { salvar }) {
+  const arraste = arrasteDoLugar;
+  if (arraste?.id !== m.id || arraste.ponteiro !== evento.pointerId) return;
+  arrasteDoLugar = null;
+  const item = lugares.porId.get(m.id);
+  if (!arraste.posicao || !item) return;
+  cliqueDoArraste = true;
+  setTimeout(() => (cliqueDoArraste = false));
+  item.elemento.classList.remove("lugar--arrastado");
+  if (!salvar) return colocarLugar(item, m);
+  try {
+    await api.alterarMarcador(lugares.mapa.id, m.id, arraste.posicao);
+  } catch (falha) {
+    colocarLugar(item, m);
+    return avisarFalha(falha);
+  }
+  await recarregar().catch(avisarFalha);
+}
+
+/* ---------- O formulário de um lugar ---------- */
+
+function mostrarErroDoLugar(texto) {
+  const erro = $("#erro-lugar");
+  erro.textContent = texto;
+  erro.hidden = !texto;
+}
+
+// A grade com os glifos, como a da Linha do Tempo
+function renderizarEscolhaGlifo() {
+  const grade = $("#escolha-glifo");
+  grade.replaceChildren(
+    ...GLIFOS_DOS_MARCADORES.map((glifo) => {
+      const opcao = criar("button", "glifo-opcao");
+      opcao.type = "button";
+      opcao.title = glifo.nome;
+      opcao.setAttribute("aria-label", glifo.nome);
+      opcao.setAttribute("aria-pressed", String(glifo.id === edicaoLugar.glifo));
+      opcao.append(simbolo(`glifo-${glifo.id}`));
+      opcao.addEventListener("click", () => {
+        edicaoLugar.glifo = glifo.id;
+        for (const outra of grade.children) outra.setAttribute("aria-pressed", String(outra === opcao));
+      });
+      return opcao;
+    }),
+  );
+}
+
+// Um lugar novo no ponto clicado (sem m), ou o lugar escolhido, para alterar
+function abrirFormLugar(m = null, posicao = null) {
+  if (!podeEditarLugares() || !lugares.mapa) return;
+  const form = $("#form-lugar");
+  form.reset();
+  Object.assign(edicaoLugar, { mapa: lugares.mapa.id, marcador: m, posicao, glifo: m?.glifo ?? "marco" });
+  mostrarErroDoLugar("");
+
+  $("#lugar-titulo").textContent = m ? `Alterar ${m.nome}` : "Novo lugar";
+  $("#lugar-enviar").textContent = m ? "Salvar" : "Marcar";
+  $("#lugar-apagar").hidden = !m || !ehAdmin();
+  $("#grupo-glifo").hidden = Boolean(m?.impresso);
+  $("#grupo-visibilidade-lugar").hidden = !ehAdmin();
+
+  form.nome.value = m?.nome ?? "";
+  form.tipo.value = m?.tipo ?? "lugar";
+  form.apelido.value = m?.apelido ?? "";
+  form.descricao.value = m?.descricao ?? "";
+  form.visibilidade.value = m?.visibilidade ?? "todos";
+  renderizarEscolhaGlifo();
+
+  $("#dialogo-lugar").showModal();
+  $("#form-lugar .edicao__campos").scrollTop = 0;
+  form.nome.focus();
+}
+
+async function enviarLugar(evento) {
+  evento.preventDefault();
+  const form = $("#form-lugar");
+  mostrarErroDoLugar("");
+  const nome = form.nome.value.trim();
+  if (!nome) return mostrarErroDoLugar("Escreva o nome do lugar.");
+
+  const m = edicaoLugar.marcador;
+  const dados = {
+    nome,
+    tipo: form.tipo.value,
+    apelido: form.apelido.value.trim(),
+    descricao: form.descricao.value.trim(),
+  };
+  if (!m?.impresso) dados.glifo = edicaoLugar.glifo;
+  if (ehAdmin()) dados.visibilidade = form.visibilidade.value;
+
+  const enviar = $("#lugar-enviar");
+  enviar.disabled = true;
+  try {
+    let novo = null;
+    if (m) await api.alterarMarcador(edicaoLugar.mapa, m.id, dados);
+    else novo = (await api.criarMarcador(edicaoLugar.mapa, { ...dados, ...edicaoLugar.posicao })).marcador.id;
+    $("#dialogo-lugar").close();
+    await recarregar();
+    // O lugar novo já fica escolhido, sem o mapa sair do lugar
+    if (novo) selecionarLugar(novo, { mover: false });
+    avisoRapido(m ? "Lugar salvo." : "Lugar marcado.");
+  } catch (falha) {
+    mostrarErroDoLugar(falha.message);
+  } finally {
+    enviar.disabled = false;
+  }
+}
+
+async function apagarLugar() {
+  const m = edicaoLugar.marcador;
+  if (!m) return;
+  const confirmado = await perguntar({
+    titulo: "Apagar este lugar?",
+    texto: `${m.nome} sai do mapa de vez.`,
+    confirmar: "Apagar",
+    cancelar: "Cancelar",
+    perigo: true,
+  });
+  if (!confirmado) return;
+  try {
+    await api.apagarMarcador(edicaoLugar.mapa, m.id);
+    $("#dialogo-lugar").close();
+    await recarregar();
+    avisoRapido("Lugar apagado.");
+  } catch (falha) {
+    avisarFalha(falha);
+  }
+}
+
+/* ---------- Importar lugares de um arquivo (só o administrador) ---------- */
+
+function fraseDaImportacao({ entraram, pulados }) {
+  if (!entraram) {
+    return pulados === 1 ? "Nenhum lugar entrou: o do arquivo já existia no mapa." : `Nenhum lugar entrou: os ${pulados} já existiam no mapa.`;
+  }
+  const entrou = entraram === 1 ? "1 lugar entrou no mapa" : `${entraram} lugares entraram no mapa`;
+  if (!pulados) return `${entrou}.`;
+  return `${entrou}; ${pulados === 1 ? "1 já existia e foi pulado" : `${pulados} já existiam e foram pulados`}.`;
+}
+
+// O arquivo é lido aqui mesmo; só a lista de lugares vai para o servidor
+async function importarArquivoDeLugares() {
+  const entrada = $("#arquivo-lugares");
+  const arquivo = entrada.files[0];
+  entrada.value = ""; // para o mesmo arquivo poder ser escolhido de novo
+  if (!arquivo || !lugares.mapa || !ehAdmin()) return;
+  const mapa = lugares.mapa.id;
+  try {
+    if (arquivo.size > CONFIG.maxImportacao) {
+      throw new Error(`O arquivo de lugares pode ter no máximo 1 MB. Este tem ${emMegabytes(arquivo.size)}.`);
+    }
+    let conteudo;
+    try {
+      conteudo = JSON.parse(await arquivo.text());
+    } catch {
+      throw new Error("Não foi possível ler esse arquivo. Use um .json no formato de lugares-tyrenar.json.");
+    }
+    if (!Array.isArray(conteudo?.lugares)) {
+      throw new Error("O arquivo não tem a lista \"lugares\". Use o formato de lugares-tyrenar.json.");
+    }
+    const resultado = await api.importarLugares(mapa, conteudo.lugares);
+    await recarregar();
+    avisoRapido(fraseDaImportacao(resultado));
+  } catch (falha) {
+    avisarFalha(falha);
+  }
+}
+
+function configurarEdicaoDosLugares() {
+  $("#visor-editar").addEventListener("click", () => ligarEdicao(!lugares.editando, { avisar: true }));
+  $("#visor-importar").addEventListener("click", () => $("#arquivo-lugares").click());
+  $("#arquivo-lugares").addEventListener("change", importarArquivoDeLugares);
+  $("#visor-janela").addEventListener("click", aoClicarNoMapa);
+  $("#form-lugar").addEventListener("submit", enviarLugar);
+  $("#lugar-cancelar").addEventListener("click", () => $("#dialogo-lugar").close());
+  $("#lugar-apagar").addEventListener("click", apagarLugar);
 }
 
 /* =================================================================
@@ -1669,6 +2175,7 @@ function configurarEdicao() {
 function renderizarTudo() {
   atualizarTopo();
   $("#botao-novo").hidden = !ehAdmin();
+  atualizarFerramentasDeEdicao();
   renderizarGaleria();
 }
 
@@ -1750,6 +2257,7 @@ async function iniciar() {
   configurarEventos();
   configurarEdicao();
   configurarLugares();
+  configurarEdicaoDosLugares();
   iniciarCinzas(30);
   if (MODO_PREVIA) configurarSimulacao();
 

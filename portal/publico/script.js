@@ -1143,7 +1143,7 @@ function renderizarAbaContas(raiz) {
   raiz.append(listaOuVazio(itens, "Nenhuma conta cadastrada."));
 }
 
-const ROTULO_EDITOR = "Editor (registra na Linha do Tempo e cadastra personagens; alterar ou apagar acontecimentos passa pela sua aprovação)";
+const ROTULO_EDITOR = "Editor (registra na Linha do Tempo, cadastra personagens e marca lugares nos mapas; alterar ou apagar acontecimentos passa pela sua aprovação)";
 
 function formularioNovaConta() {
   abrirFormulario({
