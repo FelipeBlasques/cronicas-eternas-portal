@@ -413,6 +413,7 @@ function criarId(nome, existentes) {
 
 const CAMPOS_IMAGEM = ["capa", "titulo", "arte"]; // campanhas
 const CAMPOS_IMAGEM_PERSONAGEM = ["capa", "arte"]; // personagens: o nome agora é texto, com fonte escolhida
+const CAMPOS_IMAGEM_GALERIA = ["retrato"]; // a arte da ficha na galeria, separada do card das Mesas
 const TIPOS_IMAGEM = {
   "image/png": ".png",
   "image/jpeg": ".jpg",
@@ -564,6 +565,7 @@ module.exports = {
   criarId,
   CAMPOS_IMAGEM,
   CAMPOS_IMAGEM_PERSONAGEM,
+  CAMPOS_IMAGEM_GALERIA,
   TIPOS_IMAGEM,
   arquivoEnviado,
   validarImagens,

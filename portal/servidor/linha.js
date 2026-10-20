@@ -222,9 +222,9 @@ function pedidoPublico(pedido, contexto) {
   return publico;
 }
 
-// Para o retrato, a arte ou, sem ela, a capa. As mesas desempatam nomes repetidos.
+// O círculo usa o retrato da galeria. As mesas desempatam nomes repetidos.
 function personagensDaLinha(conta, contexto) {
-  const imagemDe = (p) => p.arte || p.capa || null;
+  const imagemDe = (p) => p.retrato || null;
   return [
     ...dados.personagens.map((p) => ({
       id: p.id,
