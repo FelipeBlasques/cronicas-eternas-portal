@@ -822,6 +822,7 @@ function configurarEntrada() {
       form.reset();
       const destino = destinoDepoisDeEntrar();
       if (destino) return location.assign(destino);
+      atualizarBarra(); // a página não recarrega, e os números da barra são da conta que entrou
       await abrirPortal();
     } catch (falha) {
       erro.textContent = falha.message;

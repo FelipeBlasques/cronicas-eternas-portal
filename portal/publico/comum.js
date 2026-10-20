@@ -74,7 +74,7 @@ const PAGINAS = [
     nome: "Regras da casa",
     curto: "Regras",
     caminho: "regras/",
-    pronta: false,
+    pronta: true,
     icone: "M6.5 2.5h11a1.5 1.5 0 0 1 1.5 1.5v15.5H6.5a2 2 0 0 0 0 4H19M6.5 2.5A2 2 0 0 0 4.5 4.5v17M9.5 7h6M9.5 10.5h4", // livro fechado
   },
 ];
@@ -167,6 +167,25 @@ function marcarNaBarra(id, quantas, explicacao = "") {
     detalhe.hidden = !quantas;
     detalhe.textContent = explicacao;
   }
+}
+
+// Os números da barra em qualquer página: as regras da casa novas ou alteradas desde a
+// última visita e, para o administrador, os pedidos dos editores na Linha do Tempo.
+// Fora da prévia e em silêncio: sem sessão ou sem conexão, a barra só fica sem números.
+async function atualizarBarra() {
+  if (MODO_PREVIA) return;
+  let barra;
+  try {
+    barra = await pedir("GET", "/api/barra", undefined, { silencioso: true });
+  } catch {
+    return;
+  }
+  if (barra.pendenciasLinha !== undefined) {
+    const quantas = barra.pendenciasLinha;
+    marcarNaBarra("linha", quantas, quantas === 1 ? "1 pedido para aprovar" : `${quantas} pedidos para aprovar`);
+  }
+  const novas = barra.novidadesRegras ?? 0;
+  marcarNaBarra("regras", novas, novas === 1 ? "1 regra nova" : `${novas} regras novas`);
 }
 
 /* =================================================================
@@ -602,10 +621,12 @@ function iniciarCinzas(quantas = 34) {
 }
 
 /* =================================================================
-   Ao carregar: monta a barra lateral e acerta os links de pasta
+   Ao carregar: monta a barra lateral, acende os números dela e
+   acerta os links de pasta
    ================================================================= */
 
 montarBarraLateral();
+atualizarBarra();
 
 if (COMO_ARQUIVO) {
   for (const link of document.querySelectorAll('a[href="./"], a[href="../"]')) {
