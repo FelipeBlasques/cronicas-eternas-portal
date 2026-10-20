@@ -27,6 +27,13 @@ const apiDoServidor = {
   marcarVisto: () => pedir("POST", "/api/regras/visto", undefined, { silencioso: true }),
   estado: () => pedir("GET", "/api/estado", undefined, { silencioso: true }),
   sair: () => pedir("POST", "/api/sair"),
+  criarCapitulo: (nome) => pedir("POST", "/api/regras/capitulos", { nome }),
+  renomearCapitulo: (id, nome) => pedir("PUT", caminhoDe("/api/regras/capitulos", id), { nome }),
+  apagarCapitulo: (id) => pedir("DELETE", caminhoDe("/api/regras/capitulos", id)),
+  criarRegra: (dados) => pedir("POST", "/api/regras/itens", dados),
+  alterarRegra: (id, dados) => pedir("PUT", caminhoDe("/api/regras/itens", id), dados),
+  apagarRegra: (id) => pedir("DELETE", caminhoDe("/api/regras/itens", id)),
+  mudarOrdem: (ordem) => pedir("POST", "/api/regras/ordem", ordem),
 };
 
 /* =================================================================
@@ -149,6 +156,59 @@ function criarApiDePrevia() {
   let banco = exemplosDaPrevia();
   let conta = CONTAS_DA_PREVIA.admin;
 
+  // As mesmas conferências e mensagens do servidor/regras.js
+  const LIMITES = { capitulos: 40, itens: 500 };
+  const SITUACOES = ["vigor", "teste", "revogada"];
+
+  function exigirAdmin() {
+    if (conta.cargo !== "admin") throw erroComCodigo("Só o administrador pode fazer isso.", "proibido");
+  }
+
+  function textoValido(valor, campo, max) {
+    const limpo = typeof valor === "string" ? valor.trim() : "";
+    if (!limpo) throw erroComCodigo(`Preencha o campo ${campo}.`);
+    if (limpo.length > max) throw erroComCodigo(`O campo ${campo} pode ter no máximo ${max} caracteres.`);
+    return limpo;
+  }
+
+  function novoId(prefixo, lista) {
+    let id;
+    do id = `${prefixo}${Math.random().toString(16).slice(2, 10).padEnd(8, "0")}`;
+    while (lista.some((x) => x.id === id));
+    return id;
+  }
+
+  function acharCapitulo(id) {
+    const capitulo = banco.capitulos.find((c) => c.id === id);
+    if (!capitulo) throw erroComCodigo("Esse capítulo não existe mais. Recarregue a página.", "nao-encontrado");
+    return capitulo;
+  }
+
+  function acharRegra(id) {
+    const regra = banco.itens.find((r) => r.id === id);
+    if (!regra) throw erroComCodigo("Essa regra não existe mais. Recarregue a página.", "nao-encontrado");
+    return regra;
+  }
+
+  function valoresDaRegra(dados) {
+    const titulo = textoValido(dados.titulo, "Título", 120);
+    if (!banco.capitulos.some((c) => c.id === dados.capitulo)) throw erroComCodigo("Escolha um capítulo da lista.");
+    const textoDaRegra = textoValido(dados.texto, "Texto", 6000);
+    if (!SITUACOES.includes(dados.situacao)) {
+      throw erroComCodigo("Escolha a situação da regra: em vigor, em teste ou revogada.");
+    }
+    const mesas = [...new Set((dados.mesas ?? []).filter((id) => banco.mesas.some((m) => m.id === id)))];
+    return { titulo, capitulo: dados.capitulo, texto: textoDaRegra, mesas, situacao: dados.situacao };
+  }
+
+  function novaOrdem(atual, ids) {
+    const recusar = () => erroComCodigo("A ordem enviada não confere com a lista atual. Recarregue a página.");
+    if (!Array.isArray(ids) || ids.length !== atual.length || new Set(ids).size !== ids.length) throw recusar();
+    const nova = ids.map((id) => atual.find((x) => x.id === id));
+    if (nova.some((x) => !x)) throw recusar();
+    return nova;
+  }
+
   return {
     trocarConta(cargo) {
       conta = CONTAS_DA_PREVIA[cargo] ?? CONTAS_DA_PREVIA.admin;
@@ -183,6 +243,72 @@ function criarApiDePrevia() {
       await esperar(100);
       return {};
     },
+    async criarCapitulo(nome) {
+      await esperar(160);
+      exigirAdmin();
+      const valido = textoValido(nome, "Nome do capítulo", 60);
+      if (banco.capitulos.length >= LIMITES.capitulos) {
+        throw erroComCodigo(`O livro pode ter no máximo ${LIMITES.capitulos} capítulos.`);
+      }
+      const capitulo = { id: novoId("cap-", banco.capitulos), nome: valido };
+      banco.capitulos.push(capitulo);
+      return { capitulo: { id: capitulo.id } };
+    },
+    async renomearCapitulo(id, nome) {
+      await esperar(160);
+      exigirAdmin();
+      const valido = textoValido(nome, "Nome do capítulo", 60);
+      acharCapitulo(id).nome = valido;
+      return { ok: true };
+    },
+    async apagarCapitulo(id) {
+      await esperar(160);
+      exigirAdmin();
+      const capitulo = acharCapitulo(id);
+      if (banco.itens.some((r) => r.capitulo === id)) {
+        throw erroComCodigo("Esse capítulo ainda tem regras. Mova ou apague as regras dele antes.");
+      }
+      banco.capitulos = banco.capitulos.filter((c) => c !== capitulo);
+      return { ok: true };
+    },
+    async criarRegra(dados) {
+      await esperar(220);
+      exigirAdmin();
+      const valores = valoresDaRegra(dados);
+      if (banco.itens.length >= LIMITES.itens) {
+        throw erroComCodigo(`O livro pode ter no máximo ${LIMITES.itens} regras.`);
+      }
+      const quando = new Date().toISOString();
+      const regra = { id: novoId("regra-", banco.itens), ...valores, criadaEm: quando, alteradaEm: quando, avisadaEm: quando };
+      banco.itens.push(regra);
+      return { regra: { id: regra.id } };
+    },
+    async alterarRegra(id, dados) {
+      await esperar(220);
+      exigirAdmin();
+      const regra = acharRegra(id);
+      const valores = valoresDaRegra(dados);
+      if (valores.capitulo !== regra.capitulo) banco.itens = [...banco.itens.filter((r) => r !== regra), regra];
+      Object.assign(regra, valores);
+      regra.alteradaEm = new Date().toISOString();
+      if (dados.avisar === true) regra.avisadaEm = regra.alteradaEm;
+      return { ok: true };
+    },
+    async apagarRegra(id) {
+      await esperar(160);
+      exigirAdmin();
+      const regra = acharRegra(id);
+      banco.itens = banco.itens.filter((r) => r !== regra);
+      return { ok: true };
+    },
+    async mudarOrdem(ordem) {
+      await esperar(120);
+      exigirAdmin();
+      if (ordem.capitulos !== undefined) banco.capitulos = novaOrdem(banco.capitulos, ordem.capitulos);
+      else if (ordem.itens !== undefined) banco.itens = novaOrdem(banco.itens, ordem.itens);
+      else throw erroComCodigo("Envie a nova ordem dos capítulos ou das regras.");
+      return { ok: true };
+    },
   };
 }
 
@@ -198,6 +324,7 @@ const estado = {
   capitulos: [],
   itens: [],
   novidades: 0,
+  novidadesDaVisita: new Set(), // ids das regras que eram novidade quando a pessoa chegou
   filtros: { busca: "", mesas: new Set(), revogadas: false },
 };
 
@@ -244,26 +371,27 @@ function passaNosFiltros(regra) {
   return !termo || normalizar(`${regra.titulo} ${resumoDe(regra.texto)}`).includes(termo);
 }
 
+// Um botão na cor da mesa, que põe e tira a mesa do conjunto (nos filtros e no diálogo da regra)
+function chipDeMesa(mesa, escolhidas, aoMudar = () => {}) {
+  const chip = criar("button", "escolha escolha--mesa", mesa.nome);
+  chip.type = "button";
+  chip.style.setProperty("--cor", corVisivel(mesa.cor));
+  chip.setAttribute("aria-pressed", String(escolhidas.has(mesa.id)));
+  chip.addEventListener("click", () => {
+    if (escolhidas.has(mesa.id)) escolhidas.delete(mesa.id);
+    else escolhidas.add(mesa.id);
+    chip.setAttribute("aria-pressed", String(escolhidas.has(mesa.id)));
+    aoMudar();
+  });
+  return chip;
+}
+
 function renderizarFiltros() {
   const f = estado.filtros;
   for (const id of [...f.mesas]) if (!mesaPorId(id)) f.mesas.delete(id);
   const grupo = $("#filtro-mesas");
   grupo.hidden = estado.mesas.length === 0;
-  grupo.replaceChildren(
-    ...estado.mesas.map((mesa) => {
-      const chip = criar("button", "escolha escolha--mesa", mesa.nome);
-      chip.type = "button";
-      chip.style.setProperty("--cor", corVisivel(mesa.cor));
-      chip.setAttribute("aria-pressed", String(f.mesas.has(mesa.id)));
-      chip.addEventListener("click", () => {
-        if (f.mesas.has(mesa.id)) f.mesas.delete(mesa.id);
-        else f.mesas.add(mesa.id);
-        chip.setAttribute("aria-pressed", String(f.mesas.has(mesa.id)));
-        renderizarLivro();
-      });
-      return chip;
-    }),
-  );
+  grupo.replaceChildren(...estado.mesas.map((mesa) => chipDeMesa(mesa, f.mesas, renderizarLivro)));
   $("#filtro-busca").value = f.busca;
   $("#filtro-revogadas").checked = f.revogadas;
 }
@@ -333,7 +461,22 @@ function cartaoDaRegra({ regra, numero }) {
   const pe = criar("footer", "regra__pe");
   const link = botao("", "botao--leve botao--pequeno regra__link", () => copiarLink(regra));
   link.append(simbolo("icone-corrente"), criar("span", null, "Copiar link"));
-  pe.append(criar("span", "regra__data", dataDaRegra(regra)), link);
+  const acoes = criar("span", "regra__acoes");
+  acoes.append(link);
+  if (ehAdmin()) {
+    const lado = vizinhasDe(regra);
+    const i = lado.indexOf(regra);
+    acoes.append(
+      ...setasELapis({
+        nome: "a regra",
+        primeira: i === 0,
+        ultima: i === lado.length - 1,
+        mover: (passo) => moverRegra(regra, passo),
+        alterar: () => abrirRegra(regra),
+      }),
+    );
+  }
+  pe.append(criar("span", "regra__data", dataDaRegra(regra)), acoes);
 
   cartao.append(cabeca, texto, pe);
   return cartao;
@@ -342,7 +485,23 @@ function cartaoDaRegra({ regra, numero }) {
 function secaoDoCapitulo({ capitulo, vazio, regras }) {
   const secao = criar("section", "capitulo");
   secao.id = capitulo.id;
-  secao.append(criar("h2", "capitulo__titulo", capitulo.nome));
+  const cabeca = criar("header", "capitulo__cabeca");
+  cabeca.append(criar("h2", "capitulo__titulo", capitulo.nome));
+  if (ehAdmin()) {
+    const i = estado.capitulos.indexOf(capitulo);
+    const acoes = criar("span", "capitulo__acoes");
+    acoes.append(
+      ...setasELapis({
+        nome: "o capítulo",
+        primeira: i === 0,
+        ultima: i === estado.capitulos.length - 1,
+        mover: (passo) => moverCapitulo(capitulo, passo),
+        alterar: () => abrirCapitulo(capitulo),
+      }),
+    );
+    cabeca.append(acoes);
+  }
+  secao.append(cabeca);
   if (vazio) secao.append(criar("p", "capitulo__vazio", "Nenhuma regra neste capítulo ainda."));
   else secao.append(...regras.map(cartaoDaRegra));
   return secao;
@@ -470,24 +629,301 @@ function marcarCapituloAtual() {
 }
 
 /* =================================================================
+   Edição do administrador
+   ================================================================= */
+
+const edicao = {
+  regra: null, // a regra sendo alterada, ou null para uma nova
+  mesas: new Set(),
+  capitulo: null, // o capítulo sendo alterado, ou null para um novo
+};
+
+const formRegra = () => $("#form-regra");
+
+function renderizarAcoes() {
+  $("#acoes-admin").hidden = !ehAdmin();
+}
+
+function botaoIcone(rotulo, conteudo, aoClicar) {
+  const elemento = botao("", "botao-icone", aoClicar);
+  elemento.setAttribute("aria-label", rotulo);
+  elemento.title = rotulo;
+  elemento.append(conteudo);
+  return elemento;
+}
+
+// ↑ ↓ e o lápis, no pé de cada regra e na cabeça de cada capítulo
+function setasELapis({ nome, primeira, ultima, mover, alterar }) {
+  const subir = botaoIcone(`Subir ${nome}`, "↑", () => mover(-1));
+  subir.dataset.passo = "-1";
+  subir.disabled = primeira;
+  const descer = botaoIcone(`Descer ${nome}`, "↓", () => mover(1));
+  descer.dataset.passo = "1";
+  descer.disabled = ultima;
+  return [subir, descer, botaoIcone(`Alterar ${nome}`, simbolo("icone-lapis"), alterar)];
+}
+
+/* ---------- Ordem ---------- */
+
+// As regras com que esta troca de lugar: as do mesmo capítulo e do mesmo lado. As revogadas
+// aparecem sempre no fim do capítulo, então só trocam de lugar entre si.
+function vizinhasDe(regra) {
+  const revogada = regra.situacao === "revogada";
+  return estado.itens.filter((r) => r.capitulo === regra.capitulo && (r.situacao === "revogada") === revogada);
+}
+
+// A lista completa de ids, com os dois trocados de lugar
+function idsTrocados(lista, a, b) {
+  const ids = lista.map((x) => x.id);
+  const i = ids.indexOf(a.id);
+  const j = ids.indexOf(b.id);
+  [ids[i], ids[j]] = [ids[j], ids[i]];
+  return ids;
+}
+
+function moverRegra(regra, passo) {
+  const lado = vizinhasDe(regra);
+  const outra = lado[lado.indexOf(regra) + passo];
+  if (outra) enviarOrdem({ itens: idsTrocados(estado.itens, regra, outra) }, regra.id, passo);
+}
+
+function moverCapitulo(capitulo, passo) {
+  const outro = estado.capitulos[estado.capitulos.indexOf(capitulo) + passo];
+  if (outro) enviarOrdem({ capitulos: idsTrocados(estado.capitulos, capitulo, outro) }, capitulo.id, passo);
+}
+
+// Cada clique manda a lista completa na ordem nova. Depois de desenhar, o foco volta para a
+// mesma seta, ou para a outra se esta chegou ao fim.
+let ordenando = false;
+async function enviarOrdem(ordem, id, passo) {
+  if (ordenando) return;
+  ordenando = true;
+  try {
+    await api.mudarOrdem(ordem);
+    await recarregar();
+    const caixa = document.getElementById(id);
+    const setas = [...(caixa?.querySelectorAll(":scope > :is(header, footer) [data-passo]") ?? [])];
+    const seta = setas.find((s) => s.dataset.passo === String(passo) && !s.disabled) ?? setas.find((s) => !s.disabled);
+    seta?.focus();
+  } catch (falha) {
+    avisarFalha(falha);
+  } finally {
+    ordenando = false;
+  }
+}
+
+/* ---------- Diálogo da regra ---------- */
+
+function abrirRegra(regra = null) {
+  if (!estado.capitulos.length) {
+    perguntar({ titulo: "Falta um capítulo", texto: "Crie um capítulo antes de escrever a primeira regra." });
+    return;
+  }
+  const form = formRegra();
+  form.reset();
+  edicao.regra = regra;
+  edicao.mesas = new Set(regra?.mesas ?? []);
+
+  $("#regra-dialogo-titulo").textContent = regra ? "Alterar regra" : "Nova regra";
+  $("#regra-enviar").textContent = regra ? "Salvar" : "Criar regra";
+  $("#regra-apagar").hidden = !regra;
+  // "Avisar como alteração" só aparece ao alterar, e já vem marcada
+  $("#campo-avisar").hidden = !regra;
+
+  form.capitulo.replaceChildren(...estado.capitulos.map((c) => new Option(c.nome, c.id)));
+  // Uma regra nova vai para o capítulo que está na tela
+  form.capitulo.value = regra?.capitulo ?? ($("#sumario-celular").value || estado.capitulos[0].id);
+  form.titulo.value = regra?.titulo ?? "";
+  form.situacao.value = regra?.situacao ?? "vigor";
+  form.texto.value = regra?.texto ?? "";
+
+  const mesas = $("#escolha-mesas");
+  if (estado.mesas.length) mesas.replaceChildren(...estado.mesas.map((mesa) => chipDeMesa(mesa, edicao.mesas)));
+  else mesas.replaceChildren(criar("p", "escolhas__vazio", "Nenhuma mesa cadastrada ainda."));
+
+  atualizarPrevia();
+  $("#dialogo-regra").showModal();
+  form.titulo.focus();
+}
+
+// O texto formatado ao lado do campo, como vai ficar na página
+function atualizarPrevia() {
+  const partes = paragrafosDe(formRegra().texto.value);
+  if (!partes.length) partes.push(criar("p", "previa-texto__vazio", "O texto formatado aparece aqui."));
+  $("#previa-texto").replaceChildren(...partes);
+}
+
+function dadosDaRegra() {
+  const form = formRegra();
+  const dados = {
+    capitulo: form.capitulo.value,
+    titulo: form.titulo.value.trim(),
+    texto: form.texto.value.trim(),
+    mesas: [...edicao.mesas],
+    situacao: form.situacao.value,
+  };
+  if (edicao.regra) dados.avisar = form.avisar.checked;
+  return dados;
+}
+
+async function salvarRegra(mensagem) {
+  const enviar = $("#regra-enviar");
+  enviar.disabled = true;
+  try {
+    let id = edicao.regra?.id;
+    if (edicao.regra) await api.alterarRegra(id, dadosDaRegra());
+    else id = (await api.criarRegra(dadosDaRegra())).regra.id;
+    $("#dialogo-regra").close();
+    await depoisDeMudar(mensagem ?? (edicao.regra ? "Regra alterada." : "Regra criada."));
+    irParaRegra(id);
+  } catch (falha) {
+    avisarFalha(falha);
+  } finally {
+    enviar.disabled = false;
+  }
+}
+
+// Apagar tira a regra do livro de vez. Se ela só deixou de valer, a confirmação sugere revogar:
+// a regra sai da página, mas continua lá para quem marcar "Mostrar revogadas".
+async function apagarRegra() {
+  const regra = edicao.regra;
+  const jaRevogada = regra.situacao === "revogada";
+  const apagar = await perguntar({
+    titulo: "Apagar esta regra?",
+    texto: jaRevogada
+      ? `“${regra.titulo}” sai do livro de vez.`
+      : `“${regra.titulo}” sai do livro de vez. Se ela só deixou de valer, revogue: a regra some da página, mas continua guardada para quem marcar “Mostrar revogadas”.`,
+    confirmar: "Apagar de vez",
+    cancelar: jaRevogada ? "Cancelar" : "Revogar em vez disso",
+    perigo: true,
+  });
+  if (!apagar) {
+    // perguntar() só diz se confirmou: o outro botão fecha o aviso com "cancelar"; o Esc, sem nada
+    if (!jaRevogada && $("#dialogo-aviso").returnValue === "cancelar") {
+      formRegra().situacao.value = "revogada";
+      await salvarRegra("Regra revogada.");
+    }
+    return;
+  }
+  try {
+    await api.apagarRegra(regra.id);
+    $("#dialogo-regra").close();
+    await depoisDeMudar("Regra apagada.");
+  } catch (falha) {
+    avisarFalha(falha);
+  }
+}
+
+/* ---------- Diálogo do capítulo ---------- */
+
+function abrirCapitulo(capitulo = null) {
+  const form = $("#form-capitulo");
+  form.reset();
+  edicao.capitulo = capitulo;
+  // Apagar só aparece com o capítulo sem nenhuma regra, nem revogada
+  const vazio = Boolean(capitulo) && !estado.itens.some((r) => r.capitulo === capitulo.id);
+  $("#capitulo-dialogo-titulo").textContent = capitulo ? "Alterar capítulo" : "Novo capítulo";
+  $("#capitulo-enviar").textContent = capitulo ? "Salvar" : "Criar capítulo";
+  $("#capitulo-apagar").hidden = !vazio;
+  $("#capitulo-ajuda").hidden = !capitulo || vazio;
+  form.nome.value = capitulo?.nome ?? "";
+  $("#dialogo-capitulo").showModal();
+  form.nome.focus();
+}
+
+async function salvarCapitulo(evento) {
+  evento.preventDefault();
+  const capitulo = edicao.capitulo;
+  const nome = $("#form-capitulo").nome.value.trim();
+  const enviar = $("#capitulo-enviar");
+  enviar.disabled = true;
+  try {
+    if (capitulo) {
+      await api.renomearCapitulo(capitulo.id, nome);
+      $("#dialogo-capitulo").close();
+      await depoisDeMudar("Capítulo renomeado.");
+    } else {
+      const resposta = await api.criarCapitulo(nome);
+      $("#dialogo-capitulo").close();
+      await depoisDeMudar("Capítulo criado. Ele entra no fim do livro.");
+      irParaCapitulo(resposta.capitulo.id);
+    }
+  } catch (falha) {
+    avisarFalha(falha);
+  } finally {
+    enviar.disabled = false;
+  }
+}
+
+async function apagarCapitulo() {
+  const capitulo = edicao.capitulo;
+  const apagar = await perguntar({
+    titulo: "Apagar este capítulo?",
+    texto: `“${capitulo.nome}” sai do livro.`,
+    confirmar: "Apagar",
+    cancelar: "Cancelar",
+    perigo: true,
+  });
+  if (!apagar) return;
+  try {
+    await api.apagarCapitulo(capitulo.id);
+    $("#dialogo-capitulo").close();
+    await depoisDeMudar("Capítulo apagado.");
+  } catch (falha) {
+    avisarFalha(falha);
+  }
+}
+
+// Depois de cada mudança: desenha de novo e marca a visita, para a próxima não mostrar como
+// novidade o que o próprio administrador acabou de mudar
+async function depoisDeMudar(mensagem) {
+  await recarregar();
+  marcarVisto();
+  avisoRapido(mensagem);
+}
+
+function configurarEdicao() {
+  $("#botao-regra").addEventListener("click", () => abrirRegra());
+  $("#botao-capitulo").addEventListener("click", () => abrirCapitulo());
+
+  const form = formRegra();
+  form.addEventListener("submit", (evento) => {
+    evento.preventDefault();
+    salvarRegra();
+  });
+  form.texto.addEventListener("input", atualizarPrevia);
+  $("#regra-cancelar").addEventListener("click", () => $("#dialogo-regra").close());
+  $("#regra-apagar").addEventListener("click", apagarRegra);
+
+  $("#form-capitulo").addEventListener("submit", salvarCapitulo);
+  $("#capitulo-cancelar").addEventListener("click", () => $("#dialogo-capitulo").close());
+  $("#capitulo-apagar").addEventListener("click", apagarCapitulo);
+}
+
+/* =================================================================
    Carregar e desenhar tudo
    ================================================================= */
 
 function renderizarTudo() {
   atualizarTopo();
+  renderizarAcoes();
   renderizarNovidades();
   renderizarFiltros();
   renderizarLivro();
 }
 
-async function recarregar() {
+// As novidades são as da chegada à página ("chegada"). Depois de o administrador mudar alguma
+// coisa, o servidor já conta a partir desta visita, e sem isso os selos dela sumiriam.
+async function recarregar({ chegada = false } = {}) {
   const dados = await api.regras();
+  if (chegada) estado.novidadesDaVisita = new Set(dados.itens.filter((r) => r.novidade).map((r) => r.id));
+  const itens = dados.itens.map((r) => ({ ...r, novidade: estado.novidadesDaVisita.has(r.id) }));
   Object.assign(estado, {
     conta: dados.conta,
     mesas: dados.mesas,
     capitulos: dados.capitulos,
-    itens: dados.itens,
-    novidades: dados.novidades ?? 0,
+    itens,
+    novidades: itens.filter((r) => r.novidade).length,
   });
   renderizarTudo();
 }
@@ -555,13 +991,13 @@ function configurarSimulacao() {
     api.trocarConta(seletor.value);
     resumo();
     for (const dialogo of document.querySelectorAll("dialog[open]")) dialogo.close();
-    await recarregar();
+    await recarregar({ chegada: true });
     marcarVisto();
     avisoRapido(`Agora você vê a página como ${NOMES_DOS_CARGOS[seletor.value]}.`);
   });
   $("#sim-restaurar").addEventListener("click", async () => {
     api.restaurar();
-    await recarregar();
+    await recarregar({ chegada: true });
     marcarVisto();
     avisoRapido("Exemplos restaurados.");
   });
@@ -574,11 +1010,12 @@ function configurarSimulacao() {
 async function iniciar() {
   medirAlturas();
   configurarEventos();
+  configurarEdicao();
   iniciarCinzas(30);
   if (MODO_PREVIA) configurarSimulacao();
 
   try {
-    await recarregar();
+    await recarregar({ chegada: true });
   } catch (falha) {
     if (falha.codigo === "sem-sessao") return irParaEntrada({ voltar: true });
     $("#pagina").hidden = false;
