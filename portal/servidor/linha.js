@@ -680,19 +680,23 @@ async function salvarMesaAntiga(req, res, conta, id) {
   if (typeof corpo.cor !== "string" || !REGEX_COR.test(corpo.cor)) throw new ErroHttp(400, "Escolha uma cor válida.");
   const cor = corpo.cor.toLowerCase();
   const linha = dados.linha;
+  // Criar devolve o id, para a página Personagens marcar a mesa nova no formulário
+  let resposta = { ok: true };
   if (id) {
     const mesa = linha.mesasAntigas.find((m) => m.id === id);
     if (!mesa) throw new ErroHttp(404, "Essa mesa não existe mais.", "nao-encontrado");
     Object.assign(mesa, { nome, cor });
   } else {
     if (linha.mesasAntigas.length >= LIMITES_LINHA.mesasAntigas) throw new ErroHttp(400, "Há mesas antigas demais.");
-    linha.mesasAntigas.push({ id: novoId("antiga-", idsDasMesas()), nome, cor });
+    const nova = { id: novoId("antiga-", idsDasMesas()), nome, cor };
+    linha.mesasAntigas.push(nova);
+    resposta = { mesa: { id: nova.id } };
   }
   await salvarDados();
-  enviarJson(res, id ? 200 : 201, { ok: true });
+  enviarJson(res, id ? 200 : 201, resposta);
 }
 
-// Apagar uma mesa antiga tira também as citações dela
+// Apagar uma mesa antiga tira também as citações dela e a tira dos outros personagens
 async function apagarMesaAntiga(res, conta, id) {
   exigirAdmin(conta);
   const linha = dados.linha;
@@ -701,6 +705,9 @@ async function apagarMesaAntiga(res, conta, id) {
   for (const ev of linha.acontecimentos) ev.mesas = ev.mesas.filter((m) => m !== id);
   for (const p of linha.pendencias) {
     if (Array.isArray(p.dados?.mesas)) p.dados.mesas = p.dados.mesas.filter((m) => m !== id);
+  }
+  for (const p of dados.outrosPersonagens ?? []) {
+    if (Array.isArray(p.mesas)) p.mesas = p.mesas.filter((m) => m !== id);
   }
   await salvarDados();
   enviarJson(res, 200, { ok: true });

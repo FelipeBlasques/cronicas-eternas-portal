@@ -61,6 +61,7 @@
         <p class="cabeca-galeria__sub">Quem já caminhou por Draevor, nas mesas de hoje e nas antigas. Os que caíram continuam aqui.</p>
       </div>
       <div class="cabeca-galeria__acoes">
+        <button id="botao-mesas-antigas" class="botao botao--leve" type="button" hidden>Mesas antigas</button>
         <button id="botao-novo" class="botao botao--principal botao--brasa" type="button" hidden>+ Personagem</button>
       </div>
       <span class="cabeca-galeria__regua" aria-hidden="true"></span>
@@ -147,6 +148,23 @@
         <fieldset id="grupo-mesas" class="grupo">
           <legend class="campo__rotulo">Mesas</legend>
           <div id="escolha-mesas" class="escolhas"></div>
+          <!-- "+ Mesa antiga": só o administrador. Sem form próprio, porque já está dentro de um. -->
+          <div id="nova-mesa" class="nova-mesa" hidden>
+            <div class="painel__linha painel__linha--sigla">
+              <label class="campo">
+                <span class="campo__rotulo">Nome da mesa</span>
+                <input name="mesa_nome" maxlength="80" autocomplete="off">
+                <span id="nova-mesa-sigla" class="campo__ajuda campo__sigla"></span>
+              </label>
+              <label class="campo">
+                <span class="campo__rotulo">Cor</span>
+                <input name="mesa_cor" type="color" value="#6b5a45">
+              </label>
+              <button id="nova-mesa-adicionar" class="botao botao--principal botao--pequeno" type="button">Adicionar</button>
+              <button id="nova-mesa-cancelar" class="botao botao--leve" type="button">Cancelar</button>
+            </div>
+            <p id="erro-nova-mesa" class="mensagem-erro" role="alert" hidden></p>
+          </div>
         </fieldset>
 
         <fieldset id="grupo-situacao" class="grupo">
@@ -227,6 +245,15 @@
         <button id="edicao-enviar" class="botao botao--principal" type="submit">Cadastrar</button>
       </div>
     </form>
+  </dialog>
+
+  <!-- ============ Mesas antigas (só o administrador; montado pelo personagens.js) ============ -->
+  <dialog id="dialogo-painel" class="dialogo dialogo--largo" aria-labelledby="painel-titulo">
+    <h2 id="painel-titulo" class="dialogo__titulo">Mesas antigas</h2>
+    <div id="painel-conteudo" class="painel"></div>
+    <div class="dialogo__acoes">
+      <button id="painel-fechar" class="botao botao--leve" type="button">Fechar</button>
+    </div>
   </dialog>
 
   <!-- ============ Aviso e confirmação ============ -->

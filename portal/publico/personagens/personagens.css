@@ -906,6 +906,123 @@ button.card--desaparecido:is(:hover, :focus-visible) .card__nevoa {
   margin-right: auto;
 }
 
+/* "+ Mesa antiga": o botão no fim das mesas e a linha que ele abre abaixo delas */
+.escolhas__mais {
+  margin-left: 0.3rem;
+}
+
+.nova-mesa {
+  display: grid;
+  gap: 0.6rem;
+  padding: 0.8rem 0.95rem 0.9rem;
+  border: 1px dashed var(--ferro);
+  border-radius: var(--raio);
+}
+
+/* A sigla abaixo do nome da mesa. A linha fica reservada, para nada pular enquanto se digita. */
+.campo__sigla {
+  min-height: 1.45em;
+}
+
+/* Na linha com o nome da mesa (o primeiro), a cor e os botões ficam na altura do campo, não da sigla */
+.painel__linha--sigla > :not(:first-child) {
+  margin-bottom: calc(0.2rem + 0.9rem * 1.45);
+}
+
+/* =================================================================
+   Mesas antigas: o painel do administrador (cópia do da Linha do Tempo)
+   ================================================================= */
+
+.painel {
+  display: grid;
+  gap: 1rem;
+  max-height: min(62vh, 42rem);
+  overflow: auto;
+  padding-right: 0.5rem;
+}
+
+.painel__texto {
+  margin: 0;
+  color: var(--pergaminho-apagado);
+}
+
+.painel__lista {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.painel__item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.15rem 0.9rem;
+  padding: 0.65rem 0.85rem;
+  background: rgba(12, 10, 9, 0.45);
+  border: 1px solid var(--ferro-fraco);
+  border-radius: var(--raio);
+}
+
+.painel__item > .ponto-cor {
+  grid-row: 1 / span 2;
+}
+
+.ponto-cor {
+  width: 1rem;
+  height: 1rem;
+  border-radius: 50%;
+  background: var(--cor);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5), 0 0 0 3px rgba(232, 221, 200, 0.08);
+}
+
+.painel__nome {
+  font-family: var(--fonte-gotica);
+  font-size: 1.3rem;
+  line-height: 1.1;
+}
+
+.painel__detalhe {
+  grid-column: 2;
+  font-size: 0.92rem;
+  font-style: italic;
+  color: var(--cinza);
+}
+
+.painel__acoes {
+  grid-column: 3;
+  grid-row: 1 / span 2;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.3rem 1rem;
+}
+
+.painel__form {
+  display: grid;
+  gap: 0.9rem;
+  padding: 0.95rem 1.05rem 1.05rem;
+  border: 1px dashed var(--ferro);
+  border-radius: var(--raio);
+}
+
+.painel__form-titulo {
+  margin: 0;
+  font-family: var(--fonte-gotica);
+  font-size: 1.35rem;
+  font-weight: 500;
+  line-height: 1.1;
+}
+
+.painel__linha {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 0.8rem 1.2rem;
+}
+
+.painel__linha .campo {
+  flex: 1 1 12rem;
+}
+
 /* =================================================================
    Telas pequenas: duas colunas e os filtros atrás de um botão
    ================================================================= */
