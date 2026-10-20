@@ -2,7 +2,9 @@
 /* =================================================================
    Crônicas Eternas: administração
    -----------------------------------------------------------------
-   Contas, campanhas e personagens, só para o administrador.
+   Contas, mesas e personagens, só para o administrador. Todas as
+   mesas ficam em dados.campanhas; naPaginaMesas diz se a mesa
+   aparece na página Mesas.
    ================================================================= */
 
 const crypto = require("node:crypto");
@@ -37,6 +39,8 @@ const {
 } = require("./base");
 const { listarMundos, mundoExiste, ligarMundosPeloNome } = require("./foundry");
 
+const LIMITE_MESAS = 300;
+
 async function dadosDoAdmin() {
   return {
     contas: dados.contas.map((c) => ({ ...contaPublica(c), temSenha: Boolean(c.senha) })),
@@ -56,6 +60,7 @@ async function tratarAdmin(req, res, rota, metodo, contaAtual) {
   }
   if (recurso === "contas") return adminContas(req, res, metodo, id, acao, contaAtual);
   if (recurso === "campanhas" && !acao) return adminCampanhas(req, res, metodo, id);
+  if (recurso === "mesas" && !acao) return adminMesas(req, res, metodo, id);
   if (recurso === "personagens" && !acao) return adminPersonagens(req, res, metodo, id);
   throw new ErroHttp(404, "Endereço não encontrado.");
 }
@@ -135,7 +140,7 @@ function valoresDaCampanha(form) {
     throw new ErroHttp(400, "A senha do mestre pode ter no máximo 200 caracteres.");
   }
   validarImagens(form);
-  return { nome, mundo, cor, mestreUsuario };
+  return { nome, mundo, cor, naPaginaMesas: form.get("na_pagina") === "1", mestreUsuario };
 }
 
 // Senha em branco mantém a que já estava salva
@@ -169,7 +174,7 @@ async function adminCampanhas(req, res, metodo, id) {
   }
 
   const campanha = dados.campanhas.find((c) => c.id === id);
-  if (!campanha) throw new ErroHttp(404, "Campanha não encontrada.");
+  if (!campanha) throw new ErroHttp(404, "Mesa não encontrada.");
 
   if (metodo === "PUT") {
     const form = await lerFormulario(req);
@@ -180,15 +185,77 @@ async function adminCampanhas(req, res, metodo, id) {
     return enviarJson(res, 200, { ok: true });
   }
 
-  if (metodo === "DELETE") {
-    if (dados.personagens.some((p) => p.campanha === campanha.id)) {
-      throw new ErroHttp(409, "Essa campanha ainda tem personagens. Exclua os personagens ou mova para outra campanha antes.");
+  if (metodo === "DELETE") return apagarMesa(res, campanha);
+
+  throw new ErroHttp(405, "Operação não permitida.");
+}
+
+// Apagar uma mesa, pela Administração ou pelos painéis de mesas: as imagens vão junto,
+// e cada página tira o id dela de onde a cita
+async function apagarMesa(res, mesa) {
+  if (dados.personagens.some((p) => p.campanha === mesa.id)) {
+    throw new ErroHttp(409, "Essa mesa ainda tem personagens. Exclua os personagens ou mova para outra mesa antes.");
+  }
+  for (const campo of CAMPOS_IMAGEM) await apagarImagem(mesa[campo]);
+  for (const gancho of ganchos.excluirMesa) gancho(mesa.id);
+  dados.campanhas = dados.campanhas.filter((c) => c !== mesa);
+  await salvarDados();
+  return enviarJson(res, 200, { ok: true });
+}
+
+function nomeDaMesa(valor) {
+  return texto(valor, "Nome da mesa", 80);
+}
+
+function corDaMesa(valor) {
+  if (typeof valor !== "string" || !REGEX_COR.test(valor)) throw new ErroHttp(400, "Escolha uma cor válida.");
+  return valor.toLowerCase();
+}
+
+// Os painéis de mesas da Linha do Tempo e dos Personagens mudam só o nome e a cor.
+// O "Tirar da página" da página Mesas muda só o naPaginaMesas.
+async function adminMesas(req, res, metodo, id) {
+  if (!id && metodo === "POST") {
+    const corpo = await lerJson(req);
+    const nome = nomeDaMesa(corpo.nome);
+    const cor = corDaMesa(corpo.cor);
+    if (dados.campanhas.length >= LIMITE_MESAS) throw new ErroHttp(400, `O portal pode ter no máximo ${LIMITE_MESAS} mesas.`);
+    const mesa = {
+      id: criarId(nome, new Set(dados.campanhas.map((c) => c.id))),
+      nome,
+      mundo: "",
+      cor,
+      naPaginaMesas: false,
+      mestreUsuario: "",
+      mestreSenha: null,
+      capa: null,
+      titulo: null,
+      arte: null,
+    };
+    dados.campanhas.push(mesa);
+    await salvarDados();
+    // Devolve o id, para a página Personagens marcar a mesa nova no formulário
+    return enviarJson(res, 201, { mesa: { id: mesa.id } });
+  }
+
+  const mesa = dados.campanhas.find((c) => c.id === id);
+  if (!mesa) throw new ErroHttp(404, "Essa mesa não existe mais.", "nao-encontrado");
+
+  if (metodo === "PUT") {
+    const corpo = await lerJson(req);
+    const valores = {};
+    if (corpo.nome !== undefined) valores.nome = nomeDaMesa(corpo.nome);
+    if (corpo.cor !== undefined) valores.cor = corDaMesa(corpo.cor);
+    if (corpo.naPaginaMesas !== undefined) {
+      if (typeof corpo.naPaginaMesas !== "boolean") throw new ErroHttp(400, "Diga se a mesa aparece na página Mesas.");
+      valores.naPaginaMesas = corpo.naPaginaMesas;
     }
-    for (const campo of CAMPOS_IMAGEM) await apagarImagem(campanha[campo]);
-    dados.campanhas = dados.campanhas.filter((c) => c !== campanha);
+    Object.assign(mesa, valores);
     await salvarDados();
     return enviarJson(res, 200, { ok: true });
   }
+
+  if (metodo === "DELETE") return apagarMesa(res, mesa);
 
   throw new ErroHttp(405, "Operação não permitida.");
 }
@@ -198,7 +265,7 @@ function valoresDoPersonagem(form) {
   const dono = String(form.get("dono") || "");
   if (!dados.contas.some((c) => c.usuario === dono)) throw new ErroHttp(400, "Escolha o jogador do personagem.");
   const campanha = String(form.get("campanha") || "");
-  if (!dados.campanhas.some((c) => c.id === campanha)) throw new ErroHttp(400, "Escolha a campanha do personagem.");
+  if (!dados.campanhas.some((c) => c.id === campanha)) throw new ErroHttp(400, "Escolha a mesa do personagem.");
   const foundryUsuario = String(form.get("foundry_usuario") || "").trim();
   if (foundryUsuario.length > 60) throw new ErroHttp(400, "O usuário do Foundry pode ter no máximo 60 caracteres.");
   const foundrySenha = String(form.get("foundry_senha") || "");

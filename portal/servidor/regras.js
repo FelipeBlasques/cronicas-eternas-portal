@@ -9,7 +9,7 @@
    ================================================================= */
 
 const crypto = require("node:crypto");
-const { dados, salvarDados, ErroHttp, enviarJson, lerJson, texto } = require("./base");
+const { dados, salvarDados, ganchos, ErroHttp, enviarJson, lerJson, texto } = require("./base");
 
 // Os capítulos que a página ganha na primeira vez, nesta ordem
 const CAPITULOS_INICIAIS = [
@@ -294,5 +294,14 @@ async function mudarOrdem(req, res, conta) {
   await salvarDados();
   enviarJson(res, 200, { ok: true });
 }
+
+// Mesa apagada: sai das regras que a citam
+function tirarMesaDasRegras(id) {
+  for (const item of dados.regras?.itens ?? []) {
+    if (Array.isArray(item.mesas)) item.mesas = item.mesas.filter((m) => m !== id);
+  }
+}
+
+ganchos.excluirMesa.push(tirarMesaDasRegras);
 
 module.exports = { prefixo: "/api/regras", tratar: tratarRegras, iniciar: garantirRegras, contarNovidades };

@@ -546,8 +546,16 @@ function desligarContaDosMapas(conta) {
   }
 }
 
+// Mesa apagada: sai dos mapas que a citam
+function tirarMesaDosMapas(id) {
+  for (const mapa of dados.mapas ?? []) {
+    if (Array.isArray(mapa.mesas)) mapa.mesas = mapa.mesas.filter((m) => m !== id);
+  }
+}
+
 ganchos.renomearConta.push(renomearNosMapas);
 ganchos.excluirConta.push(desligarContaDosMapas);
+ganchos.excluirMesa.push(tirarMesaDosMapas);
 
 // Os endereços /api/mapas/... são desta página. "iniciar" confere os dados ao ligar o portal
 // e devolve true quando precisou mudar alguma coisa.

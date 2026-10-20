@@ -3,9 +3,11 @@
    Crônicas Eternas: Personagens, a galeria de Draevor
    -----------------------------------------------------------------
    Os personagens do portal (os dos jogadores, com card nas Mesas)
-   ganham uma ficha. Os outros, NPCs e personagens de mesas antigas,
-   são cadastrados aqui pelo administrador ou por um editor. Os
-   caídos continuam na galeria. Ninguém precisa de aprovação.
+   ganham uma ficha. Os outros, NPCs e personagens sem conta no
+   portal, são cadastrados aqui pelo administrador ou por um editor.
+   Os editores alteram qualquer personagem que veem; apagar e
+   escolher quem vê ficam com o administrador. Os caídos continuam
+   na galeria. Ninguém precisa de aprovação.
    A arte da galeria fica em "retrato", separada da capa e da arte
    do card das Mesas.
    ================================================================= */
@@ -101,8 +103,7 @@ function garantirPersonagens() {
   return mudou;
 }
 
-const mesasAntigas = () => dados.linha?.mesasAntigas ?? [];
-const idsDasMesas = () => new Set([...dados.campanhas.map((c) => c.id), ...mesasAntigas().map((m) => m.id)]);
+const idsDasMesas = () => new Set(dados.campanhas.map((c) => c.id));
 
 // Fica só com as mesas que existem, sem repetir
 function mesasConhecidas(lista) {
@@ -111,10 +112,10 @@ function mesasConhecidas(lista) {
   return [...new Set(lista.filter((id) => typeof id === "string" && conhecidas.has(id)))];
 }
 
-// Só o administrador vê os personagens guardados para ele
+// Só o administrador vê os personagens guardados para ele. Os editores alteram qualquer um que veem.
 const podeVerOutro = (conta, p) => Boolean(conta.admin || p.visibilidade !== "admin");
-const podeEditarFicha = (conta, p) => Boolean(conta.admin || p.dono === conta.usuario);
-const podeEditarOutro = (conta, p) => Boolean(conta.admin || (conta.editor && p.registradoPor && p.registradoPor === conta.usuario));
+const podeEditarFicha = (conta, p) => Boolean(conta.admin || conta.editor || p.dono === conta.usuario);
+const podeEditarOutro = (conta) => Boolean(conta.admin || conta.editor);
 
 function exigirAdmin(conta) {
   if (!conta.admin) throw new ErroHttp(403, "Só o administrador pode fazer isso.", "proibido");
@@ -134,7 +135,7 @@ function fichaEditavel(conta, id) {
   const personagem = dados.personagens.find((p) => p.id === id);
   if (!personagem) throw semPersonagem();
   if (!podeEditarFicha(conta, personagem)) {
-    throw new ErroHttp(403, "Só o jogador do personagem, ou o administrador, pode mudar a ficha.", "proibido");
+    throw new ErroHttp(403, "Só o jogador do personagem, os editores e o administrador mudam a ficha.", "proibido");
   }
   return personagem;
 }
@@ -147,8 +148,8 @@ function outroVisivel(conta, id) {
 
 function outroEditavel(conta, id) {
   const personagem = outroVisivel(conta, id);
-  if (!podeEditarOutro(conta, personagem)) {
-    throw new ErroHttp(403, "Só quem cadastrou o personagem, ou o administrador, pode alterá-lo.", "proibido");
+  if (!podeEditarOutro(conta)) {
+    throw new ErroHttp(403, "Só os editores e o administrador alteram personagens.", "proibido");
   }
   return personagem;
 }
@@ -197,7 +198,7 @@ function outroPublico(p, conta, conhecidas) {
     mesas: p.mesas.filter((id) => conhecidas.has(id)),
     ...fichaPublica(p),
     visibilidade: VISIBILIDADES.has(p.visibilidade) ? p.visibilidade : "todos",
-    podeEditar: podeEditarOutro(conta, p),
+    podeEditar: podeEditarOutro(conta),
   };
 }
 
@@ -226,10 +227,12 @@ function dadosDaGaleria(conta) {
   ];
   return {
     conta: { usuario: conta.usuario, nome: conta.nome, cargo: cargoDe(conta) },
-    mesas: [
-      ...dados.campanhas.map((c) => ({ id: c.id, nome: c.nome, cor: c.cor || "#2e3756" })),
-      ...mesasAntigas().map((m) => ({ id: m.id, nome: m.nome, cor: m.cor, antiga: true })),
-    ],
+    mesas: dados.campanhas.map((c) => ({
+      id: c.id,
+      nome: c.nome,
+      cor: c.cor || "#2e3756",
+      naPaginaMesas: c.naPaginaMesas !== false,
+    })),
     personagens,
     jornada: jornadaDe(conta, personagens.map((p) => p.id)),
   };
@@ -301,7 +304,7 @@ function valoresDoOutro(corpo, conta, atual) {
   };
 }
 
-// Como as mesas antigas: apagar o personagem tira também as citações dele na Linha do Tempo
+// Apagar o personagem tira também as citações dele na Linha do Tempo
 function tirarDasCitacoes(id) {
   const linha = dados.linha;
   if (!linha) return;
@@ -336,13 +339,14 @@ async function tratarGaleria(req, res, rota, metodo, conta) {
   throw new ErroHttp(404, "Endereço não encontrado.");
 }
 
-// O dono escreve resumo, ancestralidade e história e troca o retrato; o administrador muda também situação e queda.
+// O dono escreve resumo, ancestralidade e história e troca o retrato; o administrador e os editores
+// mudam isso em qualquer ficha e também a situação e a queda.
 // Nome e fonte continuam no "Personalizar" das Mesas, e a capa e a arte do card também.
 async function salvarFicha(req, res, conta, id) {
   fichaEditavel(conta, id); // antes de receber as imagens
   const { corpo, form } = await lerFormularioDaFicha(req);
   const valores = textosDaFicha(corpo);
-  if (conta.admin) Object.assign(valores, situacaoDaFicha(corpo));
+  if (conta.admin || conta.editor) Object.assign(valores, situacaoDaFicha(corpo));
   const personagem = fichaEditavel(conta, id);
   Object.assign(personagem, valores);
   await aplicarImagens(personagem, form, CAMPOS_IMAGEM_GALERIA);
@@ -408,8 +412,16 @@ function desligarContaDosPersonagens(conta) {
   }
 }
 
+// Mesa apagada: sai dos outros personagens que a citam
+function tirarMesaDosPersonagens(id) {
+  for (const p of dados.outrosPersonagens ?? []) {
+    if (Array.isArray(p.mesas)) p.mesas = p.mesas.filter((m) => m !== id);
+  }
+}
+
 ganchos.renomearConta.push(renomearNosPersonagens);
 ganchos.excluirConta.push(desligarContaDosPersonagens);
+ganchos.excluirMesa.push(tirarMesaDosPersonagens);
 
 // Os endereços /api/galeria/... são desta página (/api/personagens/:id já é o "Personalizar" das Mesas).
 // "iniciar" confere os dados ao ligar o portal e devolve true quando precisou mudar alguma coisa.
