@@ -98,6 +98,11 @@ function ehNovidade(item, vistasEm) {
   return Boolean(vistasEm) && Date.parse(item.avisadaEm) > Date.parse(vistasEm);
 }
 
+// Para a barra lateral de todas as páginas (GET /api/barra, em mesas.js)
+function contarNovidades(conta) {
+  return (dados.regras?.itens ?? []).filter((item) => ehNovidade(item, conta.regrasVistasEm)).length;
+}
+
 function dadosDasRegras(conta) {
   const { capitulos, itens } = dados.regras;
   const conhecidas = idsDasMesas();
@@ -290,4 +295,4 @@ async function mudarOrdem(req, res, conta) {
   enviarJson(res, 200, { ok: true });
 }
 
-module.exports = { prefixo: "/api/regras", tratar: tratarRegras, iniciar: garantirRegras };
+module.exports = { prefixo: "/api/regras", tratar: tratarRegras, iniciar: garantirRegras, contarNovidades };

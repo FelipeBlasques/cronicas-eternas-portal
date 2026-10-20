@@ -2,9 +2,10 @@
 /* =================================================================
    Crônicas Eternas: página Mesas e a conta de cada pessoa
    -----------------------------------------------------------------
-   Entrar, os dados da página Mesas, abrir um mundo, o login do
-   Foundry guardado com cada personagem e as mudanças na própria
-   conta (usuário, senha, nome e fonte do personagem).
+   Entrar, os dados da página Mesas, os números da barra lateral,
+   abrir um mundo, o login do Foundry guardado com cada personagem
+   e as mudanças na própria conta (usuário, senha, nome e fonte do
+   personagem).
    ================================================================= */
 
 const {
@@ -34,6 +35,7 @@ const {
   personagemPublico,
 } = require("./base");
 const { estadoAtual, mundoExiste, pedirTroca } = require("./foundry");
+const { contarNovidades } = require("./regras");
 
 // Todo mundo vê todas as campanhas que têm personagens, e todos os personagens delas.
 // Entrar no mundo continua só com o próprio personagem (o /api/abrir confere isso),
@@ -61,6 +63,15 @@ function dadosDoPortal(conta) {
   // O administrador vê na barra lateral quantos pedidos dos editores esperam por ele
   if (conta.admin) portal.pendenciasLinha = dados.linha?.pendencias?.length ?? 0;
   return portal;
+}
+
+// Os números da barra lateral, que todas as páginas pedem ao carregar: as regras da casa
+// novas ou alteradas desde a última visita e, só para o administrador, os pedidos dos
+// editores esperando por ele na Linha do Tempo
+function dadosDaBarra(conta) {
+  const barra = { novidadesRegras: contarNovidades(conta) };
+  if (conta.admin) barra.pendenciasLinha = dados.linha?.pendencias?.length ?? 0;
+  return barra;
 }
 
 async function entrar(req, res) {
@@ -195,6 +206,7 @@ async function atualizarConta(req, res, conta) {
 
 module.exports = {
   dadosDoPortal,
+  dadosDaBarra,
   entrar,
   abrir,
   trocarSenha,

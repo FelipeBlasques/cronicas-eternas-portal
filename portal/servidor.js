@@ -48,6 +48,7 @@ const {
 const { statusFoundry, estadoAtual, ligarMundosPeloNome } = require("./servidor/foundry");
 const {
   dadosDoPortal,
+  dadosDaBarra,
   entrar,
   abrir,
   trocarSenha,
@@ -101,6 +102,7 @@ async function tratarApi(req, res, url) {
     return enviarJson(res, 200, { conta: contaPublica(conta) }, renovar);
   }
   if (rota === "/api/portal" && metodo === "GET") return enviarJson(res, 200, dadosDoPortal(conta));
+  if (rota === "/api/barra" && metodo === "GET") return enviarJson(res, 200, dadosDaBarra(conta));
   if (rota === "/api/estado" && metodo === "GET") return enviarJson(res, 200, await estadoAtual());
   if (rota === "/api/abrir" && metodo === "POST") return abrir(req, res, conta);
   if (rota === "/api/senha" && metodo === "POST") return trocarSenha(req, res, conta);
