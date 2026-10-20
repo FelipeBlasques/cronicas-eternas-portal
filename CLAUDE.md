@@ -10,9 +10,13 @@ Portal do grupo de RPG em https://cronicaseternas.com. Cada jogador tem conta, v
 - As imagens fixas das campanhas (`publico/imagens/`) não estão no repositório. Se existirem no servidor, a atualização não as apaga.
 - O app dos jogadores fica noutro repositório, `FelipeBlasques/cronicas-eternas-app` (Tauri, fork do FLC). Ele abre o portal na janela principal e manda tudo o que é de vtt.cronicaseternas.com para a janela do jogo. Páginas novas do portal não precisam de mudança no app.
 
+## Onde você trabalha
+
+Na nuvem (claude.ai/code), num clone deste repositório, com Node 22. Cada sessão é uma tarefa do roteiro que está no fim de cada arquivo de `planejamento/`. O trabalho sai da sessão por uma branch própria, que eu testo e junto na `main`.
+
 ## Como o servidor é atualizado
 
-1. `empacotar.cmd 10` gera `portal-atualizacao-10.zip`, com a pasta `portal/`.
+1. Eu faço o merge do PR, dou Pull no GitHub Desktop e rodo `empacotar.cmd 10`, que gera `portal-atualizacao-10.zip` com a pasta `portal/`.
 2. O zip vai para `/root` pelo WinSCP.
 3. No servidor: `unzip -o /root/portal-atualizacao-10.zip -d /opt && systemctl restart portal`.
 4. No navegador, Ctrl+F5, ou reabrir o app.
@@ -85,8 +89,16 @@ portal/
 
 ## Testar
 
-- **Prévia:** abra `portal/publico/<pasta>/index.html` direto no navegador.
-- **Com servidor:** rode `rodar-local.cmd`, que precisa do Node 22 ou mais novo no PC, e abra http://127.0.0.1:3000. Os dados de teste ficam em `dados-teste/`, fora do git. Na primeira vez, a senha do mestre aparece no terminal.
+- **Rotas novas:** rode o servidor na sessão com dados de teste e use `curl`:
+  ```sh
+  DADOS=/tmp/portal-teste COOKIE_SEGURO=nao PORTA=3999 node portal/servidor.js > /tmp/portal.log 2>&1 &
+  grep -o 'mestre": .*' /tmp/portal.log      # senha do mestre, na primeira vez
+  curl -s -c /tmp/c -H 'Content-Type: application/json' \
+       -d '{"usuario":"mestre","senha":"..."}' http://127.0.0.1:3999/api/entrar
+  curl -s -b /tmp/c http://127.0.0.1:3999/api/regras
+  ```
+  Pare o servidor no fim (`kill %1`).
+- **Páginas:** a prévia (abrir `portal/publico/<pasta>/index.html` direto no navegador) fica comigo. No meu PC também há o `rodar-local.cmd`.
 - Antes de terminar, rode `node --check` em cada `.js` mudado.
 
 ## Como trabalhar nas sessões
@@ -95,8 +107,8 @@ portal/
 - Siga a especificação de `planejamento/` à risca. Se algo estiver ambíguo, pergunte antes de inventar.
 - Não mude o que não foi pedido, nem com "melhorias" de passagem.
 - Não abra navegador nem tire prints: eu testo na prévia e digo o que vi.
-- No fim, liste os arquivos criados ou mudados e diga se algum arquivo precisa ser apagado no servidor.
-- Não faça commit. Eu confiro e faço pelo GitHub Desktop.
+- No fim, faça commit com uma mensagem curta em português e envie a branch da sessão. Não faça merge na `main`.
+- Na resposta final, liste os arquivos criados ou mudados e diga se algum arquivo precisa ser apagado no servidor.
 
 # Compact instructions
 
