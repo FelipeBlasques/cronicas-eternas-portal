@@ -46,6 +46,9 @@ const apiDoServidor = {
   cadastrar: (dados) => pedir("POST", "/api/galeria/outros", formularioDe(dados)),
   alterar: (id, dados) => pedir("PUT", caminhoDe("/api/galeria/outros", id), formularioDe(dados)),
   apagar: (id) => pedir("DELETE", caminhoDe("/api/galeria/outros", id)),
+  // As mesas antigas são as da Linha do Tempo, com as mesmas rotas
+  salvarMesaAntiga: (mesa) => pedir(mesa.id ? "PUT" : "POST", caminhoDe("/api/linha/mesas-antigas", mesa.id), mesa),
+  apagarMesaAntiga: (id) => pedir("DELETE", caminhoDe("/api/linha/mesas-antigas", id)),
 };
 
 /* =================================================================
@@ -467,6 +470,36 @@ function criarApiDePrevia() {
       for (const ev of banco.acontecimentos) ev.personagens = ev.personagens.filter((x) => x !== id);
       return { ok: true };
     },
+    // Como no servidor/linha.js: só o administrador, e criar devolve o id da mesa nova
+    async salvarMesaAntiga(mesa) {
+      await esperar(150);
+      if (conta.cargo !== "admin") throw proibido();
+      const nome = textoOpcional(mesa.nome, "Nome da mesa", 80);
+      if (!nome) throw erroComCodigo("Dê um nome à mesa.");
+      if (typeof mesa.cor !== "string" || !/^#[0-9a-f]{6}$/i.test(mesa.cor)) throw erroComCodigo("Escolha uma cor válida.");
+      const cor = mesa.cor.toLowerCase();
+      if (mesa.id) {
+        const atual = banco.mesasAntigas.find((m) => m.id === mesa.id);
+        if (!atual) throw erroComCodigo("Essa mesa não existe mais.", "nao-encontrado");
+        Object.assign(atual, { nome, cor });
+        return { ok: true };
+      }
+      const ocupados = new Set([...banco.campanhas, ...banco.mesasAntigas].map((m) => m.id));
+      let id;
+      do id = `antiga-${idAleatorio()}`;
+      while (ocupados.has(id));
+      banco.mesasAntigas.push({ id, nome, cor });
+      return { mesa: { id } };
+    },
+    // Como no servidor: sai também dos personagens (os acontecimentos da prévia não citam mesas)
+    async apagarMesaAntiga(id) {
+      await esperar(150);
+      if (conta.cargo !== "admin") throw proibido();
+      if (!banco.mesasAntigas.some((m) => m.id === id)) throw erroComCodigo("Essa mesa não existe mais.", "nao-encontrado");
+      banco.mesasAntigas = banco.mesasAntigas.filter((m) => m.id !== id);
+      for (const p of banco.outrosPersonagens) p.mesas = p.mesas.filter((m) => m !== id);
+      return { ok: true };
+    },
   };
 }
 
@@ -490,6 +523,21 @@ const podeCadastrar = () => ehAdmin() || ehEditor();
 
 const mesaPorId = (id) => estado.mesas.find((m) => m.id === id);
 const personagemPorId = (id) => estado.personagens.find((p) => p.id === id);
+
+// A sigla da mesa, só desta página e sem nada guardado: de cada palavra, o primeiro caractere
+// que for letra ou número, como está escrito. "Primeira mesa (exemplo)" vira "Pme".
+function siglaDe(nome) {
+  return nome
+    .split(/\s+/)
+    .map((palavra) => palavra.match(/[\p{L}\p{N}]/u)?.[0] ?? "")
+    .join("");
+}
+
+// "Ode to Sleep [OtS]"
+function nomeCompletoDe(nome) {
+  const sigla = siglaDe(nome);
+  return sigla ? `${nome} [${sigla}]` : nome;
+}
 
 const ROTULOS_SITUACAO = { vivo: "vivo", caido: "caído", desaparecido: "desaparecido", aposentado: "aposentado" };
 
@@ -556,7 +604,7 @@ function renderizarFiltros() {
   grupo.hidden = mesas.length === 0;
   grupo.replaceChildren(
     ...mesas.map((mesa) => {
-      const chip = criar("button", "etiqueta-mesa", mesa.nome);
+      const chip = criar("button", "etiqueta-mesa", nomeCompletoDe(mesa.nome));
       chip.type = "button";
       chip.dataset.id = mesa.id;
       chip.style.setProperty("--cor", corVisivel(mesa.cor));
@@ -604,9 +652,17 @@ function limparFiltros() {
    A galeria
    ================================================================= */
 
-function etiquetaMesa(mesa) {
-  const etiqueta = criar("span", "etiqueta-cor", mesa.nome);
+// Na ficha, o nome completo. Abaixo do card, só a sigla; o nome completo fica no title e para leitores de tela.
+function etiquetaMesa(mesa, { curta = false } = {}) {
+  const completo = nomeCompletoDe(mesa.nome);
+  const etiqueta = criar("span", "etiqueta-cor", curta ? null : completo);
   etiqueta.style.setProperty("--cor", corVisivel(mesa.cor));
+  if (curta) {
+    const sigla = criar("span", null, siglaDe(mesa.nome) || mesa.nome);
+    sigla.setAttribute("aria-hidden", "true");
+    etiqueta.title = completo;
+    etiqueta.append(sigla, criar("span", "sr", completo));
+  }
   return etiqueta;
 }
 
@@ -655,7 +711,7 @@ function montarItem(personagem) {
 
   if (personagem.resumo) item.append(criar("p", "personagem__resumo", personagem.resumo));
   const etiquetas = criar("div", "personagem__mesas");
-  etiquetas.append(...mesas.map(etiquetaMesa));
+  etiquetas.append(...mesas.map((mesa) => etiquetaMesa(mesa, { curta: true })));
   if (personagem.visibilidade === "admin") etiquetas.append(seloOculto());
   if (etiquetas.childElementCount) item.append(etiquetas);
   return item;
@@ -718,7 +774,7 @@ function dadosDaFicha(personagem, mesas) {
   if (personagem.jogador) linha("Jogador", personagem.jogador);
   if (mesas.length) {
     const etiquetas = criar("span", "ficha__mesas");
-    etiquetas.append(...mesas.map(etiquetaMesa));
+    etiquetas.append(...mesas.map((mesa) => etiquetaMesa(mesa)));
     linha(mesas.length > 1 ? "Mesas" : "Mesa", etiquetas);
   }
   linha("Situação", comMaiuscula(ROTULOS_SITUACAO[personagem.situacao] ?? personagem.situacao));
@@ -858,29 +914,79 @@ function opcoesDeDia(seletor, valor) {
   seletor.value = valor ? String(valor) : "";
 }
 
-// As campanhas e depois as mesas antigas, como no filtro
+// As campanhas e depois as mesas antigas, como no filtro; no fim, o "+ Mesa antiga" do administrador
 function renderizarEscolhaMesas() {
   const raiz = $("#escolha-mesas");
   const mesas = [...estado.mesas].sort((a, b) => Number(Boolean(a.antiga)) - Number(Boolean(b.antiga)));
-  if (!mesas.length) {
-    raiz.replaceChildren(criar("p", "escolhas__vazio", "Nenhuma mesa cadastrada ainda."));
-    return;
-  }
-  raiz.replaceChildren(
-    ...mesas.map((mesa) => {
-      const chip = criar("button", "etiqueta-mesa", mesa.nome);
-      chip.type = "button";
-      chip.style.setProperty("--cor", corVisivel(mesa.cor));
+  const itens = mesas.map((mesa) => {
+    const chip = criar("button", "etiqueta-mesa", nomeCompletoDe(mesa.nome));
+    chip.type = "button";
+    chip.style.setProperty("--cor", corVisivel(mesa.cor));
+    chip.setAttribute("aria-pressed", String(edicao.mesas.has(mesa.id)));
+    if (mesa.antiga) chip.append(criar("small", null, "antiga"));
+    chip.addEventListener("click", () => {
+      if (edicao.mesas.has(mesa.id)) edicao.mesas.delete(mesa.id);
+      else edicao.mesas.add(mesa.id);
       chip.setAttribute("aria-pressed", String(edicao.mesas.has(mesa.id)));
-      if (mesa.antiga) chip.append(criar("small", null, "antiga"));
-      chip.addEventListener("click", () => {
-        if (edicao.mesas.has(mesa.id)) edicao.mesas.delete(mesa.id);
-        else edicao.mesas.add(mesa.id);
-        chip.setAttribute("aria-pressed", String(edicao.mesas.has(mesa.id)));
-      });
-      return chip;
-    }),
-  );
+    });
+    return chip;
+  });
+  if (!mesas.length) itens.push(criar("p", "escolhas__vazio", "Nenhuma mesa cadastrada ainda."));
+  if (ehAdmin()) {
+    const mais = botao("+ Mesa antiga", "botao--leve escolhas__mais", abrirNovaMesa);
+    mais.setAttribute("aria-controls", "nova-mesa");
+    mais.setAttribute("aria-expanded", String(!$("#nova-mesa").hidden));
+    itens.push(mais);
+  }
+  raiz.replaceChildren(...itens);
+}
+
+// A sigla aparece abaixo do nome da mesa enquanto se digita
+function mostrarSigla(entrada, saida) {
+  const sigla = siglaDe(entrada.value);
+  saida.textContent = sigla ? `Sigla: ${sigla}` : "";
+}
+
+// "+ Mesa antiga": nome, cor e "Adicionar", ali mesmo, abaixo das mesas
+function abrirNovaMesa() {
+  const form = formEdicao();
+  if ($("#nova-mesa").hidden) {
+    form.mesa_nome.value = "";
+    form.mesa_cor.value = "#6b5a45";
+    mostrarSigla(form.mesa_nome, $("#nova-mesa-sigla"));
+    $("#erro-nova-mesa").hidden = true;
+    $("#nova-mesa").hidden = false;
+    renderizarEscolhaMesas();
+  }
+  form.mesa_nome.focus();
+}
+
+function fecharNovaMesa() {
+  $("#nova-mesa").hidden = true;
+  renderizarEscolhaMesas();
+  $("#escolha-mesas .escolhas__mais")?.focus();
+}
+
+// A mesa nova vai para o servidor, entra na lista e já fica marcada; o resto do formulário fica como está
+async function adicionarMesaAntiga() {
+  const form = formEdicao();
+  const erro = $("#erro-nova-mesa");
+  const adicionar = $("#nova-mesa-adicionar");
+  if (adicionar.disabled) return;
+  erro.hidden = true;
+  adicionar.disabled = true;
+  try {
+    const { mesa } = await api.salvarMesaAntiga({ nome: form.mesa_nome.value.trim(), cor: form.mesa_cor.value });
+    edicao.mesas.add(mesa.id);
+    await recarregar();
+    fecharNovaMesa();
+    avisoRapido("Mesa adicionada.");
+  } catch (falha) {
+    erro.textContent = falha.message;
+    erro.hidden = false;
+  } finally {
+    adicionar.disabled = false;
+  }
 }
 
 // O nome aparece na fonte escolhida enquanto se escreve
@@ -911,6 +1017,7 @@ function abrirEdicao(personagem = null) {
   edicao.mesas = new Set(personagem?.mesas ?? []);
   edicao.remover = { retrato: false };
   $("#erro-edicao").hidden = true;
+  $("#nova-mesa").hidden = true;
 
   const doPortal = personagem?.origemDoDado === "portal";
   $("#edicao-titulo").textContent = personagem ? `Alterar ${personagem.nome}` : "Novo personagem";
@@ -1062,6 +1169,15 @@ function configurarEdicao() {
   $("#edicao-cancelar").addEventListener("click", () => $("#dialogo-edicao").close());
   $("#edicao-apagar").addEventListener("click", apagarPersonagem);
   form.fonte.addEventListener("change", mostrarFonte);
+  // A linha do "+ Mesa antiga" está dentro deste formulário: o Enter nela adiciona a mesa, sem enviar o personagem
+  form.mesa_nome.addEventListener("input", () => mostrarSigla(form.mesa_nome, $("#nova-mesa-sigla")));
+  form.mesa_nome.addEventListener("keydown", (evento) => {
+    if (evento.key !== "Enter") return;
+    evento.preventDefault();
+    adicionarMesaAntiga();
+  });
+  $("#nova-mesa-adicionar").addEventListener("click", adicionarMesaAntiga);
+  $("#nova-mesa-cancelar").addEventListener("click", fecharNovaMesa);
   form.addEventListener("change", (evento) => {
     if (evento.target.name === "papel" || evento.target.name === "situacao") mostrarCamposDependentes();
   });
@@ -1081,10 +1197,114 @@ function configurarEdicao() {
 }
 
 /* =================================================================
+   Mesas antigas
+   -----------------------------------------------------------------
+   As mesmas da Linha do Tempo, com as mesmas rotas; só o
+   administrador cria, altera e apaga. O painel é uma cópia do de
+   lá, contando os personagens em vez dos acontecimentos.
+   ================================================================= */
+
+function campoTexto(rotulo, nome, valor = "", { tipo = "text", ajuda = "", max } = {}) {
+  const campo = criar("label", "campo");
+  const entrada = criar("input");
+  entrada.name = nome;
+  entrada.type = tipo;
+  entrada.value = valor;
+  entrada.autocomplete = "off";
+  if (max) entrada.maxLength = max;
+  campo.append(criar("span", "campo__rotulo", rotulo), entrada);
+  if (ajuda) campo.append(criar("span", "campo__ajuda", ajuda));
+  return campo;
+}
+
+function abrirMesasAntigas(emEdicao = null) {
+  const raiz = $("#painel-conteudo");
+  raiz.replaceChildren(
+    criar("p", "painel__texto", "As mesas atuais vêm do portal. Aqui ficam as antigas, só com nome e cor. São as mesmas da Linha do Tempo."),
+  );
+  const antigas = estado.mesas.filter((m) => m.antiga);
+  const lista = criar("div", "painel__lista");
+  if (!antigas.length) lista.append(criar("p", "painel__texto", "Nenhuma mesa antiga ainda."));
+  for (const mesa of antigas) {
+    const personagens = estado.personagens.filter((p) => p.mesas.includes(mesa.id)).length;
+    const item = criar("div", "painel__item");
+    const ponto = criar("span", "ponto-cor");
+    ponto.style.setProperty("--cor", corVisivel(mesa.cor));
+    const acoes = criar("div", "painel__acoes");
+    acoes.append(
+      botao("Alterar", "botao--leve", () => abrirMesasAntigas(mesa)),
+      botao("Apagar", "botao--leve botao--perigo", async () => {
+        const confirmado = await perguntar({
+          titulo: "Apagar esta mesa?",
+          texto: `“${mesa.nome}” sai da lista, dos personagens e das citações na Linha do Tempo.`,
+          confirmar: "Apagar",
+          cancelar: "Cancelar",
+          perigo: true,
+        });
+        if (!confirmado) return abrirMesasAntigas();
+        try {
+          await api.apagarMesaAntiga(mesa.id);
+          await recarregar();
+          avisoRapido("Mesa apagada.");
+        } catch (falha) {
+          avisoRapido(falha.message);
+        }
+        abrirMesasAntigas();
+      }),
+    );
+    item.append(
+      ponto,
+      criar("span", "painel__nome", nomeCompletoDe(mesa.nome)),
+      criar("span", "painel__detalhe", personagens === 1 ? "1 personagem" : `${personagens} personagens`),
+      acoes,
+    );
+    lista.append(item);
+  }
+  raiz.append(lista);
+
+  const form = criar("form", "painel__form");
+  form.noValidate = true;
+  const campoNome = campoTexto("Nome da mesa", "nome", emEdicao?.nome ?? "", { max: 80 });
+  const sigla = criar("span", "campo__ajuda campo__sigla");
+  campoNome.append(sigla);
+  const campoCor = campoTexto("Cor", "cor", emEdicao?.cor ?? "#6b5a45", { tipo: "color" });
+  const erro = criar("p", "mensagem-erro");
+  erro.hidden = true;
+  const salvar = criar("button", "botao botao--principal botao--pequeno", emEdicao ? "Salvar" : "Adicionar mesa");
+  salvar.type = "submit";
+  const linha = criar("div", "painel__linha painel__linha--sigla");
+  linha.append(campoNome, campoCor, salvar);
+  form.append(criar("h3", "painel__form-titulo", emEdicao ? `Alterar ${emEdicao.nome}` : "Nova mesa antiga"), linha, erro);
+  if (emEdicao) form.append(botao("Cancelar a alteração", "botao--leve", () => abrirMesasAntigas()));
+  form.nome.addEventListener("input", () => mostrarSigla(form.nome, sigla));
+  mostrarSigla(form.nome, sigla);
+  form.addEventListener("submit", async (evento) => {
+    evento.preventDefault();
+    salvar.disabled = true;
+    try {
+      await api.salvarMesaAntiga({ id: emEdicao?.id, nome: form.nome.value.trim(), cor: form.cor.value });
+      await recarregar();
+      abrirMesasAntigas();
+      avisoRapido(emEdicao ? "Mesa alterada." : "Mesa adicionada.");
+    } catch (falha) {
+      erro.textContent = falha.message;
+      erro.hidden = false;
+    } finally {
+      salvar.disabled = false;
+    }
+  });
+  raiz.append(form);
+
+  const dialogo = $("#dialogo-painel");
+  if (!dialogo.open) dialogo.showModal();
+}
+
+/* =================================================================
    Carregar e desenhar tudo
    ================================================================= */
 
 function renderizarAcoes() {
+  $("#botao-mesas-antigas").hidden = !ehAdmin();
   $("#botao-novo").hidden = !podeCadastrar();
 }
 
@@ -1142,6 +1362,9 @@ function configurarEventos() {
   });
 
   $("#botao-novo").addEventListener("click", () => abrirEdicao());
+  $("#botao-mesas-antigas").addEventListener("click", () => abrirMesasAntigas());
+  fecharAoClicarFora($("#dialogo-painel"));
+  $("#painel-fechar").addEventListener("click", () => $("#dialogo-painel").close());
 
   fecharAoClicarFora($("#dialogo-ficha"));
   $("#dialogo-ficha").addEventListener("close", () => {
