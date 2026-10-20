@@ -58,7 +58,7 @@ const PAGINAS = [
     nome: "Personagens",
     curto: "Personagens",
     caminho: "personagens/",
-    pronta: false,
+    pronta: true,
     icone: "M5 20.5v-7a7 7 0 0 1 14 0v7ZM12 6.5v14M7.5 13.5h3M13.5 13.5h3M3.5 20.5h17M12 3v3.5", // elmo
   },
   {

@@ -111,6 +111,135 @@
     <div id="ficha-conteudo" class="ficha"></div>
   </dialog>
 
+  <!-- ============ Cadastrar ou alterar (os campos aparecem conforme a conta) ============ -->
+  <dialog id="dialogo-edicao" class="dialogo dialogo--edicao">
+    <form id="form-edicao" class="dialogo__form" novalidate>
+      <h2 id="edicao-titulo" class="dialogo__titulo">Novo personagem</h2>
+      <p id="edicao-aviso" class="dialogo__texto edicao-aviso" hidden></p>
+
+      <div class="edicao__campos">
+        <div id="grupo-nome" class="edicao__duas">
+          <label class="campo">
+            <span class="campo__rotulo">Nome</span>
+            <input name="nome" maxlength="60" autocomplete="off" required>
+          </label>
+          <label class="campo">
+            <span class="campo__rotulo">Fonte do nome</span>
+            <select name="fonte"></select>
+          </label>
+        </div>
+
+        <div id="grupo-papel" class="edicao__duas edicao__duas--papel">
+          <fieldset class="grupo">
+            <legend class="campo__rotulo">Papel</legend>
+            <div class="segmentos">
+              <label><input type="radio" name="papel" value="npc" checked><span>NPC</span></label>
+              <label><input type="radio" name="papel" value="jogador"><span>Personagem de jogador</span></label>
+            </div>
+          </fieldset>
+          <label id="campo-jogador" class="campo" hidden>
+            <span class="campo__rotulo">Jogador</span>
+            <input name="jogador" maxlength="40" autocomplete="off">
+            <span class="campo__ajuda">O nome de quem jogou com o personagem, como alguém de uma mesa antiga.</span>
+          </label>
+        </div>
+
+        <fieldset id="grupo-mesas" class="grupo">
+          <legend class="campo__rotulo">Mesas</legend>
+          <div id="escolha-mesas" class="escolhas"></div>
+        </fieldset>
+
+        <fieldset id="grupo-situacao" class="grupo">
+          <legend class="campo__rotulo">Situação</legend>
+          <div class="segmentos">
+            <label><input type="radio" name="situacao" value="vivo" checked><span>Vivo</span></label>
+            <label><input type="radio" name="situacao" value="caido"><span>Caído</span></label>
+            <label><input type="radio" name="situacao" value="desaparecido"><span>Desaparecido</span></label>
+            <label><input type="radio" name="situacao" value="aposentado"><span>Aposentado</span></label>
+          </div>
+        </fieldset>
+
+        <fieldset id="grupo-queda" class="grupo" hidden>
+          <legend class="campo__rotulo">A queda</legend>
+          <div class="data-campos">
+            <label class="campo campo--ano">
+              <span class="campo__rotulo">Ano</span>
+              <input name="queda_ano" type="number" inputmode="numeric" min="0">
+            </label>
+            <label class="campo">
+              <span class="campo__rotulo">Mês</span>
+              <select name="queda_mes"></select>
+            </label>
+            <label class="campo">
+              <span class="campo__rotulo">Dia</span>
+              <select name="queda_dia"></select>
+            </label>
+          </div>
+          <span class="campo__ajuda">No Ciclo de Sylara. Mês e dia são opcionais; sem o ano, a queda fica sem data.</span>
+          <label class="campo">
+            <span class="campo__rotulo">Epitáfio</span>
+            <input name="epitafio" maxlength="160" autocomplete="off">
+          </label>
+        </fieldset>
+
+        <label class="campo">
+          <span class="campo__rotulo">Ancestralidade e classe</span>
+          <input name="origem" maxlength="80" autocomplete="off">
+          <span class="campo__ajuda">Ex.: Elfo, mago 7</span>
+        </label>
+
+        <label class="campo">
+          <span class="campo__rotulo">Resumo</span>
+          <input name="resumo" maxlength="160" autocomplete="off">
+          <span class="campo__ajuda">Uma frase só. Aparece abaixo do card.</span>
+        </label>
+
+        <label class="campo">
+          <span class="campo__rotulo">História</span>
+          <textarea name="historia" rows="8" maxlength="6000"></textarea>
+          <span class="campo__ajuda">Use **negrito** e *itálico*. Uma linha em branco separa parágrafos; linhas que começam com "- " ou "1. " viram lista.</span>
+        </label>
+
+        <div class="edicao__imagens">
+          <div class="campo">
+            <label class="campo__rotulo" for="campo-capa">Capa</label>
+            <div id="imagem-capa" class="imagem-ficha" hidden>
+              <img alt="">
+              <button class="botao botao--leve botao--perigo" type="button">Remover</button>
+            </div>
+            <input id="campo-capa" name="capa" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/avif">
+            <span class="campo__ajuda">Fundo do card, na proporção 2 por 3.</span>
+          </div>
+          <div class="campo">
+            <label class="campo__rotulo" for="campo-arte">Arte recortada</label>
+            <div id="imagem-arte" class="imagem-ficha imagem-ficha--arte" hidden>
+              <img alt="">
+              <button class="botao botao--leve botao--perigo" type="button">Remover</button>
+            </div>
+            <input id="campo-arte" name="arte" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/avif">
+            <span class="campo__ajuda">O personagem em PNG transparente. É ela que salta do card.</span>
+          </div>
+        </div>
+
+        <fieldset id="grupo-visibilidade" class="grupo" hidden>
+          <legend class="campo__rotulo">Visibilidade</legend>
+          <div class="segmentos">
+            <label><input type="radio" name="visibilidade" value="todos" checked><span>Todos</span></label>
+            <label><input type="radio" name="visibilidade" value="admin"><span>Só o administrador</span></label>
+          </div>
+          <span class="campo__ajuda">Para o NPC que o grupo ainda não conheceu.</span>
+        </fieldset>
+      </div>
+
+      <p id="erro-edicao" class="mensagem-erro" role="alert" hidden></p>
+      <div class="dialogo__acoes">
+        <button id="edicao-apagar" class="botao botao--leve botao--perigo dialogo__apagar" type="button" hidden>Apagar</button>
+        <button id="edicao-cancelar" class="botao botao--leve" type="button">Cancelar</button>
+        <button id="edicao-enviar" class="botao botao--principal" type="submit">Cadastrar</button>
+      </div>
+    </form>
+  </dialog>
+
   <!-- ============ Aviso e confirmação ============ -->
   <dialog id="dialogo-aviso" class="dialogo">
     <form method="dialog">

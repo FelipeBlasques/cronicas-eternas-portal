@@ -759,6 +759,131 @@ button.card--desaparecido:is(:hover, :focus-visible)::after {
 }
 
 /* =================================================================
+   Cadastrar e alterar
+   ================================================================= */
+
+.dialogo.dialogo--edicao {
+  width: min(46rem, calc(100vw - 2rem));
+}
+
+.edicao__campos {
+  display: grid;
+  gap: 1.25rem;
+  max-height: min(64vh, 46rem);
+  overflow: auto;
+  padding: 0.2rem 0.8rem 0.4rem 0;
+}
+
+.edicao-aviso {
+  padding: 0.6rem 0.85rem;
+  background: rgba(232, 221, 200, 0.04);
+  border-left: 2px solid var(--ferro-forte);
+}
+
+.edicao__duas {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 14rem);
+  align-items: end;
+  gap: 1rem 1.5rem;
+}
+
+.edicao__duas--papel {
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.grupo {
+  display: grid;
+  gap: 0.65rem;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.grupo legend {
+  padding: 0;
+  margin-bottom: 0.25rem;
+}
+
+.escolhas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.45rem;
+}
+
+.escolhas__vazio {
+  margin: 0;
+  font-size: 0.95rem;
+  font-style: italic;
+  color: var(--cinza);
+}
+
+/* A data da queda: ano, mês e dia, como o "Até" da Linha do Tempo */
+.data-campos {
+  display: grid;
+  grid-template-columns: 7rem minmax(0, 12rem) 6rem;
+  align-items: end;
+  gap: 0.6rem 1.3rem;
+}
+
+.campo--ano input {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.campo textarea {
+  width: 100%;
+  font: inherit;
+  font-size: 1.02rem;
+  line-height: 1.5;
+  color: var(--pergaminho);
+  background: rgba(12, 10, 9, 0.45);
+  border: 1px solid var(--ferro-fraco);
+  border-radius: var(--raio);
+  padding: 0.6rem 0.75rem;
+  resize: vertical;
+}
+
+.campo textarea:focus-visible {
+  outline: none;
+  border-color: var(--brasa);
+}
+
+/* Capa e arte lado a lado, cada uma com a miniatura e o "Remover" */
+.edicao__imagens {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: start;
+  gap: 1rem 1.5rem;
+}
+
+.imagem-ficha {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin: 0.2rem 0 0.3rem;
+}
+
+.imagem-ficha img {
+  width: 3.4rem;
+  height: 5.1rem;
+  object-fit: cover;
+  border-radius: 2px;
+  background: var(--carvao);
+  box-shadow: 0 0 0 1px var(--ferro);
+}
+
+.imagem-ficha--arte img {
+  object-fit: contain;
+  background: linear-gradient(180deg, #1b1714, var(--fuligem));
+}
+
+/* Apagar fica à esquerda, longe de Salvar */
+.dialogo__apagar {
+  margin-right: auto;
+}
+
+/* =================================================================
    Telas pequenas: duas colunas e os filtros atrás de um botão
    ================================================================= */
 
@@ -863,6 +988,17 @@ button.card--desaparecido:is(:hover, :focus-visible)::after {
 
   .ficha__acoes {
     padding: 1rem 1.3rem 1.4rem;
+  }
+
+  /* O formulário numa coluna só */
+  .edicao__duas,
+  .edicao__duas--papel,
+  .edicao__imagens {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .data-campos {
+    grid-template-columns: 1fr 1fr;
   }
 }
 
