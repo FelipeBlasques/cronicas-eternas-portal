@@ -23,9 +23,10 @@ const CONFIG = {
    Conversa com o servidor
    ================================================================= */
 
-const CAMPOS_IMAGEM = ["capa", "arte"];
+// A arte da galeria, separada da capa e da arte do card das Mesas
+const CAMPOS_IMAGEM = ["retrato"];
 
-// Os dados vão como JSON; as imagens, se houver, vão junto como arquivos (ou como pedido para remover)
+// Os dados vão como JSON; a arte, se houver, vai junto como arquivo (ou como pedido para remover)
 function formularioDe(dados) {
   const { imagens, ...resto } = dados;
   const form = new FormData();
@@ -59,8 +60,8 @@ const CONTAS_DA_PREVIA = {
 
 // Guardado como no dados.json do servidor; a galeria() monta o que a página recebe
 function exemplosDaPrevia() {
-  // Um busto desenhado aqui mesmo, para a prévia mostrar capas sem depender de arquivos
-  const capaDeExemplo = (fundo, cor) =>
+  // Um busto desenhado aqui mesmo, para a prévia mostrar retratos sem depender de arquivos
+  const retratoDeExemplo = (fundo, cor) =>
     `data:image/svg+xml,${encodeURIComponent(
       `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 300"><defs><linearGradient id="f" x1="0" y1="0" x2="0" y2="1">` +
         `<stop offset="0" stop-color="${fundo}"/><stop offset="1" stop-color="#0e0c0b"/></linearGradient></defs>` +
@@ -69,8 +70,7 @@ function exemplosDaPrevia() {
     )}`;
   const doPortal = (campos) => ({
     fonte: "gotica",
-    capa: null,
-    arte: null,
+    retrato: null,
     situacao: "vivo",
     queda: null,
     origem: "",
@@ -80,8 +80,7 @@ function exemplosDaPrevia() {
   });
   const outro = (campos) => ({
     fonte: "gotica",
-    capa: null,
-    arte: null,
+    retrato: null,
     papel: "npc",
     jogador: "",
     mesas: [],
@@ -121,7 +120,7 @@ function exemplosDaPrevia() {
         dono: "comuna",
         campanha: "ode-to-sleep",
         fonte: "elfica",
-        capa: capaDeExemplo("#3a4670", "#9fb0c8"),
+        retrato: retratoDeExemplo("#3a4670", "#9fb0c8"),
         origem: "Meio-elfo, bardo 7",
         resumo: "Bardo errante que toca a noite inteira para a cidade não dormir.",
         historia: "Chegou à cidade com um alaúde rachado e **nenhuma** lembrança de onde veio.\n\nDesde a noite da canção, *não dorme mais*.",
@@ -132,7 +131,7 @@ function exemplosDaPrevia() {
         dono: "takezo",
         campanha: "ode-to-sleep",
         fonte: "romana",
-        capa: capaDeExemplo("#6e332d", "#d8b98a"),
+        retrato: retratoDeExemplo("#6e332d", "#d8b98a"),
         origem: "Elfa, maga 7",
         resumo: "Estudiosa do Ciclo de Sylara, desconfia de toda melodia antiga.",
         historia: "Viu o guardião da ponte cair e jurou descobrir quem canta na torre.",
@@ -161,7 +160,7 @@ function exemplosDaPrevia() {
         nome: "Personagem de Neia",
         dono: "neia",
         campanha: "remissao",
-        capa: capaDeExemplo("#34503a", "#b9c9a4"),
+        retrato: retratoDeExemplo("#34503a", "#b9c9a4"),
         origem: "Humana, clériga 5",
         resumo: "Atravessou o Passo Negro carregando os feridos nas costas.",
       }),
@@ -172,7 +171,7 @@ function exemplosDaPrevia() {
         id: "npc-0a1b2c3d",
         nome: "Ysolde, a Guardiã",
         fonte: "uncial",
-        capa: capaDeExemplo("#4a5560", "#c8cdd0"),
+        retrato: retratoDeExemplo("#4a5560", "#c8cdd0"),
         mesas: ["antiga-1"],
         situacao: "desaparecido",
         origem: "Humana, paladina",
@@ -182,7 +181,7 @@ function exemplosDaPrevia() {
         id: "npc-1b2c3d4e",
         nome: "Bram, o guardião da ponte",
         fonte: "ferro",
-        capa: capaDeExemplo("#6b4a2e", "#c9a37a"),
+        retrato: retratoDeExemplo("#6b4a2e", "#c9a37a"),
         mesas: ["ode-to-sleep"],
         situacao: "caido",
         queda: {
@@ -355,8 +354,7 @@ function criarApiDePrevia() {
       origemDoDado: "portal",
       nome: p.nome,
       fonte: p.fonte,
-      capa: p.capa,
-      arte: p.arte,
+      retrato: p.retrato,
       papel: "jogador",
       jogador: nomeDono,
       dono: p.dono,
@@ -374,8 +372,7 @@ function criarApiDePrevia() {
       origemDoDado: "outro",
       nome: p.nome,
       fonte: p.fonte,
-      capa: p.capa,
-      arte: p.arte,
+      retrato: p.retrato,
       papel: p.papel,
       jogador: p.jogador,
       mesas: [...p.mesas],
@@ -419,7 +416,7 @@ function criarApiDePrevia() {
       await esperar(100);
       return {};
     },
-    // O dono escreve os textos e troca as imagens; o administrador muda também situação e queda
+    // O dono escreve os textos e troca a arte; o administrador muda também situação e queda
     async salvarFicha(id, dados) {
       await esperar(200);
       const p = banco.personagens.find((x) => x.id === id);
@@ -443,8 +440,7 @@ function criarApiDePrevia() {
       const p = {
         id,
         ...valores,
-        capa: null,
-        arte: null,
+        retrato: null,
         registradoPor: conta.usuario,
         registradoNome: conta.nome,
         criadoEm: quando,
@@ -632,20 +628,26 @@ function rotuloDoCard(personagem) {
   return partes.join(", ");
 }
 
-// O card das Mesas, na cor da primeira mesa, e abaixo dele o resumo e as mesas
+// O card das Mesas, na cor da primeira mesa, com o retrato como capa e sem arte recortada;
+// abaixo dele, o resumo e as mesas
 function montarItem(personagem) {
   const mesas = personagem.mesas.map(mesaPorId).filter(Boolean);
   const item = criar("article", "personagem");
   item.dataset.id = personagem.id;
 
-  const card = montarCardComMoldura(personagem, { cor: mesas[0]?.cor ?? COR_SEM_MESA });
+  const { nome, fonte, retrato } = personagem;
+  const card = montarCardComMoldura({ nome, fonte, capa: retrato }, { cor: mesas[0]?.cor ?? COR_SEM_MESA });
   if (personagem.situacao === "caido") {
     card.classList.add("card--caido");
     if (personagem.queda?.data) {
       card.querySelector(".card__nome").after(criar("span", "card__queda", `Caiu em ${textoDaData(personagem.queda.data)}`));
     }
   }
-  if (personagem.situacao === "desaparecido") card.classList.add("card--desaparecido");
+  // A névoa fica dentro da moldura, para acompanhá-la e ser recortada pelos cantos
+  if (personagem.situacao === "desaparecido") {
+    card.classList.add("card--desaparecido");
+    card.querySelector(".card__moldura").append(criar("span", "card__nevoa"));
+  }
   if (personagem.visibilidade === "admin") card.classList.add("card--oculto");
   card.setAttribute("aria-label", rotuloDoCard(personagem));
   card.addEventListener("click", () => abrirFicha(personagem.id));
@@ -685,29 +687,23 @@ function secaoDaFicha(titulo, ...conteudo) {
   return caixa;
 }
 
-// A arte por cima da capa, como no card. Sem nenhuma das duas, a ficha fica numa coluna só.
+// O retrato preenche a coluna da esquerda. Sem ele, a ficha fica numa coluna só.
 function retratoDaFicha(personagem, cor) {
-  const imagens = [];
-  if (personagem.capa) imagens.push(imagem(personagem.capa, "ficha__capa"));
-  if (personagem.arte) imagens.push(imagem(personagem.arte, "ficha__arte"));
-  if (!imagens.length) return null;
-
+  if (!personagem.retrato) return null;
   const retrato = criar("div", "ficha__retrato");
   retrato.style.setProperty("--cor", cor);
-  retrato.append(...imagens);
-  for (const img of imagens) {
-    img.addEventListener(
-      "error",
-      () => {
-        img.remove();
-        // A ficha já pode ter sido trocada por outra
-        if (!retrato.isConnected || retrato.querySelector("img")) return;
-        retrato.remove();
-        $("#ficha-conteudo").classList.add("ficha--sem-retrato");
-      },
-      { once: true },
-    );
-  }
+  const img = imagem(personagem.retrato);
+  img.addEventListener(
+    "error",
+    () => {
+      // A ficha já pode ter sido trocada por outra
+      if (!retrato.isConnected) return;
+      retrato.remove();
+      $("#ficha-conteudo").classList.add("ficha--sem-retrato");
+    },
+    { once: true },
+  );
+  retrato.append(img);
   return retrato;
 }
 
@@ -839,14 +835,14 @@ function trocarEndereco(ancora) {
    -----------------------------------------------------------------
    Um formulário só, com os campos que a conta pode mudar. Nos
    personagens do portal, nome e fonte continuam no "Personalizar"
-   das Mesas; o dono escreve os textos e troca as imagens, e só o
+   das Mesas; o dono escreve os textos e troca a arte, e só o
    administrador muda a situação e a queda.
    ================================================================= */
 
 const edicao = {
   personagem: null, // o personagem sendo alterado, ou null para um novo
   mesas: new Set(),
-  remover: { capa: false, arte: false },
+  remover: { retrato: false },
 };
 
 const formEdicao = () => $("#form-edicao");
@@ -913,7 +909,7 @@ function abrirEdicao(personagem = null) {
   form.reset();
   edicao.personagem = personagem;
   edicao.mesas = new Set(personagem?.mesas ?? []);
-  edicao.remover = { capa: false, arte: false };
+  edicao.remover = { retrato: false };
   $("#erro-edicao").hidden = true;
 
   const doPortal = personagem?.origemDoDado === "portal";
@@ -947,7 +943,7 @@ function abrirEdicao(personagem = null) {
   form.epitafio.value = queda?.epitafio ?? "";
   mostrarCamposDependentes();
 
-  // Textos, imagens e visibilidade
+  // Textos, arte e visibilidade
   form.origem.value = personagem?.origem ?? "";
   form.resumo.value = personagem?.resumo ?? "";
   form.historia.value = personagem?.historia ?? "";
@@ -1043,7 +1039,7 @@ async function apagarPersonagem() {
   if (!personagem) return;
   const confirmado = await perguntar({
     titulo: "Apagar este personagem?",
-    texto: `${personagem.nome} sai da galeria de vez, com as imagens, e some das citações da Linha do Tempo.`,
+    texto: `${personagem.nome} sai da galeria de vez, com a arte, e some das citações da Linha do Tempo.`,
     confirmar: "Apagar",
     cancelar: "Cancelar",
     perigo: true,
