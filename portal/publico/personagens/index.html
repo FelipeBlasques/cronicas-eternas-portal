@@ -200,25 +200,14 @@
           <span class="campo__ajuda">Use **negrito** e *itálico*. Uma linha em branco separa parágrafos; linhas que começam com "- " ou "1. " viram lista.</span>
         </label>
 
-        <div class="edicao__imagens">
-          <div class="campo">
-            <label class="campo__rotulo" for="campo-capa">Capa</label>
-            <div id="imagem-capa" class="imagem-ficha" hidden>
-              <img alt="">
-              <button class="botao botao--leve botao--perigo" type="button">Remover</button>
-            </div>
-            <input id="campo-capa" name="capa" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/avif">
-            <span class="campo__ajuda">Fundo do card, na proporção 2 por 3.</span>
+        <div class="campo">
+          <label class="campo__rotulo" for="campo-retrato">Arte</label>
+          <div id="imagem-retrato" class="imagem-ficha" hidden>
+            <img alt="">
+            <button class="botao botao--leve botao--perigo" type="button">Remover</button>
           </div>
-          <div class="campo">
-            <label class="campo__rotulo" for="campo-arte">Arte recortada</label>
-            <div id="imagem-arte" class="imagem-ficha imagem-ficha--arte" hidden>
-              <img alt="">
-              <button class="botao botao--leve botao--perigo" type="button">Remover</button>
-            </div>
-            <input id="campo-arte" name="arte" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/avif">
-            <span class="campo__ajuda">O personagem em PNG transparente. É ela que salta do card.</span>
-          </div>
+          <input id="campo-retrato" name="retrato" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/avif">
+          <span class="campo__ajuda">Aparece aqui na galeria e na Linha do Tempo. O card das Mesas continua com as imagens do Personalizar.</span>
         </div>
 
         <fieldset id="grupo-visibilidade" class="grupo" hidden>

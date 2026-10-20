@@ -115,16 +115,32 @@
 }
 
 /* =================================================================
-   Filtros: mesas, papel, situação e busca
+   Filtros: mesas, papel, situação e busca, presos no alto ao rolar
    ================================================================= */
 
 .filtros {
+  position: sticky;
+  top: calc(var(--altura-topo) + 0.5rem);
+  z-index: 8;
   margin-top: 1.5rem;
   padding: 0.75rem 1rem;
   background: rgba(16, 13, 11, 0.93);
   border: 1px solid var(--ferro-fraco);
   border-radius: var(--raio);
   box-shadow: 0 18px 34px -22px rgba(0, 0, 0, 0.95);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+
+/* Cobre a fresta entre o cabeçalho e os filtros enquanto os cards passam por baixo */
+.filtros::before {
+  content: "";
+  position: absolute;
+  left: -1px;
+  right: -1px;
+  bottom: 100%;
+  height: calc(0.5rem + 1px);
+  background: rgba(14, 12, 11, 0.92);
 }
 
 .filtros__alternar {
@@ -317,13 +333,12 @@
 .galeria {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
-  gap: 4.4rem 1.6rem;
-  padding-top: 5.8rem; /* espaço para a arte saltar para fora do card */
+  gap: 1.2rem 1.6rem;
+  padding-top: 1.6rem;
 }
 
 .galeria--vazia {
   display: block;
-  padding-top: 1.6rem;
 }
 
 .galeria-vazia {
@@ -417,6 +432,33 @@
   display: none;
 }
 
+/* Acender a capa: a moldura sobe um pouco, sem deitar para trás, e a capa ganha cor
+   e aproxima devagar, recortada dentro da moldura. O card das Mesas não muda. */
+.galeria .card__moldura {
+  overflow: hidden;
+}
+
+.galeria .card__capa {
+  transition: filter 0.8s ease, transform 1.2s cubic-bezier(0.25, 0.6, 0.3, 1);
+}
+
+.galeria button.card:is(:hover, :focus-visible) .card__moldura {
+  transform: translateY(-6px);
+  box-shadow:
+    0 0 0 1px var(--ferro-forte),
+    0 0 0 5px rgba(12, 10, 9, 0.92),
+    0 0 0 6px var(--ferro),
+    0 34px 38px -12px rgba(0, 0, 0, 0.98);
+}
+
+.galeria button.card:is(:hover, :focus-visible) .card__capa {
+  transform: scale(1.06);
+}
+
+.galeria button.card:is(:hover, :focus-visible) .card__nome {
+  transform: translateY(-0.6rem);
+}
+
 /* Caído: uma lápide sem cor, com o dia da queda abaixo do nome */
 .card--caido {
   flex-direction: column;
@@ -424,7 +466,7 @@
   justify-content: flex-end;
 }
 
-.card--caido :is(.card__moldura, .card__nome, .card__arte) {
+.card--caido :is(.card__moldura, .card__nome) {
   filter: grayscale(1);
 }
 
@@ -444,8 +486,9 @@
   transition: transform 0.5s;
 }
 
-button.card:is(:hover, :focus-visible) .card__queda {
-  transform: translate3d(0, -50px, 100px);
+/* A linha da queda sobe junto com o nome */
+.galeria button.card:is(:hover, :focus-visible) .card__queda {
+  transform: translateY(-0.6rem);
 }
 
 /* Desaparecido: esmaecido, com uma névoa por cima */
@@ -457,24 +500,24 @@ button.card:is(:hover, :focus-visible) .card__queda {
   opacity: 0.75;
 }
 
-.card--desaparecido::after {
-  content: "";
+/* A névoa fica dentro da moldura (montada pelo personagens.js): acompanha a moldura e é
+   recortada pelos cantos. A moldura esmaecida também esmaece a névoa; os tons compensam. */
+.card__nevoa {
   position: absolute;
   inset: 0;
-  z-index: 1;
-  border-radius: var(--raio);
+  z-index: 2;
   background:
-    radial-gradient(45% 22% at 25% 58%, rgba(214, 208, 198, 0.3), transparent 72%),
-    radial-gradient(40% 18% at 70% 40%, rgba(214, 208, 198, 0.22), transparent 72%),
-    radial-gradient(70% 30% at 50% 86%, rgba(214, 208, 198, 0.28), transparent 75%),
-    linear-gradient(180deg, rgba(160, 155, 147, 0.06), rgba(160, 155, 147, 0.2));
+    radial-gradient(45% 22% at 25% 58%, rgba(214, 208, 198, 0.55), transparent 72%),
+    radial-gradient(40% 18% at 70% 40%, rgba(214, 208, 198, 0.4), transparent 72%),
+    radial-gradient(70% 30% at 50% 86%, rgba(214, 208, 198, 0.5), transparent 75%),
+    linear-gradient(180deg, rgba(160, 155, 147, 0.11), rgba(160, 155, 147, 0.36));
   background-size: 200% 100%;
   animation: nevoa-do-card 16s ease-in-out infinite alternate;
   transition: opacity 0.6s;
   pointer-events: none;
 }
 
-button.card--desaparecido:is(:hover, :focus-visible)::after {
+button.card--desaparecido:is(:hover, :focus-visible) .card__nevoa {
   opacity: 0.55;
 }
 
@@ -513,7 +556,7 @@ button.card--desaparecido:is(:hover, :focus-visible)::after {
   grid-template-columns: minmax(0, 1fr);
 }
 
-/* A capa no fundo e a arte por cima, presas ao alto enquanto o texto rola */
+/* O retrato preenchendo a coluna, preso ao alto enquanto o texto rola */
 .ficha__retrato {
   position: sticky;
   top: 0;
@@ -531,16 +574,8 @@ button.card--desaparecido:is(:hover, :focus-visible)::after {
   inset: 0;
   width: 100%;
   height: 100%;
-}
-
-.ficha__capa {
   object-fit: cover;
   object-position: center top;
-}
-
-.ficha__arte {
-  object-fit: contain;
-  object-position: center bottom;
 }
 
 /* Caído: o retrato sem cor, como o card */
@@ -849,14 +884,7 @@ button.card--desaparecido:is(:hover, :focus-visible)::after {
   border-color: var(--brasa);
 }
 
-/* Capa e arte lado a lado, cada uma com a miniatura e o "Remover" */
-.edicao__imagens {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  align-items: start;
-  gap: 1rem 1.5rem;
-}
-
+/* A arte, com a miniatura e o "Remover" */
 .imagem-ficha {
   display: flex;
   align-items: center;
@@ -871,11 +899,6 @@ button.card--desaparecido:is(:hover, :focus-visible)::after {
   border-radius: 2px;
   background: var(--carvao);
   box-shadow: 0 0 0 1px var(--ferro);
-}
-
-.imagem-ficha--arte img {
-  object-fit: contain;
-  background: linear-gradient(180deg, #1b1714, var(--fuligem));
 }
 
 /* Apagar fica à esquerda, longe de Salvar */
@@ -926,11 +949,7 @@ button.card--desaparecido:is(:hover, :focus-visible)::after {
   .galeria {
     --card-altura: min(300px, calc((100vw - 2.9rem) * 0.75));
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 3.4rem 0.9rem;
-    padding-top: 4.4rem;
-  }
-
-  .galeria--vazia {
+    gap: 0.9rem;
     padding-top: 1.2rem;
   }
 
@@ -992,8 +1011,7 @@ button.card--desaparecido:is(:hover, :focus-visible)::after {
 
   /* O formulário numa coluna só */
   .edicao__duas,
-  .edicao__duas--papel,
-  .edicao__imagens {
+  .edicao__duas--papel {
     grid-template-columns: minmax(0, 1fr);
   }
 
@@ -1003,15 +1021,29 @@ button.card--desaparecido:is(:hover, :focus-visible)::after {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .card--desaparecido::after {
+  .card__nevoa {
     animation: none;
   }
 
+  .galeria .card__capa,
   .card__queda {
     transition: none;
   }
 
-  button.card:is(:hover, :focus-visible) .card__queda {
+  /* Ao acender, só a cor muda: nada sobe nem aproxima */
+  .galeria button.card:is(:hover, :focus-visible) :is(.card__moldura, .card__capa, .card__nome, .card__queda) {
     transform: none;
+  }
+
+  .galeria button.card:is(:hover, :focus-visible) .card__moldura {
+    box-shadow:
+      0 0 0 1px var(--ferro),
+      0 0 0 5px rgba(12, 10, 9, 0.92),
+      0 0 0 6px var(--ferro-fraco),
+      0 22px 34px -14px rgba(0, 0, 0, 0.95);
+  }
+
+  .galeria button.card:is(:hover, :focus-visible) .card__moldura::after {
+    height: 90px;
   }
 }
