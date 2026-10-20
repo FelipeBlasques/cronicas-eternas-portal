@@ -2,7 +2,7 @@
 
 A galeria de todos os personagens de Draevor: os dos jogadores, que já estão no portal, e os NPCs e personagens de mesas antigas, cadastrados pelo administrador ou por um editor. Os caídos continuam na galeria, como lápides. Sem login, a página manda para a entrada. Decisões fechadas em 19/10/2026.
 
-> **Mudou depois (20/10/2026):** a galeria tem uma imagem só, a arte em `retrato`, separada da capa e da arte do card das Mesas. O que vale está em `ajustes-1.md`, partes 1 e 2. As siglas das mesas e o cadastro de mesas antigas por esta página estão em `ajustes-2.md`.
+> **Mudou depois (20/10/2026):** a galeria tem uma imagem só, a arte em `retrato`, separada da capa e da arte do card das Mesas. O que vale está em `ajustes-1.md`, partes 1 e 2. As siglas das mesas estão em `ajustes-2.md`. As mesas viraram uma lista só (sem "antigas") e o editor altera qualquer personagem: `ajustes-3.md`.
 
 Sessões: 2.1 servidor e citações na Linha · 2.2 galeria · 2.3 ficha aberta e jornada · 2.4 edição e acender o botão (veja "Sessões" no fim).
 

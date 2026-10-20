@@ -1,5 +1,7 @@
 # Ajustes 2: mesas na aba Personagens
 
+> **Mudou depois:** não existem mais "mesas antigas", só mesas, com rotas novas. O que vale para isso está em `ajustes-3.md`. A sigla (parte 1) continua valendo.
+
 Mais um pacote de ajustes, agora só na página Personagens, mais um detalhe no servidor da Linha. Decisões fechadas em 20/10/2026. É uma sessão só, a 5.1 (veja "Sessão" no fim), e vai para o servidor na atualização seguinte à 13.
 
 ## 1. A sigla das mesas

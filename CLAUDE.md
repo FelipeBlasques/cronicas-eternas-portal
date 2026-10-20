@@ -41,7 +41,7 @@ O `unzip -o` só cria e substitui arquivos, nunca apaga. Se uma mudança tirar a
 ## Cargos
 
 - **Administrador** (`conta.admin`): faz tudo.
-- **Editor** (`conta.editor`): registra e altera acontecimentos na Linha do Tempo (apagar vira pedido aprovado pelo administrador); cadastra NPCs na galeria e marca lugares nos mapas, e nesses dois só altera o que ele mesmo criou.
+- **Editor** (`conta.editor`): registra e altera acontecimentos na Linha do Tempo (apagar vira pedido aprovado pelo administrador); cadastra e altera qualquer personagem que vê na galeria (apagar e escolher quem vê ficam com o administrador); marca lugares nos mapas e altera só os que ele marcou.
 - **Jogador:** só a conta.
 
 Sem login, nenhuma página abre.
@@ -57,7 +57,8 @@ portal/
                     contaPublica / campanhaPublica / personagemPublico, ganchos
     foundry.js      status do Foundry, lista de mundos, pedirTroca()
     mesas.js        /api/entrar, /api/portal, /api/abrir, /api/conta, /api/senha, ...
-    admin.js        /api/admin/... (contas, campanhas, personagens)
+    admin.js        /api/admin/... (contas, mesas, personagens). Todas as mesas ficam em dados.campanhas;
+                    naPaginaMesas diz se a mesa aparece na página Mesas
     linha.js        /api/linha/... (Linha do Tempo; exporta lerDataDaLinha, podeVer, dataPublica...)
     regras.js       /api/regras/... (Regras da casa)
     personagens.js  /api/galeria/... (Personagens: fichas e outros personagens; a arte da galeria
