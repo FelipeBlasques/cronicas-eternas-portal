@@ -1,0 +1,586 @@
+/* =================================================================
+   Personagens: a galeria de Draevor
+   -----------------------------------------------------------------
+   Os cards das Mesas em grade, com filtros no alto. Os caídos viram
+   lápides sem cor, os desaparecidos somem na névoa. A brasa fica na
+   barra lateral, no "+ Personagem" e no foco dos cards; o azul
+   arcano não aparece aqui.
+   ================================================================= */
+
+.sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.topo__cargo {
+  margin-left: -0.6rem;
+  font-style: italic;
+  font-size: 0.95rem;
+  color: var(--cinza);
+}
+
+.contador {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.35rem;
+  height: 1.35rem;
+  margin-left: 0.3rem;
+  padding: 0 0.35rem;
+  font-size: 0.8rem;
+  font-style: normal;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--fuligem);
+  background: var(--pergaminho-apagado);
+  border-radius: 999px;
+}
+
+.pagina-galeria {
+  width: min(76rem, 100%);
+  margin: 0 auto;
+  padding: 2.8rem clamp(1rem, 4vw, 3rem) 7rem;
+}
+
+/* =================================================================
+   Cabeça da página
+   ================================================================= */
+
+.cabeca-galeria {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.8rem 1.6rem;
+}
+
+.cabeca-galeria__texto {
+  flex: 1 1 24rem;
+}
+
+.cabeca-galeria__titulo {
+  margin: 0;
+  font-family: var(--fonte-gotica);
+  font-weight: 500;
+  font-size: clamp(2.6rem, 5.4vw, 4rem);
+  line-height: 1;
+  text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.7), 0 6px 26px rgba(0, 0, 0, 0.85);
+}
+
+.cabeca-galeria__sub {
+  max-width: 42rem;
+  margin: 0.55rem 0 0;
+  font-style: italic;
+  color: var(--pergaminho-apagado);
+}
+
+.cabeca-galeria__acoes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem 1.3rem;
+  margin-left: auto;
+}
+
+/* "+ Personagem": a placa de ferro com a borda em brasa */
+.botao--brasa {
+  border-color: rgba(196, 106, 53, 0.85);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 240, 215, 0.07),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.45),
+    0 0 0 1px rgba(196, 106, 53, 0.18),
+    0 8px 22px -12px var(--brasa-brilho);
+}
+
+.cabeca-galeria__regua {
+  position: relative;
+  flex-basis: 100%;
+  height: 11px;
+  margin-top: 0.3rem;
+  background: linear-gradient(90deg, var(--ferro-forte), var(--ferro-fraco) 55%, transparent) 0 50% / 100% 1px no-repeat;
+}
+
+.cabeca-galeria__regua::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  transform: translateY(-50%) rotate(45deg);
+  background: var(--fuligem);
+  border: 1px solid var(--ferro-forte);
+}
+
+/* =================================================================
+   Filtros: mesas, papel, situação e busca
+   ================================================================= */
+
+.filtros {
+  margin-top: 1.5rem;
+  padding: 0.75rem 1rem;
+  background: rgba(16, 13, 11, 0.93);
+  border: 1px solid var(--ferro-fraco);
+  border-radius: var(--raio);
+  box-shadow: 0 18px 34px -22px rgba(0, 0, 0, 0.95);
+}
+
+.filtros__alternar {
+  display: none;
+}
+
+.filtros__corpo {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.filtros__mesas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem 0.5rem;
+}
+
+.filtros__controles {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem 1rem;
+}
+
+/* Botão de mesa: um ponto na cor da mesa (o mesmo da Linha do Tempo) */
+.etiqueta-mesa {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.18rem 0.75rem 0.24rem 0.55rem;
+  font: inherit;
+  font-size: 0.95rem;
+  line-height: 1.3;
+  color: var(--pergaminho-apagado);
+  background: rgba(21, 18, 15, 0.7);
+  border: 1px solid var(--ferro-fraco);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s, background-color 0.2s;
+}
+
+.etiqueta-mesa::before {
+  content: "";
+  flex: none;
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  background: var(--cor, var(--cinza));
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45);
+}
+
+.etiqueta-mesa:hover {
+  color: var(--pergaminho);
+  border-color: var(--ferro);
+}
+
+.etiqueta-mesa[aria-pressed="true"] {
+  color: var(--pergaminho);
+  border-color: var(--cor, var(--ferro-forte));
+  background: color-mix(in srgb, var(--cor, var(--ferro-forte)) 24%, rgba(21, 18, 15, 0.9));
+}
+
+.etiqueta-mesa:focus-visible {
+  outline: 2px solid var(--brasa);
+  outline-offset: 2px;
+}
+
+.etiqueta-mesa small {
+  font-style: italic;
+  font-size: 0.8rem;
+  color: var(--cinza);
+}
+
+/* Papel e situação: uma escolha só em cada grupo */
+.segmentos {
+  display: inline-flex;
+  flex-wrap: wrap;
+  min-width: 0;
+  margin: 0;
+  padding: 0 0 1px 1px;
+  border: 0;
+}
+
+.segmentos label {
+  position: relative;
+  margin: 0 0 -1px -1px;
+  cursor: pointer;
+}
+
+.segmentos input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.segmentos span {
+  display: flex;
+  align-items: center;
+  min-height: 2.3rem;
+  padding: 0 0.8rem;
+  font-size: 0.95rem;
+  color: var(--pergaminho-apagado);
+  background: rgba(12, 10, 9, 0.55);
+  border: 1px solid var(--ferro-fraco);
+  transition: color 0.2s, background-color 0.2s, border-color 0.2s;
+}
+
+.segmentos label:first-of-type span {
+  border-radius: var(--raio) 0 0 var(--raio);
+}
+
+.segmentos label:last-of-type span {
+  border-radius: 0 var(--raio) var(--raio) 0;
+}
+
+.segmentos label:hover span {
+  color: var(--pergaminho);
+}
+
+.segmentos input:checked + span {
+  position: relative;
+  z-index: 1;
+  color: var(--pergaminho);
+  background: rgba(232, 221, 200, 0.09);
+  border-color: var(--ferro-forte);
+  box-shadow: inset 0 -2px 0 var(--ferro-forte);
+}
+
+.segmentos input:focus-visible + span {
+  z-index: 2;
+  outline: 2px solid var(--brasa);
+  outline-offset: -2px;
+}
+
+.filtro-campo {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 2.3rem;
+  padding: 0 0.75rem;
+  color: var(--pergaminho-apagado);
+  background: rgba(12, 10, 9, 0.55);
+  border: 1px solid var(--ferro-fraco);
+  border-radius: var(--raio);
+  transition: border-color 0.2s;
+}
+
+.filtro-campo:focus-within {
+  border-color: var(--ferro-forte);
+}
+
+.filtro-campo input {
+  min-width: 0;
+  font: inherit;
+  font-size: 0.98rem;
+  color: var(--pergaminho);
+  background: transparent;
+  border: 0;
+  outline: none;
+}
+
+.filtro-campo input::placeholder {
+  color: var(--cinza);
+  font-style: italic;
+}
+
+.filtro-campo--busca svg {
+  flex: none;
+  width: 1rem;
+  height: 1rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+}
+
+.filtro-campo--busca input {
+  width: 11rem;
+}
+
+.filtro-campo--busca input::-webkit-search-cancel-button {
+  filter: grayscale(1) brightness(1.6);
+}
+
+/* =================================================================
+   A galeria
+   ================================================================= */
+
+.galeria {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  gap: 4.4rem 1.6rem;
+  padding-top: 5.8rem; /* espaço para a arte saltar para fora do card */
+}
+
+.galeria--vazia {
+  display: block;
+  padding-top: 1.6rem;
+}
+
+.galeria-vazia {
+  margin: 0;
+  padding: 0.8rem 1.4rem;
+  text-align: center;
+  font-style: italic;
+  color: var(--pergaminho-apagado);
+  background: var(--fuligem);
+  border: 1px solid var(--ferro-fraco);
+  border-radius: var(--raio);
+}
+
+.personagem {
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  gap: 0.8rem;
+  min-width: 0;
+  text-align: center;
+}
+
+.personagem__resumo {
+  max-width: 17rem;
+  margin: 0;
+  font-style: italic;
+  font-size: 0.98rem;
+  line-height: 1.45;
+  color: var(--pergaminho-apagado);
+}
+
+.personagem__mesas {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.35rem;
+  max-width: 17rem;
+}
+
+.etiqueta-cor {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.04rem 0.6rem 0.1rem 0.45rem;
+  font-size: 0.82rem;
+  line-height: 1.35;
+  color: var(--pergaminho);
+  background: color-mix(in srgb, var(--cor, var(--cinza)) 22%, transparent);
+  border: 1px solid color-mix(in srgb, var(--cor, var(--cinza)) 75%, transparent);
+  border-radius: 999px;
+}
+
+.etiqueta-cor::before {
+  content: "";
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--cor, var(--cinza));
+}
+
+/* Só o administrador vê: o olho riscado */
+.selo-oculto {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.04rem 0.6rem 0.1rem 0.45rem;
+  font-size: 0.82rem;
+  font-style: italic;
+  line-height: 1.35;
+  color: var(--pergaminho-apagado);
+  border: 1px dashed var(--ferro);
+  border-radius: 999px;
+}
+
+.selo-oculto svg {
+  width: 0.95rem;
+  height: 0.95rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+
+/* =================================================================
+   O card nesta página
+   ================================================================= */
+
+/* Sem o azul arcano: o card desperta sem a aura e sem as runas */
+.galeria .card::before,
+.galeria .card__runas {
+  display: none;
+}
+
+/* Caído: uma lápide sem cor, com o dia da queda abaixo do nome */
+.card--caido {
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.card--caido :is(.card__moldura, .card__nome, .card__arte) {
+  filter: grayscale(1);
+}
+
+.card--caido .card__nome {
+  margin-bottom: 0.4rem;
+  color: #ddd6c9;
+}
+
+.card__queda {
+  margin: 0 -14px 1.15rem;
+  font-size: 0.82rem;
+  font-style: italic;
+  line-height: 1.25;
+  text-align: center;
+  color: #b9b1a4;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.95);
+  transition: transform 0.5s;
+}
+
+button.card:is(:hover, :focus-visible) .card__queda {
+  transform: translate3d(0, -50px, 100px);
+}
+
+/* Desaparecido: esmaecido, com uma névoa por cima */
+.card--desaparecido .card__moldura {
+  opacity: 0.55;
+}
+
+.card--desaparecido .card__nome {
+  opacity: 0.75;
+}
+
+.card--desaparecido::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: var(--raio);
+  background:
+    radial-gradient(45% 22% at 25% 58%, rgba(214, 208, 198, 0.3), transparent 72%),
+    radial-gradient(40% 18% at 70% 40%, rgba(214, 208, 198, 0.22), transparent 72%),
+    radial-gradient(70% 30% at 50% 86%, rgba(214, 208, 198, 0.28), transparent 75%),
+    linear-gradient(180deg, rgba(160, 155, 147, 0.06), rgba(160, 155, 147, 0.2));
+  background-size: 200% 100%;
+  animation: nevoa-do-card 16s ease-in-out infinite alternate;
+  transition: opacity 0.6s;
+  pointer-events: none;
+}
+
+button.card--desaparecido:is(:hover, :focus-visible)::after {
+  opacity: 0.55;
+}
+
+@keyframes nevoa-do-card {
+  from {
+    background-position: 0% 0;
+  }
+  to {
+    background-position: 100% 0;
+  }
+}
+
+/* Oculto: a moldura tracejada, como na Linha do Tempo */
+.card--oculto .card__moldura {
+  outline: 1px dashed var(--ferro-forte);
+  outline-offset: 8px;
+}
+
+/* =================================================================
+   Telas pequenas: duas colunas e os filtros atrás de um botão
+   ================================================================= */
+
+@media (max-width: 760px) {
+  .pagina-galeria {
+    padding: 2rem 1rem 7rem;
+  }
+
+  .cabeca-galeria__acoes {
+    margin-left: 0;
+  }
+
+  .filtros {
+    padding: 0.5rem 0.8rem;
+  }
+
+  .filtros__alternar {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .filtros__corpo {
+    display: none;
+    margin-top: 0.6rem;
+  }
+
+  .filtros--aberto .filtros__corpo {
+    display: grid;
+  }
+
+  .filtro-campo--busca {
+    flex: 1 1 100%;
+  }
+
+  .filtro-campo--busca input {
+    width: 100%;
+  }
+
+  /* Duas colunas: o card tem a largura da coluna (a altura é 1,5 vez a largura) */
+  .galeria {
+    --card-altura: min(300px, calc((100vw - 2.9rem) * 0.75));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 3.4rem 0.9rem;
+    padding-top: 4.4rem;
+  }
+
+  .galeria--vazia {
+    padding-top: 1.2rem;
+  }
+
+  .galeria .card {
+    padding: 0 0.9rem;
+  }
+
+  .galeria .card__nome {
+    margin: 0 -0.5rem 0.9rem;
+    font-size: calc(1.3rem * var(--escala-nome, 1));
+  }
+
+  .galeria .card--caido .card__nome {
+    margin-bottom: 0.3rem;
+  }
+
+  .card__queda {
+    margin: 0 -0.4rem 0.85rem;
+    font-size: 0.74rem;
+  }
+
+  .personagem {
+    gap: 0.6rem;
+  }
+
+  .personagem__resumo {
+    font-size: 0.9rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card--desaparecido::after {
+    animation: none;
+  }
+
+  .card__queda {
+    transition: none;
+  }
+
+  button.card:is(:hover, :focus-visible) .card__queda {
+    transform: none;
+  }
+}
