@@ -122,6 +122,12 @@ const CONTAS_DA_PREVIA = {
 };
 
 function exemplosDaPrevia() {
+  // Um busto desenhado aqui mesmo, para a prévia mostrar retratos sem depender de arquivos
+  const retratoDeExemplo = (fundo, cor) =>
+    `data:image/svg+xml,${encodeURIComponent(
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><rect width="40" height="40" fill="${fundo}"/>` +
+        `<circle cx="20" cy="15" r="7" fill="${cor}"/><path d="M5 40c1-10 8-15 15-15s14 5 15 15z" fill="${cor}"/></svg>`,
+    )}`;
   const ev = (campos) => ({
     mesas: [],
     personagens: [],
@@ -143,12 +149,16 @@ function exemplosDaPrevia() {
       { id: "antiga-1", nome: "Primeira mesa (exemplo)", cor: "#6b6b45", antiga: true },
     ],
     personagens: [
-      { id: "p1", nome: "Venti", campanha: "ode-to-sleep" },
-      { id: "p2", nome: "Alisaie", campanha: "ode-to-sleep" },
-      { id: "p3", nome: "Personagem de Frati", campanha: "ode-to-sleep" },
-      { id: "p4", nome: "Personagem de Neia", campanha: "ode-to-sleep" },
-      { id: "p5", nome: "Personagem de Comuna", campanha: "remissao" },
-      { id: "p6", nome: "Personagem de Neia", campanha: "remissao" },
+      ...[
+        { id: "p1", nome: "Venti", campanha: "ode-to-sleep", imagem: retratoDeExemplo("#2e3756", "#9fb0c8") },
+        { id: "p2", nome: "Alisaie", campanha: "ode-to-sleep", imagem: retratoDeExemplo("#5a2a26", "#d8b98a") },
+        { id: "p3", nome: "Personagem de Frati", campanha: "ode-to-sleep" },
+        { id: "p4", nome: "Personagem de Neia", campanha: "ode-to-sleep" },
+        { id: "p5", nome: "Personagem de Comuna", campanha: "remissao" },
+        { id: "p6", nome: "Personagem de Neia", campanha: "remissao" },
+      ].map((p) => ({ imagem: null, ...p, mesas: [p.campanha] })),
+      // Um NPC cadastrado na página Personagens, de uma mesa antiga
+      { id: "npc-0a1b2c3d", nome: "Ysolde, a Guardiã", imagem: null, mesas: ["antiga-1"] },
     ],
     acontecimentos: [
       ev({
@@ -213,6 +223,7 @@ function exemplosDaPrevia() {
         data: { ano: 331, mes: 9 },
         tipo: "descoberta",
         mesas: ["antiga-1"],
+        personagens: ["npc-0a1b2c3d"],
         descricao: "Exemplo de mesa antiga citada: ela entra só com nome e cor.",
       }),
       ev({
@@ -560,10 +571,11 @@ function iconeLua(fase) {
   return svg;
 }
 
+// Nomes repetidos ganham a primeira mesa do personagem, para desempatar
 function nomeDoPersonagem(personagem) {
   const repetidos = estado.personagens.filter((p) => p.nome === personagem.nome).length > 1;
   if (!repetidos) return personagem.nome;
-  const mesa = mesaPorId(personagem.campanha);
+  const mesa = personagem.mesas.map(mesaPorId).find(Boolean);
   return mesa ? `${personagem.nome} (${mesa.nome})` : personagem.nome;
 }
 
@@ -745,8 +757,11 @@ function selosDe(ev) {
   return selos;
 }
 
+// A imagem do personagem num círculo; sem imagem, a inicial do nome
 function retrato(personagem) {
-  const r = criar("span", "retrato", personagem.nome.trim().charAt(0).toUpperCase());
+  const r = criar("span", "retrato");
+  if (personagem.imagem) r.append(imagem(personagem.imagem, "retrato__imagem"));
+  else r.textContent = personagem.nome.trim().charAt(0).toUpperCase();
   r.title = nomeDoPersonagem(personagem);
   r.setAttribute("role", "img");
   r.setAttribute("aria-label", nomeDoPersonagem(personagem));

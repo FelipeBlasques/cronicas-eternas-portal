@@ -131,7 +131,9 @@ function garantirLinha() {
 
 const tiposDaLinha = () => [...TIPOS_PADRAO, ...dados.linha.tipos];
 const idsDasMesas = () => new Set([...dados.campanhas.map((c) => c.id), ...dados.linha.mesasAntigas.map((m) => m.id)]);
-const idsDosPersonagens = () => new Set(dados.personagens.map((p) => p.id));
+// Os outros personagens (NPCs e de mesas antigas) vêm da página Personagens; os ocultos são só do administrador
+const outrosVisiveis = (conta) => (dados.outrosPersonagens ?? []).filter((p) => conta.admin || p.visibilidade !== "admin");
+const idsDosPersonagens = (conta) => new Set([...dados.personagens, ...outrosVisiveis(conta)].map((p) => p.id));
 
 // Fica só com os ids que existem, sem repetir
 function idsConhecidos(lista, conhecidos) {
@@ -220,13 +222,33 @@ function pedidoPublico(pedido, contexto) {
   return publico;
 }
 
+// Para o retrato, a arte ou, sem ela, a capa. As mesas desempatam nomes repetidos.
+function personagensDaLinha(conta, contexto) {
+  const imagemDe = (p) => p.arte || p.capa || null;
+  return [
+    ...dados.personagens.map((p) => ({
+      id: p.id,
+      nome: p.nome,
+      campanha: p.campanha,
+      imagem: imagemDe(p),
+      mesas: [p.campanha],
+    })),
+    ...outrosVisiveis(conta).map((p) => ({
+      id: p.id,
+      nome: p.nome,
+      imagem: imagemDe(p),
+      mesas: p.mesas.filter((id) => contexto.mesas.has(id)),
+    })),
+  ];
+}
+
 function dadosDaLinha(conta) {
   const linha = dados.linha;
   const cargo = cargoDe(conta);
   const contexto = {
     cargo,
     mesas: idsDasMesas(),
-    personagens: idsDosPersonagens(),
+    personagens: idsDosPersonagens(conta),
     comPendencia: new Set(linha.pendencias.map((p) => p.acontecimento)),
   };
 
@@ -258,7 +280,7 @@ function dadosDaLinha(conta) {
     anoAtual: linha.anoAtual,
     tipos: tiposDaLinha().map((t) => ({ id: t.id, nome: t.nome, glifo: t.glifo, padrao: TIPOS_PADRAO.includes(t) })),
     mesas,
-    personagens: dados.personagens.map((p) => ({ id: p.id, nome: p.nome, campanha: p.campanha })),
+    personagens: personagensDaLinha(conta, contexto),
     acontecimentos,
     pendencias: conta.admin
       ? linha.pendencias.map((p) => ({
@@ -322,7 +344,7 @@ function valoresDoAcontecimento(corpo, conta, origem = false) {
     tipo,
     importancia: corpo.importancia === "marco" ? "marco" : "comum",
     mesas: idsConhecidos(corpo.mesas, idsDasMesas()),
-    personagens: idsConhecidos(corpo.personagens, idsDosPersonagens()),
+    personagens: idsConhecidos(corpo.personagens, idsDosPersonagens(conta)),
     // Só o administrador escolhe quem vê; o que os editores registram é para todos
     visibilidade: conta.admin && VISIBILIDADES.has(corpo.visibilidade) ? corpo.visibilidade : "todos",
   };
@@ -471,6 +493,11 @@ async function alterarAcontecimento(req, res, conta, id) {
   if (!conta.admin) {
     const pedido = { ...valores };
     delete pedido.visibilidade; // quem vê continua decidido pelo administrador
+    // O editor não vê os personagens ocultos; as citações deles continuam como estão
+    if (pedido.personagens) {
+      const visiveis = idsDosPersonagens(conta);
+      pedido.personagens = [...pedido.personagens, ...ev.personagens.filter((p) => !visiveis.has(p))];
+    }
     if (caminho) pedido.imagemNova = caminho;
     else if (removerImagem) pedido.removerImagem = true;
     const sobras = registrarPedido(conta, ev, "alterar", pedido);
@@ -577,7 +604,7 @@ async function decidirPedido(res, conta, id, aprovar) {
         tipo: pedido.tipo,
         importancia: pedido.importancia,
         mesas: idsConhecidos(pedido.mesas, idsDasMesas()),
-        personagens: idsConhecidos(pedido.personagens, idsDosPersonagens()),
+        personagens: idsConhecidos(pedido.personagens, idsDosPersonagens(conta)),
       });
     }
     if (imagemNova || removerImagem) {
@@ -706,5 +733,14 @@ ganchos.renomearConta.push(renomearNaLinha);
 ganchos.excluirConta.push(desligarContaDaLinha);
 
 // Os endereços /api/linha/... são desta página. "iniciar" confere os dados ao ligar o portal
-// e devolve true quando precisou mudar alguma coisa.
-module.exports = { prefixo: "/api/linha", tratar: tratarLinha, iniciar: garantirLinha };
+// e devolve true quando precisou mudar alguma coisa. O resto serve à página Personagens.
+module.exports = {
+  prefixo: "/api/linha",
+  tratar: tratarLinha,
+  iniciar: garantirLinha,
+  lerDataDaLinha,
+  podeVer,
+  dataPublica,
+  chaveDaData,
+  textoOpcional,
+};

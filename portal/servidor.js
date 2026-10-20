@@ -14,6 +14,7 @@
      admin.js     administração
      linha.js     Linha do Tempo
      regras.js    Regras da casa
+     personagens.js  Personagens (a galeria)
 
    Comandos:
      node servidor.js                     inicia o portal
@@ -60,7 +61,7 @@ const { tratarAdmin } = require("./servidor/admin");
 
 // As páginas do grupo que têm dados próprios. Cada módulo responde pelos endereços
 // que começam com o seu prefixo (ex.: /api/linha) e pode conferir os dados ao ligar.
-const PAGINAS = [require("./servidor/linha"), require("./servidor/regras")];
+const PAGINAS = [require("./servidor/linha"), require("./servidor/regras"), require("./servidor/personagens")];
 
 /* =================================================================
    Rotas da API
