@@ -365,12 +365,12 @@ function criarApiDePrevia() {
         aplicar(ev, dados);
         return { pendente: false };
       }
-      const pedido = { ...dados, visibilidade: ev.visibilidade };
-      if (pedido.imagem instanceof File) pedido.imagemNova = URL.createObjectURL(pedido.imagem);
-      delete pedido.imagem;
-      banco.pendencias = banco.pendencias.filter((p) => !(p.acontecimento === id && p.por === conta.nome));
-      banco.pendencias.push({ id: `pend-${proximoId++}`, acontecimento: id, acao: "alterar", por: conta.nome, dados: pedido });
-      return { pendente: true };
+      // O editor altera direto, sem mudar quem vê; o pedido de alteração que ele tinha some
+      aplicar(ev, { ...dados, visibilidade: ev.visibilidade });
+      banco.pendencias = banco.pendencias.filter(
+        (p) => !(p.acontecimento === id && p.por === conta.nome && p.acao === "alterar")
+      );
+      return { pendente: false };
     },
     async apagar(id) {
       await esperar(200);
@@ -961,7 +961,7 @@ function renderizarPanorama() {
    Navegar pela linha
    ================================================================= */
 
-const alturaPresa = () => ($("#topo")?.offsetHeight ?? 0) + ($("#filtros")?.offsetHeight ?? 0);
+const alturaPresa = () => ($("#topo")?.offsetHeight ?? 0) + ($("#presos")?.offsetHeight ?? 0);
 
 function rolarAte(elemento) {
   const reduzido = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -1263,7 +1263,7 @@ function abrirEvento(id) {
     acoes.append(botao(ehAdmin() ? "Apagar" : "Pedir para apagar", "botao--leve botao--perigo", () => apagarEvento(ev)));
   }
   if (podeRegistrar()) {
-    acoes.append(botao(ehAdmin() ? "Alterar" : "Pedir alteração", "botao--leve", () => {
+    acoes.append(botao("Alterar", "botao--leve", () => {
       dialogo.close();
       abrirRegistro(ev);
     }));
@@ -1499,13 +1499,11 @@ function abrirRegistro(ev = null) {
   $("#erro-registro").hidden = true;
 
   const origem = Boolean(ev?.origem);
-  const titulo = ev ? (ehAdmin() ? "Alterar acontecimento" : "Pedir alteração") : "Registrar acontecimento";
-  $("#registro-titulo").textContent = titulo;
-  $("#registro-enviar").textContent = ev ? (ehAdmin() ? "Salvar" : "Enviar para aprovação") : "Registrar";
+  $("#registro-titulo").textContent = ev ? "Alterar acontecimento" : "Registrar acontecimento";
+  $("#registro-enviar").textContent = ev ? "Salvar" : "Registrar";
 
   const aviso = $("#registro-aviso");
   const avisos = [];
-  if (ev && !ehAdmin()) avisos.push("A alteração vai para o administrador aprovar. Até lá, o card continua como está.");
   if (origem) avisos.push("O Expurgo Demoníaco fica sempre no ano 0 ED; aqui só mudam o título, a descrição e a imagem.");
   aviso.hidden = !avisos.length;
   aviso.textContent = avisos.join(" ");
@@ -1616,8 +1614,8 @@ async function enviarRegistro(evento) {
     let irPara = registro.ev?.id ?? null;
     let mensagem;
     if (registro.ev) {
-      const resposta = await api.alterar(registro.ev.id, dados);
-      mensagem = resposta.pendente ? "Alteração enviada para o administrador aprovar." : "Acontecimento alterado.";
+      await api.alterar(registro.ev.id, dados);
+      mensagem = "Acontecimento alterado.";
     } else {
       const resposta = await api.registrar(dados);
       irPara = resposta.acontecimento?.id ?? null;
@@ -1739,7 +1737,7 @@ function abrirPendencias() {
       raiz.append(criar("p", "painel__texto", "Nada esperando aprovação."));
       return;
     }
-    raiz.append(criar("p", "painel__texto", "Alterações e pedidos para apagar feitos pelos editores. O card só muda depois que você aprovar."));
+    raiz.append(criar("p", "painel__texto", "Pedidos dos editores esperando você. O card só muda depois que você aprovar."));
     const lista = criar("div", "painel__lista");
     for (const pendencia of estado.pendencias) {
       const ev = acontecimentoPorId(pendencia.acontecimento);
@@ -1968,16 +1966,16 @@ async function recarregar() {
    Eventos da página
    ================================================================= */
 
-// O cabeçalho e os filtros ficam presos no alto; a página precisa saber o tamanho deles
+// O cabeçalho e o bloco dos filtros com o Panorama ficam presos no alto; a página precisa saber o tamanho deles
 function medirAlturas() {
   const raiz = document.documentElement;
   const aplicar = () => {
     raiz.style.setProperty("--altura-topo", `${$("#topo").offsetHeight}px`);
-    raiz.style.setProperty("--altura-filtros", `${$("#filtros").offsetHeight}px`);
+    raiz.style.setProperty("--altura-filtros", `${$("#presos").offsetHeight}px`);
   };
   const observador = new ResizeObserver(aplicar);
   observador.observe($("#topo"));
-  observador.observe($("#filtros"));
+  observador.observe($("#presos"));
   aplicar();
 }
 

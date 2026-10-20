@@ -3,7 +3,7 @@
    Crônicas Eternas: Linha do Tempo, a história de Draevor
    -----------------------------------------------------------------
    Vai do Expurgo Demoníaco, no ano 0 ED, até o ano atual do mundo.
-   Editores registram direto; alterar ou apagar o que já está na
+   Editores registram e alteram direto; apagar o que já está na
    linha vira um pedido que o administrador aprova ou recusa.
    Qualquer conta pode acrescentar frases marcantes.
    ================================================================= */
@@ -474,7 +474,7 @@ async function registrarAcontecimento(req, res, conta) {
   enviarJson(res, 201, { acontecimento: { id: ev.id } });
 }
 
-// O administrador altera direto; o pedido de um editor espera a aprovação dele
+// O administrador e os editores alteram direto; só o administrador escolhe quem vê
 async function alterarAcontecimento(req, res, conta, id) {
   exigirEditor(conta);
   acontecimentoVisivel(conta, id); // antes de receber a imagem
@@ -490,23 +490,23 @@ async function alterarAcontecimento(req, res, conta, id) {
     throw semAcontecimento();
   }
 
+  const sobras = [];
   if (!conta.admin) {
-    const pedido = { ...valores };
-    delete pedido.visibilidade; // quem vê continua decidido pelo administrador
+    delete valores.visibilidade; // quem vê continua decidido pelo administrador
     // O editor não vê os personagens ocultos; as citações deles continuam como estão
-    if (pedido.personagens) {
+    if (valores.personagens) {
       const visiveis = idsDosPersonagens(conta);
-      pedido.personagens = [...pedido.personagens, ...ev.personagens.filter((p) => !visiveis.has(p))];
+      valores.personagens = [...valores.personagens, ...ev.personagens.filter((p) => !visiveis.has(p))];
     }
-    if (caminho) pedido.imagemNova = caminho;
-    else if (removerImagem) pedido.removerImagem = true;
-    const sobras = registrarPedido(conta, ev, "alterar", pedido);
-    await salvarDados();
-    await apagarImagens(sobras);
-    return enviarJson(res, 200, { pendente: true });
+    // O pedido de alteração que ele mesmo deixou esperando perde a razão de ser
+    const linha = dados.linha;
+    const antigos = linha.pendencias.filter(
+      (p) => p.acontecimento === ev.id && p.por === conta.usuario && p.acao === "alterar"
+    );
+    linha.pendencias = linha.pendencias.filter((p) => !antigos.includes(p));
+    sobras.push(...antigos.map((p) => p.dados?.imagemNova).filter(Boolean));
   }
 
-  const sobras = [];
   // Passar a "revelar depois" sela o acontecimento de novo
   if (!ev.origem && valores.visibilidade === "revelar" && ev.visibilidade !== "revelar") ev.revelado = false;
   Object.assign(ev, valores);
@@ -517,6 +517,7 @@ async function alterarAcontecimento(req, res, conta, id) {
   ev.alteradoEm = carimbo();
   await salvarDados();
   await apagarImagens(sobras);
+  console.log(`${conta.usuario} alterou na Linha do Tempo: ${ev.titulo}`);
   enviarJson(res, 200, { pendente: false });
 }
 
