@@ -2,9 +2,11 @@
    Crônicas Eternas: Personagens
    -----------------------------------------------------------------
    A galeria de todos os personagens de Draevor: os dos jogadores,
-   que têm card na página Mesas, e os NPCs e personagens de mesas
-   antigas, cadastrados aqui pelo administrador ou por um editor.
-   Os caídos continuam na galeria, como lápides.
+   que têm card na página Mesas, e os NPCs e personagens sem conta
+   no portal, cadastrados aqui pelo administrador ou por um editor.
+   Os editores alteram qualquer personagem que veem; apagar e
+   escolher quem vê ficam com o administrador. Os caídos continuam
+   na galeria, como lápides.
 
    No servidor, conversa com o servidor/personagens.js. Aberta fora
    dele (arquivo no PC ou prévia), usa personagens de exemplo e um
@@ -46,9 +48,9 @@ const apiDoServidor = {
   cadastrar: (dados) => pedir("POST", "/api/galeria/outros", formularioDe(dados)),
   alterar: (id, dados) => pedir("PUT", caminhoDe("/api/galeria/outros", id), formularioDe(dados)),
   apagar: (id) => pedir("DELETE", caminhoDe("/api/galeria/outros", id)),
-  // As mesas antigas são as da Linha do Tempo, com as mesmas rotas
-  salvarMesaAntiga: (mesa) => pedir(mesa.id ? "PUT" : "POST", caminhoDe("/api/linha/mesas-antigas", mesa.id), mesa),
-  apagarMesaAntiga: (id) => pedir("DELETE", caminhoDe("/api/linha/mesas-antigas", id)),
+  // As mesas são as da Administração; aqui mudam só o nome e a cor, como na Linha do Tempo
+  salvarMesa: (mesa) => pedir(mesa.id ? "PUT" : "POST", caminhoDe("/api/admin/mesas", mesa.id), mesa),
+  apagarMesa: (id) => pedir("DELETE", caminhoDe("/api/admin/mesas", id)),
 };
 
 /* =================================================================
@@ -110,11 +112,12 @@ function exemplosDaPrevia() {
       { usuario: "frati", nome: "Frati" },
       { usuario: "neia", nome: "Neia" },
     ],
+    // Todas as mesas; a última não está na página Mesas
     campanhas: [
-      { id: "ode-to-sleep", nome: "Ode to Sleep", cor: "#2e3756" },
-      { id: "remissao", nome: "Remissão do Flagelo Esvanescente", cor: "#5a2a26" },
+      { id: "ode-to-sleep", nome: "Ode to Sleep", cor: "#2e3756", naPaginaMesas: true },
+      { id: "remissao", nome: "Remissão do Flagelo Esvanescente", cor: "#5a2a26", naPaginaMesas: true },
+      { id: "primeira-mesa", nome: "Primeira mesa (exemplo)", cor: "#6b6b45", naPaginaMesas: false },
     ],
-    mesasAntigas: [{ id: "antiga-1", nome: "Primeira mesa (exemplo)", cor: "#6b6b45" }],
     // Os mesmos das campanhas de exemplo da página Mesas
     personagens: [
       doPortal({
@@ -175,7 +178,7 @@ function exemplosDaPrevia() {
         nome: "Ysolde, a Guardiã",
         fonte: "uncial",
         retrato: retratoDeExemplo("#4a5560", "#c8cdd0"),
-        mesas: ["antiga-1"],
+        mesas: ["primeira-mesa"],
         situacao: "desaparecido",
         origem: "Humana, paladina",
         resumo: "Desceu às ruínas sob o gelo e nunca mais foi vista.",
@@ -261,7 +264,9 @@ function criarApiDePrevia() {
   const podeVer = (ev) =>
     conta.cargo === "admin" || (ev.visibilidade !== "admin" && !(ev.visibilidade === "revelar" && !ev.revelado));
   const podeVerOutro = (p) => conta.cargo === "admin" || p.visibilidade !== "admin";
-  const podeEditarOutro = (p) => conta.cargo === "admin" || (conta.cargo === "editor" && p.registradoPor === conta.usuario);
+  // Os editores alteram qualquer personagem que veem, como o administrador
+  const podeEditarFicha = (p) => conta.cargo === "admin" || conta.cargo === "editor" || p.dono === conta.usuario;
+  const podeEditarOutro = () => conta.cargo === "admin" || conta.cargo === "editor";
 
   const proibido = () => erroComCodigo("Sua conta não pode fazer isso.", "proibido");
   const semPersonagem = () => erroComCodigo("Esse personagem não existe mais. Recarregue a página.", "nao-encontrado");
@@ -317,7 +322,7 @@ function criarApiDePrevia() {
     if (dados.papel !== "jogador" && dados.papel !== "npc") {
       throw erroComCodigo("Escolha o papel: personagem de jogador ou NPC.");
     }
-    const conhecidas = new Set([...banco.campanhas, ...banco.mesasAntigas].map((m) => m.id));
+    const conhecidas = new Set(banco.campanhas.map((m) => m.id));
     let visibilidade = atual?.visibilidade ?? "todos";
     if (conta.cargo === "admin") visibilidade = dados.visibilidade === "admin" ? "admin" : "todos";
     return {
@@ -365,7 +370,7 @@ function criarApiDePrevia() {
       mesas: [p.campanha],
       ...fichaPublica(p),
       visibilidade: "todos",
-      podeEditar: conta.cargo === "admin" || p.dono === conta.usuario,
+      podeEditar: podeEditarFicha(p),
     };
   }
 
@@ -381,7 +386,7 @@ function criarApiDePrevia() {
       mesas: [...p.mesas],
       ...fichaPublica(p),
       visibilidade: p.visibilidade,
-      podeEditar: podeEditarOutro(p),
+      podeEditar: podeEditarOutro(),
     };
   }
 
@@ -407,7 +412,7 @@ function criarApiDePrevia() {
       }
       return structuredClone({
         conta: { ...conta },
-        mesas: [...banco.campanhas, ...banco.mesasAntigas.map((m) => ({ ...m, antiga: true }))],
+        mesas: banco.campanhas,
         personagens,
         jornada,
       });
@@ -419,14 +424,15 @@ function criarApiDePrevia() {
       await esperar(100);
       return {};
     },
-    // O dono escreve os textos e troca a arte; o administrador muda também situação e queda
+    // O dono escreve os textos e troca a arte; o administrador e os editores mudam isso em qualquer ficha,
+    // e também a situação e a queda
     async salvarFicha(id, dados) {
       await esperar(200);
       const p = banco.personagens.find((x) => x.id === id);
       if (!p) throw semPersonagem();
-      if (conta.cargo !== "admin" && p.dono !== conta.usuario) throw proibido();
+      if (!podeEditarFicha(p)) throw proibido();
       const valores = textosDe(dados);
-      if (conta.cargo === "admin") Object.assign(valores, situacaoDe(dados));
+      if (conta.cargo === "admin" || conta.cargo === "editor") Object.assign(valores, situacaoDe(dados));
       Object.assign(p, valores);
       aplicarImagens(p, dados.imagens);
       return { ok: true };
@@ -456,7 +462,7 @@ function criarApiDePrevia() {
     async alterar(id, dados) {
       await esperar(200);
       const p = acharOutro(id);
-      if (!podeEditarOutro(p)) throw proibido();
+      if (!podeEditarOutro()) throw proibido();
       Object.assign(p, valoresDoOutro(dados, p), { alteradoEm: new Date().toISOString() });
       aplicarImagens(p, dados.imagens);
       return { ok: true };
@@ -470,33 +476,38 @@ function criarApiDePrevia() {
       for (const ev of banco.acontecimentos) ev.personagens = ev.personagens.filter((x) => x !== id);
       return { ok: true };
     },
-    // Como no servidor/linha.js: só o administrador, e criar devolve o id da mesa nova
-    async salvarMesaAntiga(mesa) {
+    // Como no servidor/admin.js: só o administrador, a mesa nova fica fora da página Mesas,
+    // e criar devolve o id dela
+    async salvarMesa(mesa) {
       await esperar(150);
       if (conta.cargo !== "admin") throw proibido();
       const nome = textoOpcional(mesa.nome, "Nome da mesa", 80);
-      if (!nome) throw erroComCodigo("Dê um nome à mesa.");
+      if (!nome) throw erroComCodigo("Preencha o campo Nome da mesa.");
       if (typeof mesa.cor !== "string" || !/^#[0-9a-f]{6}$/i.test(mesa.cor)) throw erroComCodigo("Escolha uma cor válida.");
       const cor = mesa.cor.toLowerCase();
       if (mesa.id) {
-        const atual = banco.mesasAntigas.find((m) => m.id === mesa.id);
+        const atual = banco.campanhas.find((m) => m.id === mesa.id);
         if (!atual) throw erroComCodigo("Essa mesa não existe mais.", "nao-encontrado");
         Object.assign(atual, { nome, cor });
         return { ok: true };
       }
-      const ocupados = new Set([...banco.campanhas, ...banco.mesasAntigas].map((m) => m.id));
+      const ocupados = new Set(banco.campanhas.map((m) => m.id));
       let id;
-      do id = `antiga-${idAleatorio()}`;
+      do id = `mesa-${idAleatorio()}`;
       while (ocupados.has(id));
-      banco.mesasAntigas.push({ id, nome, cor });
+      banco.campanhas.push({ id, nome, cor, naPaginaMesas: false });
       return { mesa: { id } };
     },
-    // Como no servidor: sai também dos personagens (os acontecimentos da prévia não citam mesas)
-    async apagarMesaAntiga(id) {
+    // Como no servidor: a mesa com personagens do portal fica; as outras saem também dos
+    // outros personagens (os acontecimentos da prévia não citam mesas)
+    async apagarMesa(id) {
       await esperar(150);
       if (conta.cargo !== "admin") throw proibido();
-      if (!banco.mesasAntigas.some((m) => m.id === id)) throw erroComCodigo("Essa mesa não existe mais.", "nao-encontrado");
-      banco.mesasAntigas = banco.mesasAntigas.filter((m) => m.id !== id);
+      if (!banco.campanhas.some((m) => m.id === id)) throw erroComCodigo("Essa mesa não existe mais.", "nao-encontrado");
+      if (banco.personagens.some((p) => p.campanha === id)) {
+        throw erroComCodigo("Essa mesa ainda tem personagens. Exclua os personagens ou mova para outra mesa antes.");
+      }
+      banco.campanhas = banco.campanhas.filter((m) => m.id !== id);
       for (const p of banco.outrosPersonagens) p.mesas = p.mesas.filter((m) => m !== id);
       return { ok: true };
     },
@@ -597,19 +608,17 @@ const personagensVisiveis = () => estado.personagens.filter(passaNosFiltros).sor
 function renderizarFiltros() {
   const f = estado.filtros;
 
-  // Mesas: as campanhas e depois as antigas; as que sumiram saem do filtro
+  // Mesas: na ordem da lista; as que sumiram saem do filtro
   for (const id of [...f.mesas]) if (!mesaPorId(id)) f.mesas.delete(id);
-  const mesas = [...estado.mesas].sort((a, b) => Number(Boolean(a.antiga)) - Number(Boolean(b.antiga)));
   const grupo = $("#filtro-mesas");
-  grupo.hidden = mesas.length === 0;
+  grupo.hidden = estado.mesas.length === 0;
   grupo.replaceChildren(
-    ...mesas.map((mesa) => {
+    ...estado.mesas.map((mesa) => {
       const chip = criar("button", "etiqueta-mesa", nomeCompletoDe(mesa.nome));
       chip.type = "button";
       chip.dataset.id = mesa.id;
       chip.style.setProperty("--cor", corVisivel(mesa.cor));
       chip.setAttribute("aria-pressed", String(f.mesas.has(mesa.id)));
-      if (mesa.antiga) chip.append(criar("small", null, "antiga"));
       chip.addEventListener("click", () => {
         if (f.mesas.has(mesa.id)) f.mesas.delete(mesa.id);
         else f.mesas.add(mesa.id);
@@ -914,16 +923,14 @@ function opcoesDeDia(seletor, valor) {
   seletor.value = valor ? String(valor) : "";
 }
 
-// As campanhas e depois as mesas antigas, como no filtro; no fim, o "+ Mesa antiga" do administrador
+// As mesas na ordem da lista, como no filtro; no fim, o "+ Mesa" do administrador
 function renderizarEscolhaMesas() {
   const raiz = $("#escolha-mesas");
-  const mesas = [...estado.mesas].sort((a, b) => Number(Boolean(a.antiga)) - Number(Boolean(b.antiga)));
-  const itens = mesas.map((mesa) => {
+  const itens = estado.mesas.map((mesa) => {
     const chip = criar("button", "etiqueta-mesa", nomeCompletoDe(mesa.nome));
     chip.type = "button";
     chip.style.setProperty("--cor", corVisivel(mesa.cor));
     chip.setAttribute("aria-pressed", String(edicao.mesas.has(mesa.id)));
-    if (mesa.antiga) chip.append(criar("small", null, "antiga"));
     chip.addEventListener("click", () => {
       if (edicao.mesas.has(mesa.id)) edicao.mesas.delete(mesa.id);
       else edicao.mesas.add(mesa.id);
@@ -931,9 +938,9 @@ function renderizarEscolhaMesas() {
     });
     return chip;
   });
-  if (!mesas.length) itens.push(criar("p", "escolhas__vazio", "Nenhuma mesa cadastrada ainda."));
+  if (!estado.mesas.length) itens.push(criar("p", "escolhas__vazio", "Nenhuma mesa cadastrada ainda."));
   if (ehAdmin()) {
-    const mais = botao("+ Mesa antiga", "botao--leve escolhas__mais", abrirNovaMesa);
+    const mais = botao("+ Mesa", "botao--leve escolhas__mais", abrirNovaMesa);
     mais.setAttribute("aria-controls", "nova-mesa");
     mais.setAttribute("aria-expanded", String(!$("#nova-mesa").hidden));
     itens.push(mais);
@@ -947,7 +954,7 @@ function mostrarSigla(entrada, saida) {
   saida.textContent = sigla ? `Sigla: ${sigla}` : "";
 }
 
-// "+ Mesa antiga": nome, cor e "Adicionar", ali mesmo, abaixo das mesas
+// "+ Mesa": nome, cor e "Adicionar", ali mesmo, abaixo das mesas
 function abrirNovaMesa() {
   const form = formEdicao();
   if ($("#nova-mesa").hidden) {
@@ -968,7 +975,7 @@ function fecharNovaMesa() {
 }
 
 // A mesa nova vai para o servidor, entra na lista e já fica marcada; o resto do formulário fica como está
-async function adicionarMesaAntiga() {
+async function adicionarMesa() {
   const form = formEdicao();
   const erro = $("#erro-nova-mesa");
   const adicionar = $("#nova-mesa-adicionar");
@@ -976,7 +983,7 @@ async function adicionarMesaAntiga() {
   erro.hidden = true;
   adicionar.disabled = true;
   try {
-    const { mesa } = await api.salvarMesaAntiga({ nome: form.mesa_nome.value.trim(), cor: form.mesa_cor.value });
+    const { mesa } = await api.salvarMesa({ nome: form.mesa_nome.value.trim(), cor: form.mesa_cor.value });
     edicao.mesas.add(mesa.id);
     await recarregar();
     fecharNovaMesa();
@@ -1028,7 +1035,7 @@ function abrirEdicao(personagem = null) {
 
   // Quais campos aparecem
   for (const grupo of ["#grupo-nome", "#grupo-papel", "#grupo-mesas"]) $(grupo).hidden = doPortal;
-  $("#grupo-situacao").hidden = doPortal && !ehAdmin();
+  $("#grupo-situacao").hidden = doPortal && !ehAdmin() && !ehEditor();
   $("#grupo-visibilidade").hidden = doPortal || !ehAdmin();
   $("#edicao-apagar").hidden = !personagem || doPortal || !ehAdmin();
 
@@ -1169,14 +1176,14 @@ function configurarEdicao() {
   $("#edicao-cancelar").addEventListener("click", () => $("#dialogo-edicao").close());
   $("#edicao-apagar").addEventListener("click", apagarPersonagem);
   form.fonte.addEventListener("change", mostrarFonte);
-  // A linha do "+ Mesa antiga" está dentro deste formulário: o Enter nela adiciona a mesa, sem enviar o personagem
+  // A linha do "+ Mesa" está dentro deste formulário: o Enter nela adiciona a mesa, sem enviar o personagem
   form.mesa_nome.addEventListener("input", () => mostrarSigla(form.mesa_nome, $("#nova-mesa-sigla")));
   form.mesa_nome.addEventListener("keydown", (evento) => {
     if (evento.key !== "Enter") return;
     evento.preventDefault();
-    adicionarMesaAntiga();
+    adicionarMesa();
   });
-  $("#nova-mesa-adicionar").addEventListener("click", adicionarMesaAntiga);
+  $("#nova-mesa-adicionar").addEventListener("click", adicionarMesa);
   $("#nova-mesa-cancelar").addEventListener("click", fecharNovaMesa);
   form.addEventListener("change", (evento) => {
     if (evento.target.name === "papel" || evento.target.name === "situacao") mostrarCamposDependentes();
@@ -1197,11 +1204,12 @@ function configurarEdicao() {
 }
 
 /* =================================================================
-   Mesas antigas
+   Mesas
    -----------------------------------------------------------------
-   As mesmas da Linha do Tempo, com as mesmas rotas; só o
-   administrador cria, altera e apaga. O painel é uma cópia do de
-   lá, contando os personagens em vez dos acontecimentos.
+   Todas as mesas do portal, mas só o nome e a cor; o resto fica na
+   Administração. Só o administrador cria, altera e apaga. O painel
+   é uma cópia do da Linha do Tempo, contando os personagens em vez
+   dos acontecimentos.
    ================================================================= */
 
 function campoTexto(rotulo, nome, valor = "", { tipo = "text", ajuda = "", max } = {}) {
@@ -1217,22 +1225,26 @@ function campoTexto(rotulo, nome, valor = "", { tipo = "text", ajuda = "", max }
   return campo;
 }
 
-function abrirMesasAntigas(emEdicao = null) {
+function abrirMesas(emEdicao = null) {
   const raiz = $("#painel-conteudo");
   raiz.replaceChildren(
-    criar("p", "painel__texto", "As mesas atuais vêm do portal. Aqui ficam as antigas, só com nome e cor. São as mesmas da Linha do Tempo."),
+    criar(
+      "p",
+      "painel__texto",
+      "Todas as mesas do portal. Aqui mudam só o nome e a cor. Mundo do Foundry, imagens e a página Mesas ficam em Administração, na aba Mesas.",
+    ),
   );
-  const antigas = estado.mesas.filter((m) => m.antiga);
   const lista = criar("div", "painel__lista");
-  if (!antigas.length) lista.append(criar("p", "painel__texto", "Nenhuma mesa antiga ainda."));
-  for (const mesa of antigas) {
+  if (!estado.mesas.length) lista.append(criar("p", "painel__texto", "Nenhuma mesa ainda."));
+  for (const mesa of estado.mesas) {
     const personagens = estado.personagens.filter((p) => p.mesas.includes(mesa.id)).length;
+    const detalhe = personagens === 1 ? "1 personagem" : `${personagens} personagens`;
     const item = criar("div", "painel__item");
     const ponto = criar("span", "ponto-cor");
     ponto.style.setProperty("--cor", corVisivel(mesa.cor));
     const acoes = criar("div", "painel__acoes");
     acoes.append(
-      botao("Alterar", "botao--leve", () => abrirMesasAntigas(mesa)),
+      botao("Alterar", "botao--leve", () => abrirMesas(mesa)),
       botao("Apagar", "botao--leve botao--perigo", async () => {
         const confirmado = await perguntar({
           titulo: "Apagar esta mesa?",
@@ -1241,21 +1253,22 @@ function abrirMesasAntigas(emEdicao = null) {
           cancelar: "Cancelar",
           perigo: true,
         });
-        if (!confirmado) return abrirMesasAntigas();
+        if (!confirmado) return abrirMesas();
         try {
-          await api.apagarMesaAntiga(mesa.id);
+          await api.apagarMesa(mesa.id);
           await recarregar();
           avisoRapido("Mesa apagada.");
         } catch (falha) {
-          avisoRapido(falha.message);
+          // Uma mesa com personagens do portal não sai: o servidor explica
+          await avisarFalha(falha);
         }
-        abrirMesasAntigas();
+        abrirMesas();
       }),
     );
     item.append(
       ponto,
       criar("span", "painel__nome", nomeCompletoDe(mesa.nome)),
-      criar("span", "painel__detalhe", personagens === 1 ? "1 personagem" : `${personagens} personagens`),
+      criar("span", "painel__detalhe", mesa.naPaginaMesas ? `${detalhe} · na página Mesas` : detalhe),
       acoes,
     );
     lista.append(item);
@@ -1274,17 +1287,17 @@ function abrirMesasAntigas(emEdicao = null) {
   salvar.type = "submit";
   const linha = criar("div", "painel__linha painel__linha--sigla");
   linha.append(campoNome, campoCor, salvar);
-  form.append(criar("h3", "painel__form-titulo", emEdicao ? `Alterar ${emEdicao.nome}` : "Nova mesa antiga"), linha, erro);
-  if (emEdicao) form.append(botao("Cancelar a alteração", "botao--leve", () => abrirMesasAntigas()));
+  form.append(criar("h3", "painel__form-titulo", emEdicao ? `Alterar ${emEdicao.nome}` : "Nova mesa"), linha, erro);
+  if (emEdicao) form.append(botao("Cancelar a alteração", "botao--leve", () => abrirMesas()));
   form.nome.addEventListener("input", () => mostrarSigla(form.nome, sigla));
   mostrarSigla(form.nome, sigla);
   form.addEventListener("submit", async (evento) => {
     evento.preventDefault();
     salvar.disabled = true;
     try {
-      await api.salvarMesaAntiga({ id: emEdicao?.id, nome: form.nome.value.trim(), cor: form.cor.value });
+      await api.salvarMesa({ id: emEdicao?.id, nome: form.nome.value.trim(), cor: form.cor.value });
       await recarregar();
-      abrirMesasAntigas();
+      abrirMesas();
       avisoRapido(emEdicao ? "Mesa alterada." : "Mesa adicionada.");
     } catch (falha) {
       erro.textContent = falha.message;
@@ -1304,7 +1317,7 @@ function abrirMesasAntigas(emEdicao = null) {
    ================================================================= */
 
 function renderizarAcoes() {
-  $("#botao-mesas-antigas").hidden = !ehAdmin();
+  $("#botao-mesas").hidden = !ehAdmin();
   $("#botao-novo").hidden = !podeCadastrar();
 }
 
@@ -1362,7 +1375,7 @@ function configurarEventos() {
   });
 
   $("#botao-novo").addEventListener("click", () => abrirEdicao());
-  $("#botao-mesas-antigas").addEventListener("click", () => abrirMesasAntigas());
+  $("#botao-mesas").addEventListener("click", () => abrirMesas());
   fecharAoClicarFora($("#dialogo-painel"));
   $("#painel-fechar").addEventListener("click", () => $("#dialogo-painel").close());
 

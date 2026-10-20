@@ -206,12 +206,6 @@
   outline-offset: 2px;
 }
 
-.etiqueta-mesa small {
-  font-style: italic;
-  font-size: 0.8rem;
-  color: var(--cinza);
-}
-
 .filtro-campo {
   position: relative;
   display: inline-flex;
