@@ -1,6 +1,6 @@
 # Crônicas Eternas: portal
 
-Portal do grupo de RPG em https://cronicaseternas.com. Cada jogador tem conta, vê os personagens na página **Mesas** e entra no mundo certo do Foundry com um clique. Também tem a **Linha do Tempo** do mundo de Draevor. As páginas novas (Regras da casa, Personagens, Mapas) estão especificadas em `planejamento/`.
+Portal do grupo de RPG em https://cronicaseternas.com. Cada jogador tem conta, vê os personagens na página **Mesas** e entra no mundo certo do Foundry com um clique. Também tem a **Linha do Tempo** do mundo de Draevor, as **Regras da casa**, a galeria de **Personagens** e os **Mapas**. As especificações de cada página estão em `planejamento/`.
 
 ## Onde roda
 
@@ -41,7 +41,7 @@ O `unzip -o` só cria e substitui arquivos, nunca apaga. Se uma mudança tirar a
 ## Cargos
 
 - **Administrador** (`conta.admin`): faz tudo.
-- **Editor** (`conta.editor`): registra na Linha do Tempo. Para alterar ou apagar, o pedido passa pela aprovação do administrador.
+- **Editor** (`conta.editor`): registra e altera acontecimentos na Linha do Tempo (apagar vira pedido aprovado pelo administrador); cadastra NPCs na galeria e marca lugares nos mapas, e nesses dois só altera o que ele mesmo criou.
 - **Jogador:** só a conta.
 
 Sem login, nenhuma página abre.
@@ -58,16 +58,25 @@ portal/
     foundry.js      status do Foundry, lista de mundos, pedirTroca()
     mesas.js        /api/entrar, /api/portal, /api/abrir, /api/conta, /api/senha, ...
     admin.js        /api/admin/... (contas, campanhas, personagens)
-    linha.js        /api/linha/... (Linha do Tempo)
+    linha.js        /api/linha/... (Linha do Tempo; exporta lerDataDaLinha, podeVer, dataPublica...)
+    regras.js       /api/regras/... (Regras da casa)
+    personagens.js  /api/galeria/... (Personagens: fichas e outros personagens; a arte da galeria
+                    fica em `retrato`, separada da capa e da arte do card das Mesas)
+    mapas.js        /api/mapas/... (Mapas e lugares)
   publico/
     comum.js        lista PAGINAS e barra lateral, pedir(), $, criar(), botao(), imagem(),
                     simbolo(), perguntar(), avisoRapido(), avisarFalha(), fecharAoClicarFora(),
                     mostrarStatus(), textoFormatado(), paragrafosDe(), resumoDe(), normalizar(),
                     corVisivel(), FONTES e aplicarFonte(), montarCardComMoldura(),
                     iniciarCinzas(), irParaEntrada(), marcarNaBarra()
+    calendario.js   o Ciclo de Sylara: MESES, textoDaData(), textoDoPeriodo(), faseDaLua()...
     style.css       estilos comuns: variáveis, topo, barra lateral, botões, campos, diálogos, cards
     index.html, script.js        página Mesas, tela de entrada e administração
     linha-do-tempo/              index.html, linha.js, linha.css
+    regras/                      index.html, regras.js, regras.css
+    personagens/                 index.html, personagens.js, personagens.css
+    mapas/                       index.html, visor.js, mapas.js, mapas.css
+planejamento/       especificações e roteiro das sessões; referencias/ com o Atlas de Tyrenar
 ```
 
 ## Padrão: página nova no servidor
