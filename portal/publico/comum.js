@@ -66,7 +66,7 @@ const PAGINAS = [
     nome: "Mapas",
     curto: "Mapas",
     caminho: "mapas/",
-    pronta: false,
+    pronta: true,
     icone: "M12 2l2.3 7.7L22 12l-7.7 2.3L12 22l-2.3-7.7L2 12l7.7-2.3ZM14.2 12a2.2 2.2 0 1 1-4.4 0a2.2 2.2 0 1 1 4.4 0Z", // rosa dos ventos
   },
   {

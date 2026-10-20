@@ -520,6 +520,55 @@
 }
 
 /* =================================================================
+   Marcar e alterar um lugar
+   ================================================================= */
+
+/* A grade com os glifos, como a da Linha do Tempo */
+.glifos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(2.6rem, 1fr));
+  gap: 0.4rem;
+}
+
+.glifo-opcao {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  padding: 0;
+  color: var(--pergaminho-apagado);
+  background: rgba(12, 10, 9, 0.5);
+  border: 1px solid var(--ferro-fraco);
+  border-radius: var(--raio);
+  cursor: pointer;
+}
+
+.glifo-opcao svg {
+  width: 1.3rem;
+  height: 1.3rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.glifo-opcao:hover {
+  color: var(--pergaminho);
+  border-color: var(--ferro);
+}
+
+.glifo-opcao[aria-pressed="true"] {
+  color: var(--brasa);
+  border-color: var(--brasa);
+  background: rgba(196, 106, 53, 0.1);
+}
+
+.glifo-opcao:focus-visible {
+  outline: 2px solid var(--brasa);
+  outline-offset: 2px;
+}
+
+/* =================================================================
    O visor: um mapa aberto
    -----------------------------------------------------------------
    O mapa ocupa o espaço abaixo do cabeçalho, ao lado da barra
@@ -596,6 +645,11 @@ body.com-visor .cenario__cinzas {
 
 .visor__janela.visor--arrastando {
   cursor: grabbing;
+}
+
+/* "Editar lugares" ligado: clicar num ponto vazio marca um lugar novo ali */
+.visor--editando .visor__janela:not(.visor--arrastando) {
+  cursor: crosshair;
 }
 
 /* A imagem e a camada dos lugares: do tamanho da imagem, movidas juntas pelo visor.js */
@@ -1076,6 +1130,12 @@ body.com-visor .cenario__cinzas {
   min-width: 0;
 }
 
+/* O lápis, com "Editar lugares" ligado */
+.detalhe-lugar__lapis {
+  flex: none;
+  margin-left: auto;
+}
+
 .detalhe-lugar__nome {
   margin: 0;
   font-family: var(--fonte-gotica);
@@ -1166,6 +1226,19 @@ body.com-visor .cenario__cinzas {
 
 .visor--arrastando .lugar__alvo {
   cursor: grabbing;
+}
+
+/* Com a edição ligada, os marcadores que a conta pode editar se arrastam */
+.visor--editando .lugar--movel .lugar__marca {
+  cursor: grab;
+}
+
+.visor--editando :is(.visor--arrastando, .lugar--arrastado) .lugar__marca {
+  cursor: grabbing;
+}
+
+.lugar--arrastado {
+  z-index: 4;
 }
 
 /* O que fica em volta do ponto, centrado nele */
