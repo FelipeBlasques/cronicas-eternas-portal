@@ -341,6 +341,7 @@ const ehEditor = () => estado.conta?.cargo === "editor";
 const podeCadastrar = () => ehAdmin() || ehEditor();
 
 const mesaPorId = (id) => estado.mesas.find((m) => m.id === id);
+const personagemPorId = (id) => estado.personagens.find((p) => p.id === id);
 
 const ROTULOS_SITUACAO = { vivo: "vivo", caido: "caído", desaparecido: "desaparecido", aposentado: "aposentado" };
 
@@ -495,6 +496,7 @@ function montarItem(personagem) {
   if (personagem.situacao === "desaparecido") card.classList.add("card--desaparecido");
   if (personagem.visibilidade === "admin") card.classList.add("card--oculto");
   card.setAttribute("aria-label", rotuloDoCard(personagem));
+  card.addEventListener("click", () => abrirFicha(personagem.id));
   item.append(card);
 
   if (personagem.resumo) item.append(criar("p", "personagem__resumo", personagem.resumo));
@@ -515,6 +517,169 @@ function renderizarGaleria() {
     return;
   }
   galeria.replaceChildren(...visiveis.map(montarItem));
+}
+
+/* =================================================================
+   A ficha aberta
+   ================================================================= */
+
+const ROTULOS_PAPEL = { jogador: "Personagem de jogador", npc: "NPC" };
+
+const comMaiuscula = (texto) => texto.charAt(0).toUpperCase() + texto.slice(1);
+
+function secaoDaFicha(titulo, ...conteudo) {
+  const caixa = criar("section", "ficha__secao");
+  caixa.append(criar("h3", null, titulo), ...conteudo);
+  return caixa;
+}
+
+// A arte por cima da capa, como no card. Sem nenhuma das duas, a ficha fica numa coluna só.
+function retratoDaFicha(personagem, cor) {
+  const imagens = [];
+  if (personagem.capa) imagens.push(imagem(personagem.capa, "ficha__capa"));
+  if (personagem.arte) imagens.push(imagem(personagem.arte, "ficha__arte"));
+  if (!imagens.length) return null;
+
+  const retrato = criar("div", "ficha__retrato");
+  retrato.style.setProperty("--cor", cor);
+  retrato.append(...imagens);
+  for (const img of imagens) {
+    img.addEventListener(
+      "error",
+      () => {
+        img.remove();
+        // A ficha já pode ter sido trocada por outra
+        if (!retrato.isConnected || retrato.querySelector("img")) return;
+        retrato.remove();
+        $("#ficha-conteudo").classList.add("ficha--sem-retrato");
+      },
+      { once: true },
+    );
+  }
+  return retrato;
+}
+
+// Jogador, mesas, situação e ancestralidade, um abaixo do outro
+function dadosDaFicha(personagem, mesas) {
+  const lista = criar("dl", "ficha__dados");
+  const linha = (rotulo, ...valor) => {
+    const dd = criar("dd");
+    dd.append(...valor);
+    lista.append(criar("dt", null, rotulo), dd);
+  };
+  if (personagem.jogador) linha("Jogador", personagem.jogador);
+  if (mesas.length) {
+    const etiquetas = criar("span", "ficha__mesas");
+    etiquetas.append(...mesas.map(etiquetaMesa));
+    linha(mesas.length > 1 ? "Mesas" : "Mesa", etiquetas);
+  }
+  linha("Situação", comMaiuscula(ROTULOS_SITUACAO[personagem.situacao] ?? personagem.situacao));
+  if (personagem.origem) linha("Ancestralidade e classe", personagem.origem);
+  return lista;
+}
+
+// A data por extenso e o epitáfio
+function quedaDaFicha(queda) {
+  if (!queda || (!queda.data && !queda.epitafio)) return null;
+  const partes = [];
+  if (queda.data) partes.push(criar("p", "ficha__queda-data", textoDaData(queda.data, { extenso: true })));
+  if (queda.epitafio) partes.push(criar("blockquote", "ficha__epitafio", `“${queda.epitafio}”`));
+  return secaoDaFicha("A queda", ...partes);
+}
+
+// Os acontecimentos que citam o personagem, do mais antigo ao mais recente (o servidor já manda nessa ordem)
+function jornadaDaFicha(personagem) {
+  const passos = estado.jornada[personagem.id] ?? [];
+  if (!passos.length) return criar("p", "ficha__nota", "Nenhum acontecimento da Linha do Tempo cita este personagem ainda.");
+  const linha = enderecoDaPagina("linha");
+  const lista = criar("ol", "jornada");
+  for (const passo of passos) {
+    const link = criar("a", "jornada__link");
+    link.href = `${linha}#evento-${encodeURIComponent(passo.id)}`;
+    link.append(criar("span", "jornada__data", textoDoPeriodo(passo)), criar("span", "jornada__titulo", passo.titulo));
+    const item = criar("li", "jornada__passo");
+    item.append(link);
+    lista.append(item);
+  }
+  return lista;
+}
+
+function abrirFicha(id) {
+  const personagem = personagemPorId(id);
+  if (!personagem) return;
+  const dialogo = $("#dialogo-ficha");
+  const conteudo = $("#ficha-conteudo");
+  const mesas = personagem.mesas.map(mesaPorId).filter(Boolean);
+  const partes = [];
+
+  const retrato = retratoDaFicha(personagem, mesas[0]?.cor ?? COR_SEM_MESA);
+  if (retrato) partes.push(retrato);
+  conteudo.classList.toggle("ficha--sem-retrato", !retrato);
+  conteudo.classList.toggle("ficha--caido", personagem.situacao === "caido");
+
+  const corpo = criar("div", "ficha__corpo");
+  const cabeca = criar("div", "ficha__cabeca");
+  cabeca.append(criar("span", "ficha__papel", ROTULOS_PAPEL[personagem.papel] ?? personagem.papel));
+  if (personagem.visibilidade === "admin") cabeca.append(seloOculto());
+  if (personagem.podeEditar) {
+    // O formulário de edição chega na sessão 2.4
+    const lapis = criar("button", "botao botao-icone ficha__lapis");
+    lapis.type = "button";
+    lapis.title = "Alterar";
+    lapis.setAttribute("aria-label", `Alterar ${personagem.nome}`);
+    lapis.append(simbolo("icone-lapis"));
+    cabeca.append(lapis);
+  }
+  const nome = criar("h2", "ficha__nome", personagem.nome);
+  nome.id = "ficha-nome";
+  aplicarFonte(nome, personagem.fonte);
+  corpo.append(cabeca, nome, dadosDaFicha(personagem, mesas));
+
+  if (personagem.resumo) corpo.append(criar("p", "ficha__resumo", personagem.resumo));
+  if (personagem.historia) {
+    const historia = criar("div", "ficha__historia");
+    historia.append(...paragrafosDe(personagem.historia));
+    corpo.append(secaoDaFicha("História", historia));
+  }
+  if (personagem.situacao === "caido") {
+    const queda = quedaDaFicha(personagem.queda);
+    if (queda) corpo.append(queda);
+  }
+  corpo.append(secaoDaFicha("Na Linha do Tempo", jornadaDaFicha(personagem)));
+
+  const acoes = criar("div", "ficha__acoes");
+  acoes.append(
+    botao("Copiar link", "botao--leve espaco", () => copiarLink(personagem)),
+    botao("Fechar", "botao--leve", () => dialogo.close()),
+  );
+
+  const texto = criar("div", "ficha__texto");
+  texto.append(corpo, acoes);
+  partes.push(texto);
+
+  conteudo.replaceChildren(...partes);
+  trocarEndereco(`#personagem-${personagem.id}`);
+  if (!dialogo.open) dialogo.showModal();
+  dialogo.scrollTop = 0;
+}
+
+async function copiarLink(personagem) {
+  const link = `${location.origin}${location.pathname}#personagem-${personagem.id}`;
+  try {
+    await navigator.clipboard.writeText(link);
+    avisoRapido("Link copiado. Quem abrir vai direto nesta ficha.");
+  } catch {
+    avisoRapido(link);
+  }
+}
+
+// Coloca (ou tira) a ficha aberta no endereço da página, para o link funcionar
+function trocarEndereco(ancora) {
+  try {
+    history.replaceState(null, "", ancora || location.pathname + location.search);
+  } catch {
+    // dentro de alguns quadros de prévia, o navegador não deixa mudar o endereço
+  }
 }
 
 /* =================================================================
@@ -578,6 +743,11 @@ function configurarEventos() {
     $("#filtros-alternar").setAttribute("aria-expanded", String(aberto));
   });
 
+  fecharAoClicarFora($("#dialogo-ficha"));
+  $("#dialogo-ficha").addEventListener("close", () => {
+    if (location.hash.startsWith("#personagem-")) trocarEndereco("");
+  });
+
   $("#botao-sair").addEventListener("click", async () => {
     if (MODO_PREVIA) return avisoRapido("Na prévia, sair não faz nada.");
     try {
@@ -639,6 +809,10 @@ async function iniciar() {
 
   atualizarStatus();
   setInterval(atualizarStatus, CONFIG.intervaloStatus);
+
+  // Link direto para um personagem: abre a ficha
+  const alvo = location.hash.match(/^#personagem-(.+)$/)?.[1];
+  if (alvo) abrirFicha(decodeURIComponent(alvo));
 }
 
 iniciar();

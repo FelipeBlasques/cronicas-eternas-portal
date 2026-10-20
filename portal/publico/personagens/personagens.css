@@ -494,6 +494,271 @@ button.card--desaparecido:is(:hover, :focus-visible)::after {
 }
 
 /* =================================================================
+   A ficha aberta: o retrato à esquerda, o texto à direita
+   ================================================================= */
+
+.dialogo.dialogo--ficha {
+  width: min(52rem, calc(100vw - 2rem));
+  max-height: calc(100dvh - 2rem);
+  padding: 0;
+  overflow: auto;
+}
+
+.ficha {
+  display: grid;
+  grid-template-columns: 16.5rem minmax(0, 1fr);
+}
+
+.ficha--sem-retrato {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* A capa no fundo e a arte por cima, presas ao alto enquanto o texto rola */
+.ficha__retrato {
+  position: sticky;
+  top: 0;
+  align-self: start;
+  overflow: hidden;
+  aspect-ratio: 2 / 3;
+  background:
+    radial-gradient(90% 60% at 50% 100%, color-mix(in srgb, var(--cor, var(--cinza)) 55%, transparent), transparent 75%),
+    linear-gradient(180deg, #1b1714, var(--fuligem));
+  border-right: 1px solid var(--ferro);
+}
+
+.ficha__retrato img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.ficha__capa {
+  object-fit: cover;
+  object-position: center top;
+}
+
+.ficha__arte {
+  object-fit: contain;
+  object-position: center bottom;
+}
+
+/* Caído: o retrato sem cor, como o card */
+.ficha--caido .ficha__retrato img {
+  filter: grayscale(1);
+}
+
+.ficha__texto {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.ficha__corpo {
+  padding: 1.8rem 2.1rem 0.6rem;
+}
+
+.ficha__cabeca {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.7rem;
+  min-height: 1.9rem;
+}
+
+.ficha__papel {
+  font-size: 0.78rem;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--cinza);
+}
+
+/* O lápis, para quem pode alterar a ficha */
+.botao-icone {
+  display: inline-grid;
+  place-items: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  padding: 0;
+  color: var(--pergaminho-apagado);
+  background: rgba(12, 10, 9, 0.5);
+  border: 1px solid var(--ferro-fraco);
+}
+
+.botao-icone:hover {
+  color: var(--pergaminho);
+  border-color: var(--ferro-forte);
+}
+
+.botao-icone svg {
+  width: 1rem;
+  height: 1rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.ficha__lapis {
+  margin-left: auto;
+}
+
+.ficha__nome {
+  margin: 0.45rem 0 1rem;
+  font-family: var(--fonte-gotica);
+  font-weight: 500;
+  font-size: calc(clamp(2rem, 5vw, 2.6rem) * var(--escala-nome, 1));
+  line-height: 1.05;
+  text-wrap: balance;
+}
+
+.ficha__dados {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: baseline;
+  gap: 0.45rem 1.1rem;
+  margin: 0;
+}
+
+.ficha__dados dt {
+  font-size: 0.78rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--cinza);
+}
+
+.ficha__dados dd {
+  margin: 0;
+}
+
+.ficha__mesas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.ficha__resumo {
+  margin: 1.4rem 0 0;
+  font-style: italic;
+  font-size: 1.08rem;
+  color: var(--pergaminho-apagado);
+}
+
+.ficha__secao {
+  margin-top: 1.4rem;
+}
+
+.ficha__secao h3 {
+  margin: 0 0 0.5rem;
+  font-size: 0.78rem;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--cinza);
+}
+
+.ficha__historia > :first-child {
+  margin-top: 0;
+}
+
+.ficha__historia :is(p, ul, ol) {
+  margin: 0.75rem 0 0;
+}
+
+.ficha__queda-data {
+  margin: 0;
+  font-style: italic;
+  color: var(--pergaminho-apagado);
+}
+
+.ficha__epitafio {
+  margin: 0.6rem 0 0;
+  padding: 0.1rem 0 0.1rem 1rem;
+  font-style: italic;
+  font-size: 1.08rem;
+  border-left: 2px solid var(--ferro-forte);
+}
+
+.ficha__nota {
+  margin: 0;
+  font-size: 0.95rem;
+  font-style: italic;
+  color: var(--cinza);
+}
+
+/* Na Linha do Tempo: um fio com um ponto em cada acontecimento */
+.jornada {
+  margin: 0 0 0 0.3rem;
+  padding: 0 0 0 1.1rem;
+  list-style: none;
+  border-left: 1px solid var(--ferro-fraco);
+}
+
+.jornada__passo {
+  position: relative;
+}
+
+.jornada__passo::before {
+  content: "";
+  position: absolute;
+  left: calc(-1.1rem - 4px);
+  top: 0.95rem;
+  width: 7px;
+  height: 7px;
+  background: #15120f;
+  border: 1px solid var(--ferro-forte);
+  border-radius: 50%;
+}
+
+.jornada__link {
+  display: grid;
+  gap: 0.05rem;
+  margin-left: -0.5rem;
+  padding: 0.35rem 0.5rem;
+  color: var(--pergaminho);
+  text-decoration: none;
+  border-radius: var(--raio);
+  transition: background-color 0.25s;
+}
+
+.jornada__link:hover {
+  background: rgba(232, 221, 200, 0.05);
+}
+
+.jornada__link:focus-visible {
+  outline: 1px solid var(--ferro-forte);
+  outline-offset: 0;
+}
+
+.jornada__data {
+  font-size: 0.85rem;
+  font-style: italic;
+  color: var(--pergaminho-apagado);
+}
+
+.jornada__link:is(:hover, :focus-visible) .jornada__titulo {
+  text-decoration: underline;
+  text-decoration-color: var(--ferro-forte);
+  text-underline-offset: 3px;
+}
+
+.ficha__acoes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.8rem 1.4rem;
+  margin-top: auto;
+  padding: 1.2rem 2.1rem 1.7rem;
+}
+
+.ficha__acoes .espaco {
+  margin-right: auto;
+}
+
+/* =================================================================
    Telas pequenas: duas colunas e os filtros atrás de um botão
    ================================================================= */
 
@@ -568,6 +833,36 @@ button.card--desaparecido:is(:hover, :focus-visible)::after {
 
   .personagem__resumo {
     font-size: 0.9rem;
+  }
+
+  /* A ficha numa coluna só, com o retrato no alto */
+  .ficha {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ficha__retrato {
+    position: relative;
+    aspect-ratio: auto;
+    height: min(22rem, 52dvh);
+    border-right: 0;
+    border-bottom: 1px solid var(--ferro);
+  }
+
+  .ficha__corpo {
+    padding: 1.4rem 1.3rem 0.4rem;
+  }
+
+  .ficha__dados {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.1rem;
+  }
+
+  .ficha__dados dd + dt {
+    margin-top: 0.45rem;
+  }
+
+  .ficha__acoes {
+    padding: 1rem 1.3rem 1.4rem;
   }
 }
 
