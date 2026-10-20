@@ -28,6 +28,7 @@ const CONFIG = {
   duracaoSemLembrar: 12 * 60 * 60 * 1000, // sem lembrar: some ao fechar o app ou o navegador
   limiteTroca: 3 * 60 * 1000, // tempo máximo de uma troca de mundo
   maxImagem: 10 * 1024 * 1024, // 10 MB por imagem
+  maxMapa: 25 * 1024 * 1024, // 25 MB: só a imagem de um mapa, na página Mapas
   maxJson: 64 * 1024,
 };
 
@@ -319,14 +320,15 @@ function origemValida(req) {
   }
 }
 
-async function lerJson(req) {
+// O limite padrão serve a quase tudo; a importação de lugares dos Mapas usa um maior
+async function lerJson(req, limite = CONFIG.maxJson) {
   const tipo = req.headers["content-type"] || "";
   if (!tipo.startsWith("application/json")) throw new ErroHttp(415, "Envie os dados em JSON.");
   const partes = [];
   let tamanho = 0;
   for await (const parte of req) {
     tamanho += parte.length;
-    if (tamanho > CONFIG.maxJson) throw new ErroHttp(413, "Os dados enviados são grandes demais.");
+    if (tamanho > limite) throw new ErroHttp(413, "Os dados enviados são grandes demais.");
     partes.push(parte);
   }
   try {
