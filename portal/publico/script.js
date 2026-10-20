@@ -38,6 +38,7 @@ const apiDoServidor = {
     excluirConta: (usuario) => pedir("DELETE", caminhoDe("/api/admin/contas", usuario)),
     salvarCampanha: (id, form) => pedir(id ? "PUT" : "POST", caminhoDe("/api/admin/campanhas", id), form),
     excluirCampanha: (id) => pedir("DELETE", caminhoDe("/api/admin/campanhas", id)),
+    alterarMesa: (id, mudancas) => pedir("PUT", caminhoDe("/api/admin/mesas", id), mudancas),
     salvarPersonagem: (id, form) =>
       pedir(id ? "PUT" : "POST", caminhoDe("/api/admin/personagens", id), form),
     excluirPersonagem: (id) => pedir("DELETE", caminhoDe("/api/admin/personagens", id)),
@@ -63,6 +64,7 @@ function criarApiDePrevia() {
         nome: "Ode to Sleep",
         mundo: "ode-to-sleep",
         cor: "#2b3466",
+        naPaginaMesas: true,
         mestreUsuario: "Gamemaster",
         temSenhaMestre: true,
         capa: "imagens/ots-cover.jpg",
@@ -74,6 +76,17 @@ function criarApiDePrevia() {
         nome: "Remissão do Flagelo Esvanescente",
         mundo: "remissao-do-flagelo-esvanescente",
         cor: "#5a1f22",
+        naPaginaMesas: true,
+        capa: null,
+        titulo: null,
+        arte: null,
+      },
+      {
+        id: "primeira-mesa",
+        nome: "Primeira mesa (exemplo)",
+        mundo: "",
+        cor: "#6b6b45",
+        naPaginaMesas: false,
         capa: null,
         titulo: null,
         arte: null,
@@ -144,7 +157,9 @@ function criarApiDePrevia() {
     async portal() {
       exigirConta();
       const comPersonagens = new Set(banco.personagens.map((p) => p.campanha));
-      const campanhas = banco.campanhas.filter((c) => atual.admin || comPersonagens.has(c.id));
+      const campanhas = banco.campanhas.filter(
+        (c) => c.naPaginaMesas !== false && (atual.admin || comPersonagens.has(c.id)),
+      );
       const visiveis = new Set(campanhas.map((c) => c.id));
       return {
         conta: atual,
@@ -258,6 +273,7 @@ function criarApiDePrevia() {
           nome,
           mundo: String(form.get("mundo") || ""),
           cor: String(form.get("cor") || "#2b2520"),
+          naPaginaMesas: form.get("na_pagina") === "1",
           mestreUsuario: String(form.get("mestre_usuario") || "").trim(),
         });
         if (form.get("remover_mestre") === "1") Object.assign(campanha, { mestreUsuario: "", temSenhaMestre: false });
@@ -266,9 +282,15 @@ function criarApiDePrevia() {
       },
       async excluirCampanha(id) {
         if (banco.personagens.some((p) => p.campanha === id)) {
-          throw erroComCodigo("Essa campanha ainda tem personagens. Exclua os personagens ou mova para outra campanha antes.");
+          throw erroComCodigo("Essa mesa ainda tem personagens. Exclua os personagens ou mova para outra mesa antes.");
         }
         banco.campanhas = banco.campanhas.filter((c) => c.id !== id);
+      },
+      async alterarMesa(id, { naPaginaMesas }) {
+        await esperar(200);
+        const mesa = banco.campanhas.find((c) => c.id === id);
+        if (!mesa) throw erroComCodigo("Essa mesa não existe mais.", "nao-encontrado");
+        if (naPaginaMesas !== undefined) mesa.naPaginaMesas = naPaginaMesas;
       },
       async salvarPersonagem(id, form) {
         const nome = String(form.get("nome") || "").trim();
@@ -502,6 +524,7 @@ function criarSecao(campanha, personagens, ehAdmin) {
   if (ehAdmin) {
     const acoes = criar("div", "campanha__acoes");
     acoes.append(
+      botao("Tirar da página", "botao--leve", () => tirarDaPagina(campanha)),
       botao("Entrar no mundo", "botao--leve", () => entrarNoMundo(campanha, null)),
       botao("Entrar como Mestre", "botao--principal botao--pequeno", () => entrarComoMestre(campanha)),
     );
@@ -523,6 +546,23 @@ function criarSecao(campanha, personagens, ehAdmin) {
 
   secao.append(topo, regua, lista);
   return secao;
+}
+
+// Só o administrador tira uma mesa da página Mesas; ela volta pela Administração
+async function tirarDaPagina(campanha) {
+  const confirmou = await perguntar({
+    titulo: "Tirar da página Mesas?",
+    texto: `“${campanha.nome}” sai da página Mesas, com os cards dos personagens. Continua na Linha do Tempo, nos Personagens, nos Mapas e nas Regras. Para trazer de volta, marque “Aparece na página Mesas” em Administração, na aba Mesas.`,
+    confirmar: "Tirar da página",
+    cancelar: "Cancelar",
+  });
+  if (!confirmou) return;
+  try {
+    await api.admin.alterarMesa(campanha.id, { naPaginaMesas: false });
+    await carregarPortal();
+  } catch (falha) {
+    avisar({ titulo: "Não foi possível tirar da página", texto: falha.message });
+  }
 }
 
 function renderizarCampanhas() {
@@ -576,7 +616,7 @@ async function entrarNoMundo(campanha, cardOrigem, acesso = null) {
     return avisar({
       titulo: "Essa campanha ainda não tem mundo",
       texto: estado.conta.admin
-        ? "Ligue a campanha a um mundo do Foundry na administração, na aba Campanhas."
+        ? "Ligue a campanha a um mundo do Foundry na administração, na aba Mesas."
         : "Ela ainda não foi ligada a um mundo do Foundry. Avise o mestre.",
     });
   }
@@ -636,7 +676,7 @@ function entrarComoMestre(campanha) {
   if (!campanha.temLoginMestre) {
     return avisar({
       titulo: "Falta salvar o login do mestre",
-      texto: "Em Administração, na aba Campanhas, edite esta campanha e preencha o usuário e a senha do mestre no Foundry.",
+      texto: "Em Administração, na aba Mesas, edite esta mesa e preencha o usuário e a senha do mestre no Foundry.",
     });
   }
   return entrarNoMundo(campanha, null, {
@@ -1009,7 +1049,7 @@ function renderizarAbaPersonagens(raiz) {
   const { personagens, campanhas } = estado.admin;
   raiz.append(
     barraDaAba(
-      "Cada personagem aparece só para o jogador dono dele. Clicar no card abre o mundo da campanha.",
+      "Cada personagem aparece só para o jogador dono dele. Clicar no card abre o mundo da mesa.",
       "Novo personagem",
       () => formularioPersonagem(null),
     ),
@@ -1028,7 +1068,7 @@ function renderizarAbaPersonagens(raiz) {
     return linha({
       miniatura: miniaturaDe(p.capa || campanha?.capa, campanha?.cor),
       nome: p.nome,
-      detalhes: [`${p.nomeDono} em ${campanha?.nome ?? "campanha removida"}, ${login}`],
+      detalhes: [`${p.nomeDono} em ${campanha?.nome ?? "mesa removida"}, ${login}`],
       acoes: [
         ["Editar", () => formularioPersonagem(p)],
         ["Excluir", () => excluir(`Excluir ${p.nome}?`, "O personagem sai do portal. O mundo no Foundry não muda.", () => api.admin.excluirPersonagem(p.id), "Personagem excluído."), true],
@@ -1041,7 +1081,7 @@ function renderizarAbaPersonagens(raiz) {
 function formularioPersonagem(personagem) {
   const { contas, campanhas } = estado.admin;
   if (!campanhas.length) {
-    return avisar({ titulo: "Crie uma campanha primeiro", texto: "Todo personagem precisa estar em uma campanha." });
+    return avisar({ titulo: "Crie uma mesa primeiro", texto: "Todo personagem precisa estar em uma mesa." });
   }
   abrirFormulario({
     titulo: personagem ? `Editar ${personagem.nome}` : "Novo personagem",
@@ -1065,7 +1105,7 @@ function formularioPersonagem(personagem) {
       {
         tipo: "selecao",
         nome: "campanha",
-        rotulo: "Campanha",
+        rotulo: "Mesa",
         valor: personagem?.campanha,
         opcoes: campanhas.map((c) => [c.id, c.nome]),
       },
@@ -1075,7 +1115,7 @@ function formularioPersonagem(personagem) {
         rotulo: "Usuário no Foundry",
         valor: personagem?.foundryUsuario,
         max: 60,
-        ajuda: "O nome desse jogador no mundo da campanha, igual aparece na tela de login do Foundry.",
+        ajuda: "O nome desse jogador no mundo da mesa, igual aparece na tela de login do Foundry.",
       },
       {
         tipo: "senha",
@@ -1093,7 +1133,7 @@ function formularioPersonagem(personagem) {
         nome: "capa",
         rotulo: "Capa",
         atual: personagem?.capa,
-        ajuda: "Fundo do card, na proporção 2 por 3. Sem capa, o card usa a da campanha.",
+        ajuda: "Fundo do card, na proporção 2 por 3. Sem capa, o card usa a da mesa.",
       },
       {
         tipo: "imagem",
@@ -1143,7 +1183,7 @@ function renderizarAbaContas(raiz) {
   raiz.append(listaOuVazio(itens, "Nenhuma conta cadastrada."));
 }
 
-const ROTULO_EDITOR = "Editor (registra e altera acontecimentos na Linha do Tempo, cadastra personagens e marca lugares nos mapas; apagar acontecimentos passa pela sua aprovação)";
+const ROTULO_EDITOR = "Editor (registra e altera acontecimentos na Linha do Tempo, cadastra e altera personagens e marca lugares nos mapas; apagar acontecimentos passa pela sua aprovação)";
 
 function formularioNovaConta() {
   abrirFormulario({
@@ -1219,14 +1259,14 @@ function formularioSenhaDaConta(conta) {
   });
 }
 
-/* ---------- Aba Campanhas ---------- */
+/* ---------- Aba Mesas ---------- */
 
 function renderizarAbaCampanhas(raiz) {
   const { campanhas, mundos, personagens } = estado.admin;
   raiz.append(
     barraDaAba(
-      "Cada campanha fica ligada a um mundo do Foundry. É esse mundo que abre quando alguém clica num personagem dela.",
-      "Nova campanha",
+      "Todas as mesas do portal. As que acontecem no Foundry ficam ligadas a um mundo; é ele que abre quando alguém clica num personagem dela.",
+      "Nova mesa",
       () => formularioCampanha(null),
     ),
   );
@@ -1234,11 +1274,11 @@ function renderizarAbaCampanhas(raiz) {
   const itens = campanhas.map((c) => {
     const mundo = mundos.find((m) => m.id === c.mundo);
     const quantos = personagens.filter((p) => p.campanha === c.id).length;
-    const detalhes = [];
+    const detalhes = [c.naPaginaMesas ? "Aparece na página Mesas" : "Fora da página Mesas"];
     const loginMestre = c.temLoginMestre ? `login do mestre salvo (${c.mestreUsuario})` : "sem login do mestre salvo";
     if (mundo) {
       detalhes.push(`Mundo ${mundo.titulo}, ${quantos === 1 ? "1 personagem" : `${quantos} personagens`}, ${loginMestre}`);
-    } else {
+    } else if (c.naPaginaMesas) {
       detalhes.push({ texto: "Ainda não está ligada a um mundo do Foundry.", alerta: true });
     }
     return linha({
@@ -1247,19 +1287,21 @@ function renderizarAbaCampanhas(raiz) {
       detalhes,
       acoes: [
         ["Editar", () => formularioCampanha(c)],
-        ["Excluir", () => excluir(`Excluir ${c.nome}?`, "A campanha sai do portal. O mundo no Foundry não muda.", () => api.admin.excluirCampanha(c.id), "Campanha excluída."), true],
+        ["Excluir", () => excluir(`Excluir ${c.nome}?`, "A mesa sai do portal. O mundo no Foundry não muda.", () => api.admin.excluirCampanha(c.id), "Mesa excluída."), true],
       ],
     });
   });
-  raiz.append(listaOuVazio(itens, "Nenhuma campanha cadastrada."));
+  raiz.append(listaOuVazio(itens, "Nenhuma mesa cadastrada."));
 }
 
 function formularioCampanha(campanha) {
   const { mundos } = estado.admin;
   abrirFormulario({
-    titulo: campanha ? `Editar ${campanha.nome}` : "Nova campanha",
+    titulo: campanha ? `Editar ${campanha.nome}` : "Nova mesa",
     campos: [
-      { tipo: "texto", nome: "nome", rotulo: "Nome da campanha", valor: campanha?.nome, max: 80 },
+      { tipo: "texto", nome: "nome", rotulo: "Nome da mesa", valor: campanha?.nome, max: 80 },
+      // Uma mesa nova nasce na página Mesas
+      { tipo: "caixa", nome: "na_pagina", rotulo: "Aparece na página Mesas", valor: campanha ? campanha.naPaginaMesas : true },
       {
         tipo: "selecao",
         nome: "mundo",
@@ -1309,7 +1351,7 @@ function formularioCampanha(campanha) {
         rotulo: "Logo",
         atual: campanha?.titulo,
         larga: true,
-        ajuda: "Nome da campanha escrito como imagem. Aparece no card da campanha quando o mestre abre o mundo pela administração.",
+        ajuda: "Nome da mesa escrito como imagem. Aparece no card da mesa quando o mestre abre o mundo pela administração.",
       },
       {
         tipo: "imagem",
@@ -1320,7 +1362,7 @@ function formularioCampanha(campanha) {
       },
     ],
     enviar: (form) => api.admin.salvarCampanha(campanha?.id, new FormData(form)),
-    sucesso: campanha ? "Campanha salva." : "Campanha criada.",
+    sucesso: campanha ? "Mesa salva." : "Mesa criada.",
   });
 }
 
