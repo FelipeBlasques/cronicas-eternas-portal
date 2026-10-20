@@ -6,11 +6,16 @@
    ganham uma ficha. Os outros, NPCs e personagens de mesas antigas,
    são cadastrados aqui pelo administrador ou por um editor. Os
    caídos continuam na galeria. Ninguém precisa de aprovação.
+   A arte da galeria fica em "retrato", separada da capa e da arte
+   do card das Mesas.
    ================================================================= */
 
+const fs = require("node:fs");
+const path = require("node:path");
 const crypto = require("node:crypto");
 const {
   CONFIG,
+  PASTA_UPLOADS,
   dados,
   salvarDados,
   ganchos,
@@ -20,7 +25,7 @@ const {
   texto,
   FONTES,
   FONTE_PADRAO,
-  CAMPOS_IMAGEM_PERSONAGEM,
+  CAMPOS_IMAGEM_GALERIA,
   validarImagens,
   aplicarImagens,
   apagarImagens,
@@ -48,7 +53,26 @@ function cargoDe(conta) {
   return "jogador";
 }
 
+// O retrato de um personagem do portal nasce de uma cópia da capa (ou da arte), para que trocar
+// ou remover a imagem numa página nunca apague o arquivo da outra. As imagens fixas do site não são copiadas.
+function retratoCopiado(p) {
+  const origem = p.capa || p.arte;
+  if (!origem) return null;
+  if (!origem.startsWith("/uploads/")) return origem;
+  const arquivo = path.join(PASTA_UPLOADS, path.basename(origem));
+  if (!fs.existsSync(arquivo)) return null;
+  const nome = `${crypto.randomBytes(12).toString("hex")}${path.extname(arquivo)}`;
+  try {
+    fs.copyFileSync(arquivo, path.join(PASTA_UPLOADS, nome));
+  } catch (erro) {
+    console.error(erro); // sem a cópia, o personagem fica sem retrato e ganha outro pela galeria
+    return null;
+  }
+  return `/uploads/${nome}`;
+}
+
 // Cria a lista dos outros personagens na primeira vez e confere o formato do que está salvo.
+// Quem ainda não tem "retrato" vem de antes da arte própria da galeria e passa pela migração.
 // Devolve true quando precisou mudar alguma coisa.
 function garantirPersonagens() {
   let mudou = false;
@@ -56,9 +80,21 @@ function garantirPersonagens() {
     dados.outrosPersonagens = [];
     mudou = true;
   }
+  for (const p of dados.personagens) {
+    if ("retrato" in p) continue;
+    p.retrato = retratoCopiado(p);
+    mudou = true;
+  }
   for (const p of dados.outrosPersonagens) {
     if (!Array.isArray(p.mesas)) {
       p.mesas = [];
+      mudou = true;
+    }
+    // Nenhum arquivo é apagado: a arte recortada que sobrar fica em uploads/
+    if (!("retrato" in p)) {
+      p.retrato = p.capa || p.arte || null;
+      delete p.capa;
+      delete p.arte;
       mudou = true;
     }
   }
@@ -137,8 +173,7 @@ function personagemDoPortal(p, conta) {
     origemDoDado: "portal",
     nome: p.nome,
     fonte: FONTES.has(p.fonte) ? p.fonte : FONTE_PADRAO,
-    capa: p.capa || null,
-    arte: p.arte || null,
+    retrato: p.retrato || null,
     papel: "jogador",
     jogador: nomeDono,
     dono: p.dono,
@@ -156,8 +191,7 @@ function outroPublico(p, conta, conhecidas) {
     origemDoDado: "outro",
     nome: p.nome,
     fonte: FONTES.has(p.fonte) ? p.fonte : FONTE_PADRAO,
-    capa: p.capa || null,
-    arte: p.arte || null,
+    retrato: p.retrato || null,
     papel: PAPEIS.has(p.papel) ? p.papel : "npc",
     jogador: p.jogador || "",
     mesas: p.mesas.filter((id) => conhecidas.has(id)),
@@ -203,9 +237,9 @@ function dadosDaGaleria(conta) {
 
 /* ---------- O que chega do formulário ---------- */
 
-// Os dados vêm como JSON no campo "dados"; as imagens, se houver, nos campos "capa" e "arte"
+// Os dados vêm como JSON no campo "dados"; a imagem, se houver, no campo "retrato"
 async function lerFormularioDaFicha(req) {
-  const form = await lerFormulario(req, 2 * CONFIG.maxImagem + CONFIG.maxJson);
+  const form = await lerFormulario(req, CONFIG.maxImagem + CONFIG.maxJson);
   const bruto = form.get("dados");
   let corpo = null;
   if (typeof bruto === "string" && bruto.length <= CONFIG.maxJson) {
@@ -218,7 +252,7 @@ async function lerFormularioDaFicha(req) {
   if (!corpo || typeof corpo !== "object" || Array.isArray(corpo)) {
     throw new ErroHttp(400, "Os dados enviados não estão em um formato válido.");
   }
-  validarImagens(form, CAMPOS_IMAGEM_PERSONAGEM);
+  validarImagens(form, CAMPOS_IMAGEM_GALERIA);
   return { corpo, form };
 }
 
@@ -302,8 +336,8 @@ async function tratarGaleria(req, res, rota, metodo, conta) {
   throw new ErroHttp(404, "Endereço não encontrado.");
 }
 
-// O dono escreve resumo, ancestralidade e história e troca as imagens; o administrador muda também situação e queda.
-// Nome e fonte continuam no "Personalizar" das Mesas.
+// O dono escreve resumo, ancestralidade e história e troca o retrato; o administrador muda também situação e queda.
+// Nome e fonte continuam no "Personalizar" das Mesas, e a capa e a arte do card também.
 async function salvarFicha(req, res, conta, id) {
   fichaEditavel(conta, id); // antes de receber as imagens
   const { corpo, form } = await lerFormularioDaFicha(req);
@@ -311,7 +345,7 @@ async function salvarFicha(req, res, conta, id) {
   if (conta.admin) Object.assign(valores, situacaoDaFicha(corpo));
   const personagem = fichaEditavel(conta, id);
   Object.assign(personagem, valores);
-  await aplicarImagens(personagem, form, CAMPOS_IMAGEM_PERSONAGEM);
+  await aplicarImagens(personagem, form, CAMPOS_IMAGEM_GALERIA);
   await salvarDados();
   enviarJson(res, 200, { ok: true });
 }
@@ -327,14 +361,13 @@ async function cadastrarOutro(req, res, conta) {
   const personagem = {
     id: novoId("npc-", new Set([...dados.personagens, ...dados.outrosPersonagens].map((p) => p.id))),
     ...valores,
-    capa: null,
-    arte: null,
+    retrato: null,
     registradoPor: conta.usuario,
     registradoNome: conta.nome,
     criadoEm: quando,
     alteradoEm: quando,
   };
-  await aplicarImagens(personagem, form, CAMPOS_IMAGEM_PERSONAGEM);
+  await aplicarImagens(personagem, form, CAMPOS_IMAGEM_GALERIA);
   dados.outrosPersonagens.push(personagem);
   await salvarDados();
   console.log(`${conta.usuario} cadastrou nos Personagens: ${personagem.nome}`);
@@ -346,7 +379,7 @@ async function alterarOutro(req, res, conta, id) {
   const { corpo, form } = await lerFormularioDaFicha(req);
   const personagem = outroEditavel(conta, id);
   Object.assign(personagem, valoresDoOutro(corpo, conta, personagem));
-  await aplicarImagens(personagem, form, CAMPOS_IMAGEM_PERSONAGEM);
+  await aplicarImagens(personagem, form, CAMPOS_IMAGEM_GALERIA);
   personagem.alteradoEm = carimbo();
   await salvarDados();
   enviarJson(res, 200, { ok: true });
@@ -358,7 +391,7 @@ async function apagarOutro(res, conta, id) {
   dados.outrosPersonagens = dados.outrosPersonagens.filter((p) => p !== personagem);
   tirarDasCitacoes(id);
   await salvarDados();
-  await apagarImagens(CAMPOS_IMAGEM_PERSONAGEM.map((campo) => personagem[campo]));
+  await apagarImagens(CAMPOS_IMAGEM_GALERIA.map((campo) => personagem[campo]));
   console.log(`${conta.usuario} apagou dos Personagens: ${personagem.nome}`);
   enviarJson(res, 200, { ok: true });
 }

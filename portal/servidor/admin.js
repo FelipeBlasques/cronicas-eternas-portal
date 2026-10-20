@@ -26,6 +26,7 @@ const {
   criarId,
   CAMPOS_IMAGEM,
   CAMPOS_IMAGEM_PERSONAGEM,
+  CAMPOS_IMAGEM_GALERIA,
   validarImagens,
   apagarImagem,
   aplicarImagens,
@@ -227,6 +228,7 @@ async function adminPersonagens(req, res, metodo, id) {
       ...valoresDoPersonagem(form),
       capa: null,
       arte: null,
+      retrato: null, // a arte da galeria começa vazia; a cópia da capa foi só na migração
       foundrySenha: null,
     };
     aplicarLoginFoundry(personagem, form);
@@ -250,7 +252,8 @@ async function adminPersonagens(req, res, metodo, id) {
   }
 
   if (metodo === "DELETE") {
-    for (const campo of CAMPOS_IMAGEM) await apagarImagem(personagem[campo]); // inclui o título antigo, se houver
+    // Inclui o título antigo, se houver, e o retrato da galeria
+    for (const campo of [...CAMPOS_IMAGEM, ...CAMPOS_IMAGEM_GALERIA]) await apagarImagem(personagem[campo]);
     dados.personagens = dados.personagens.filter((p) => p !== personagem);
     await salvarDados();
     return enviarJson(res, 200, { ok: true });
