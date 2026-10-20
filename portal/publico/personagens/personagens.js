@@ -23,10 +23,28 @@ const CONFIG = {
    Conversa com o servidor
    ================================================================= */
 
+const CAMPOS_IMAGEM = ["capa", "arte"];
+
+// Os dados vão como JSON; as imagens, se houver, vão junto como arquivos (ou como pedido para remover)
+function formularioDe(dados) {
+  const { imagens, ...resto } = dados;
+  const form = new FormData();
+  form.append("dados", JSON.stringify(resto));
+  for (const campo of CAMPOS_IMAGEM) {
+    if (imagens[campo].arquivo) form.append(campo, imagens[campo].arquivo);
+    else if (imagens[campo].remover) form.append(`remover_${campo}`, "1");
+  }
+  return form;
+}
+
 const apiDoServidor = {
   galeria: () => pedir("GET", "/api/galeria"),
   estado: () => pedir("GET", "/api/estado", undefined, { silencioso: true }),
   sair: () => pedir("POST", "/api/sair"),
+  salvarFicha: (id, dados) => pedir("PUT", caminhoDe("/api/galeria/ficha", id), formularioDe(dados)),
+  cadastrar: (dados) => pedir("POST", "/api/galeria/outros", formularioDe(dados)),
+  alterar: (id, dados) => pedir("PUT", caminhoDe("/api/galeria/outros", id), formularioDe(dados)),
+  apagar: (id) => pedir("DELETE", caminhoDe("/api/galeria/outros", id)),
 };
 
 /* =================================================================
@@ -82,6 +100,7 @@ function exemplosDaPrevia() {
   const ev = (campos) => ({ ate: null, visibilidade: "todos", revelado: false, personagens: [], ...campos });
 
   return {
+    anoAtual: 366, // o ano de hoje em Draevor, o mesmo da prévia da Linha do Tempo
     contas: [
       { usuario: "mestre", nome: "Mestre" },
       { usuario: "comuna", nome: "Comuna" },
@@ -239,6 +258,87 @@ function criarApiDePrevia() {
   };
   const podeVer = (ev) =>
     conta.cargo === "admin" || (ev.visibilidade !== "admin" && !(ev.visibilidade === "revelar" && !ev.revelado));
+  const podeVerOutro = (p) => conta.cargo === "admin" || p.visibilidade !== "admin";
+  const podeEditarOutro = (p) => conta.cargo === "admin" || (conta.cargo === "editor" && p.registradoPor === conta.usuario);
+
+  const proibido = () => erroComCodigo("Sua conta não pode fazer isso.", "proibido");
+  const semPersonagem = () => erroComCodigo("Esse personagem não existe mais. Recarregue a página.", "nao-encontrado");
+  const idAleatorio = () => Array.from(crypto.getRandomValues(new Uint8Array(4)), (b) => b.toString(16).padStart(2, "0")).join("");
+
+  function acharOutro(id) {
+    const p = banco.outrosPersonagens.find((x) => x.id === id);
+    if (!p || !podeVerOutro(p)) throw semPersonagem();
+    return p;
+  }
+
+  /* ---------- O que chega do formulário, conferido como no servidor ---------- */
+
+  function textoOpcional(valor, campo, max) {
+    const limpo = typeof valor === "string" ? valor.trim() : "";
+    if (limpo.length > max) throw erroComCodigo(`O campo ${campo} pode ter no máximo ${max} caracteres.`);
+    return limpo;
+  }
+
+  function textosDe(dados) {
+    return {
+      origem: textoOpcional(dados.origem, "Ancestralidade e classe", 80),
+      resumo: textoOpcional(dados.resumo, "Resumo", 160).replace(/\s*\n\s*/g, " "),
+      historia: textoOpcional(dados.historia, "História", 6000),
+    };
+  }
+
+  function situacaoDe(dados) {
+    const situacao = dados.situacao ?? "vivo";
+    if (!Object.hasOwn(ROTULOS_SITUACAO, situacao)) {
+      throw erroComCodigo("Escolha a situação: vivo, caído, desaparecido ou aposentado.");
+    }
+    const bruta = situacao === "caido" ? dados.queda : null;
+    if (!bruta) return { situacao, queda: null };
+    let data = null;
+    if (bruta.data) {
+      const { ano, mes, dia } = bruta.data;
+      if (!Number.isInteger(ano) || ano < 0 || ano > banco.anoAtual) {
+        throw erroComCodigo(`O ano precisa ser um número inteiro de 0 a ${banco.anoAtual}.`);
+      }
+      data = { ano, mes: mes || null, dia: mes && dia ? dia : null, aprox: false };
+    }
+    const epitafio = textoOpcional(bruta.epitafio, "Epitáfio", 160);
+    return { situacao, queda: data || epitafio ? { data, epitafio } : null };
+  }
+
+  // O editor não escolhe quem vê: o que ele cadastra é para todos, e continua como está quando ele altera
+  function valoresDoOutro(dados, atual) {
+    const nome = typeof dados.nome === "string" ? dados.nome.trim() : "";
+    if (!nome) throw erroComCodigo("Preencha o campo Nome.");
+    if (nome.length > 60) throw erroComCodigo("O campo Nome pode ter no máximo 60 caracteres.");
+    if (!FONTES.some((f) => f.chave === dados.fonte)) throw erroComCodigo("Escolha uma das fontes da lista.");
+    if (dados.papel !== "jogador" && dados.papel !== "npc") {
+      throw erroComCodigo("Escolha o papel: personagem de jogador ou NPC.");
+    }
+    const conhecidas = new Set([...banco.campanhas, ...banco.mesasAntigas].map((m) => m.id));
+    let visibilidade = atual?.visibilidade ?? "todos";
+    if (conta.cargo === "admin") visibilidade = dados.visibilidade === "admin" ? "admin" : "todos";
+    return {
+      nome,
+      fonte: dados.fonte,
+      papel: dados.papel,
+      jogador: dados.papel === "jogador" ? textoOpcional(dados.jogador, "Jogador", 40) : "",
+      mesas: [...new Set(dados.mesas)].filter((id) => conhecidas.has(id)),
+      ...situacaoDe(dados),
+      ...textosDe(dados),
+      visibilidade,
+    };
+  }
+
+  // A imagem da prévia vira um endereço temporário do próprio navegador
+  function aplicarImagens(p, imagens) {
+    for (const campo of CAMPOS_IMAGEM) {
+      if (imagens[campo].arquivo instanceof File) p[campo] = URL.createObjectURL(imagens[campo].arquivo);
+      else if (imagens[campo].remover) p[campo] = null;
+    }
+  }
+
+  /* ---------- O formato enviado à página ---------- */
 
   function fichaPublica(p) {
     const queda =
@@ -281,7 +381,7 @@ function criarApiDePrevia() {
       mesas: [...p.mesas],
       ...fichaPublica(p),
       visibilidade: p.visibilidade,
-      podeEditar: conta.cargo === "admin" || (conta.cargo === "editor" && p.registradoPor === conta.usuario),
+      podeEditar: podeEditarOutro(p),
     };
   }
 
@@ -296,7 +396,7 @@ function criarApiDePrevia() {
       await esperar(120);
       const personagens = [
         ...banco.personagens.map(personagemDoPortal),
-        ...banco.outrosPersonagens.filter((p) => conta.cargo === "admin" || p.visibilidade !== "admin").map(outroPublico),
+        ...banco.outrosPersonagens.filter(podeVerOutro).map(outroPublico),
       ];
       // Para cada personagem, os acontecimentos que a conta pode ver e que o citam, do mais antigo ao mais recente
       const jornada = Object.fromEntries(personagens.map((p) => [p.id, []]));
@@ -318,6 +418,58 @@ function criarApiDePrevia() {
     async sair() {
       await esperar(100);
       return {};
+    },
+    // O dono escreve os textos e troca as imagens; o administrador muda também situação e queda
+    async salvarFicha(id, dados) {
+      await esperar(200);
+      const p = banco.personagens.find((x) => x.id === id);
+      if (!p) throw semPersonagem();
+      if (conta.cargo !== "admin" && p.dono !== conta.usuario) throw proibido();
+      const valores = textosDe(dados);
+      if (conta.cargo === "admin") Object.assign(valores, situacaoDe(dados));
+      Object.assign(p, valores);
+      aplicarImagens(p, dados.imagens);
+      return { ok: true };
+    },
+    async cadastrar(dados) {
+      await esperar(200);
+      if (conta.cargo === "jogador") throw proibido();
+      const valores = valoresDoOutro(dados, null);
+      const ocupados = new Set([...banco.personagens, ...banco.outrosPersonagens].map((p) => p.id));
+      let id;
+      do id = `npc-${idAleatorio()}`;
+      while (ocupados.has(id));
+      const quando = new Date().toISOString();
+      const p = {
+        id,
+        ...valores,
+        capa: null,
+        arte: null,
+        registradoPor: conta.usuario,
+        registradoNome: conta.nome,
+        criadoEm: quando,
+        alteradoEm: quando,
+      };
+      aplicarImagens(p, dados.imagens);
+      banco.outrosPersonagens.push(p);
+      return { personagem: { id } };
+    },
+    async alterar(id, dados) {
+      await esperar(200);
+      const p = acharOutro(id);
+      if (!podeEditarOutro(p)) throw proibido();
+      Object.assign(p, valoresDoOutro(dados, p), { alteradoEm: new Date().toISOString() });
+      aplicarImagens(p, dados.imagens);
+      return { ok: true };
+    },
+    // Como no servidor: sai também das citações da Linha do Tempo
+    async apagar(id) {
+      await esperar(200);
+      if (conta.cargo !== "admin") throw proibido();
+      const p = acharOutro(id);
+      banco.outrosPersonagens = banco.outrosPersonagens.filter((x) => x !== p);
+      for (const ev of banco.acontecimentos) ev.personagens = ev.personagens.filter((x) => x !== id);
+      return { ok: true };
     },
   };
 }
@@ -622,12 +774,12 @@ function abrirFicha(id) {
   cabeca.append(criar("span", "ficha__papel", ROTULOS_PAPEL[personagem.papel] ?? personagem.papel));
   if (personagem.visibilidade === "admin") cabeca.append(seloOculto());
   if (personagem.podeEditar) {
-    // O formulário de edição chega na sessão 2.4
     const lapis = criar("button", "botao botao-icone ficha__lapis");
     lapis.type = "button";
     lapis.title = "Alterar";
     lapis.setAttribute("aria-label", `Alterar ${personagem.nome}`);
     lapis.append(simbolo("icone-lapis"));
+    lapis.addEventListener("click", () => abrirEdicao(personagem));
     cabeca.append(lapis);
   }
   const nome = criar("h2", "ficha__nome", personagem.nome);
@@ -679,6 +831,256 @@ function trocarEndereco(ancora) {
     history.replaceState(null, "", ancora || location.pathname + location.search);
   } catch {
     // dentro de alguns quadros de prévia, o navegador não deixa mudar o endereço
+  }
+}
+
+/* =================================================================
+   Cadastrar e alterar
+   -----------------------------------------------------------------
+   Um formulário só, com os campos que a conta pode mudar. Nos
+   personagens do portal, nome e fonte continuam no "Personalizar"
+   das Mesas; o dono escreve os textos e troca as imagens, e só o
+   administrador muda a situação e a queda.
+   ================================================================= */
+
+const edicao = {
+  personagem: null, // o personagem sendo alterado, ou null para um novo
+  mesas: new Set(),
+  remover: { capa: false, arte: false },
+};
+
+const formEdicao = () => $("#form-edicao");
+
+function opcoesDeMes(seletor, valor) {
+  seletor.replaceChildren(new Option("Sem mês", ""), ...MESES.map((mes, i) => new Option(mes, String(i + 1))));
+  seletor.value = valor ? String(valor) : "";
+}
+
+function opcoesDeDia(seletor, valor) {
+  seletor.replaceChildren(new Option("Sem dia", ""));
+  for (let dia = 1; dia <= 30; dia++) seletor.append(new Option(String(dia), String(dia)));
+  seletor.value = valor ? String(valor) : "";
+}
+
+// As campanhas e depois as mesas antigas, como no filtro
+function renderizarEscolhaMesas() {
+  const raiz = $("#escolha-mesas");
+  const mesas = [...estado.mesas].sort((a, b) => Number(Boolean(a.antiga)) - Number(Boolean(b.antiga)));
+  if (!mesas.length) {
+    raiz.replaceChildren(criar("p", "escolhas__vazio", "Nenhuma mesa cadastrada ainda."));
+    return;
+  }
+  raiz.replaceChildren(
+    ...mesas.map((mesa) => {
+      const chip = criar("button", "etiqueta-mesa", mesa.nome);
+      chip.type = "button";
+      chip.style.setProperty("--cor", corVisivel(mesa.cor));
+      chip.setAttribute("aria-pressed", String(edicao.mesas.has(mesa.id)));
+      if (mesa.antiga) chip.append(criar("small", null, "antiga"));
+      chip.addEventListener("click", () => {
+        if (edicao.mesas.has(mesa.id)) edicao.mesas.delete(mesa.id);
+        else edicao.mesas.add(mesa.id);
+        chip.setAttribute("aria-pressed", String(edicao.mesas.has(mesa.id)));
+      });
+      return chip;
+    }),
+  );
+}
+
+// O nome aparece na fonte escolhida enquanto se escreve
+function mostrarFonte() {
+  const form = formEdicao();
+  carregarFontes([form.fonte.value]);
+  aplicarFonte(form.nome, form.fonte.value);
+}
+
+// O jogador só vale para personagens de jogador; a data e o epitáfio, só para os caídos
+function mostrarCamposDependentes() {
+  const form = formEdicao();
+  $("#campo-jogador").hidden = form.papel.value !== "jogador";
+  $("#grupo-queda").hidden = $("#grupo-situacao").hidden || form.situacao.value !== "caido";
+}
+
+function mostrarImagem(campo, src) {
+  const caixa = $(`#imagem-${campo}`);
+  caixa.hidden = !src;
+  if (src) caixa.querySelector("img").src = src;
+}
+
+function abrirEdicao(personagem = null) {
+  if (personagem ? !personagem.podeEditar : !podeCadastrar()) return;
+  const form = formEdicao();
+  form.reset();
+  edicao.personagem = personagem;
+  edicao.mesas = new Set(personagem?.mesas ?? []);
+  edicao.remover = { capa: false, arte: false };
+  $("#erro-edicao").hidden = true;
+
+  const doPortal = personagem?.origemDoDado === "portal";
+  $("#edicao-titulo").textContent = personagem ? `Alterar ${personagem.nome}` : "Novo personagem";
+  $("#edicao-enviar").textContent = personagem ? "Salvar" : "Cadastrar";
+  const aviso = $("#edicao-aviso");
+  aviso.hidden = !doPortal;
+  aviso.textContent = doPortal ? "O nome e a fonte deste personagem mudam na página Mesas." : "";
+
+  // Quais campos aparecem
+  for (const grupo of ["#grupo-nome", "#grupo-papel", "#grupo-mesas"]) $(grupo).hidden = doPortal;
+  $("#grupo-situacao").hidden = doPortal && !ehAdmin();
+  $("#grupo-visibilidade").hidden = doPortal || !ehAdmin();
+  $("#edicao-apagar").hidden = !personagem || doPortal || !ehAdmin();
+
+  // Nome, fonte, papel e mesas: só os outros personagens
+  form.nome.value = personagem?.nome ?? "";
+  form.fonte.replaceChildren(...FONTES.map((f) => new Option(f.rotulo, f.chave)));
+  form.fonte.value = personagem?.fonte ?? FONTES[0].chave;
+  mostrarFonte();
+  form.papel.value = personagem?.papel ?? "npc";
+  form.jogador.value = personagem?.jogador ?? "";
+  renderizarEscolhaMesas();
+
+  // Situação e queda
+  form.situacao.value = personagem?.situacao ?? "vivo";
+  const queda = personagem?.queda;
+  form.queda_ano.value = queda?.data ? String(queda.data.ano) : "";
+  opcoesDeMes(form.queda_mes, queda?.data?.mes);
+  opcoesDeDia(form.queda_dia, queda?.data?.dia);
+  form.epitafio.value = queda?.epitafio ?? "";
+  mostrarCamposDependentes();
+
+  // Textos, imagens e visibilidade
+  form.origem.value = personagem?.origem ?? "";
+  form.resumo.value = personagem?.resumo ?? "";
+  form.historia.value = personagem?.historia ?? "";
+  for (const campo of CAMPOS_IMAGEM) mostrarImagem(campo, personagem?.[campo]);
+  form.visibilidade.value = personagem?.visibilidade ?? "todos";
+
+  $("#dialogo-edicao").showModal();
+  $(".edicao__campos").scrollTop = 0;
+  (doPortal ? form.origem : form.nome).focus();
+}
+
+// A situação e, para os caídos, a queda: a data (só o ano é obrigatório) e o epitáfio
+function situacaoDoFormulario() {
+  const form = formEdicao();
+  const situacao = form.situacao.value;
+  if (situacao !== "caido") return { situacao, queda: null };
+  const mes = Number(form.queda_mes.value) || null;
+  let data = null;
+  if (form.queda_ano.value !== "") {
+    const ano = Number(form.queda_ano.value);
+    if (!Number.isInteger(ano) || ano < 0) throw new Error("O ano da queda precisa ser um número inteiro, de 0 em diante.");
+    data = { ano, mes, dia: mes ? Number(form.queda_dia.value) || null : null };
+  } else if (mes) {
+    throw new Error("Escreva o ano da queda, ou deixe o mês em branco.");
+  }
+  const epitafio = form.epitafio.value.trim();
+  return { situacao, queda: data || epitafio ? { data, epitafio } : null };
+}
+
+function coletarEdicao() {
+  const form = formEdicao();
+  const imagens = {};
+  for (const campo of CAMPOS_IMAGEM) {
+    const arquivo = form[campo].files[0] ?? null;
+    imagens[campo] = { arquivo, remover: edicao.remover[campo] && !arquivo };
+  }
+  const dados = {
+    origem: form.origem.value.trim(),
+    resumo: form.resumo.value.trim(),
+    historia: form.historia.value.trim(),
+    imagens,
+  };
+  if (!$("#grupo-situacao").hidden) Object.assign(dados, situacaoDoFormulario());
+  if (edicao.personagem?.origemDoDado === "portal") return dados;
+
+  const nome = form.nome.value.trim();
+  if (!nome) throw new Error("Escreva o nome do personagem.");
+  return {
+    ...dados,
+    nome,
+    fonte: form.fonte.value,
+    papel: form.papel.value,
+    jogador: form.papel.value === "jogador" ? form.jogador.value.trim() : "",
+    mesas: [...edicao.mesas],
+    visibilidade: ehAdmin() ? form.visibilidade.value : "todos",
+  };
+}
+
+async function enviarEdicao(evento) {
+  evento.preventDefault();
+  const erro = $("#erro-edicao");
+  const enviar = $("#edicao-enviar");
+  erro.hidden = true;
+  let dados;
+  try {
+    dados = coletarEdicao();
+  } catch (falha) {
+    erro.textContent = falha.message;
+    erro.hidden = false;
+    return;
+  }
+  enviar.disabled = true;
+  try {
+    const personagem = edicao.personagem;
+    if (!personagem) await api.cadastrar(dados);
+    else if (personagem.origemDoDado === "portal") await api.salvarFicha(personagem.id, dados);
+    else await api.alterar(personagem.id, dados);
+    $("#dialogo-edicao").close();
+    await recarregar();
+    avisoRapido(personagem ? "Ficha salva." : "Personagem cadastrado.");
+    // Alterado pela ficha: ela mostra o que acabou de mudar
+    if (personagem && $("#dialogo-ficha").open && personagemPorId(personagem.id)) abrirFicha(personagem.id);
+  } catch (falha) {
+    erro.textContent = falha.message;
+    erro.hidden = false;
+  } finally {
+    enviar.disabled = false;
+  }
+}
+
+async function apagarPersonagem() {
+  const personagem = edicao.personagem;
+  if (!personagem) return;
+  const confirmado = await perguntar({
+    titulo: "Apagar este personagem?",
+    texto: `${personagem.nome} sai da galeria de vez, com as imagens, e some das citações da Linha do Tempo.`,
+    confirmar: "Apagar",
+    cancelar: "Cancelar",
+    perigo: true,
+  });
+  if (!confirmado) return;
+  try {
+    await api.apagar(personagem.id);
+    $("#dialogo-edicao").close();
+    $("#dialogo-ficha").close();
+    await recarregar();
+    avisoRapido("Personagem apagado.");
+  } catch (falha) {
+    avisarFalha(falha);
+  }
+}
+
+function configurarEdicao() {
+  const form = formEdicao();
+  form.addEventListener("submit", enviarEdicao);
+  $("#edicao-cancelar").addEventListener("click", () => $("#dialogo-edicao").close());
+  $("#edicao-apagar").addEventListener("click", apagarPersonagem);
+  form.fonte.addEventListener("change", mostrarFonte);
+  form.addEventListener("change", (evento) => {
+    if (evento.target.name === "papel" || evento.target.name === "situacao") mostrarCamposDependentes();
+  });
+  for (const campo of CAMPOS_IMAGEM) {
+    form[campo].addEventListener("change", () => {
+      const arquivo = form[campo].files[0];
+      if (!arquivo) return;
+      mostrarImagem(campo, URL.createObjectURL(arquivo));
+      edicao.remover[campo] = false;
+    });
+    $(`#imagem-${campo} button`).addEventListener("click", () => {
+      form[campo].value = "";
+      edicao.remover[campo] = true;
+      mostrarImagem(campo, null);
+    });
   }
 }
 
@@ -743,6 +1145,8 @@ function configurarEventos() {
     $("#filtros-alternar").setAttribute("aria-expanded", String(aberto));
   });
 
+  $("#botao-novo").addEventListener("click", () => abrirEdicao());
+
   fecharAoClicarFora($("#dialogo-ficha"));
   $("#dialogo-ficha").addEventListener("close", () => {
     if (location.hash.startsWith("#personagem-")) trocarEndereco("");
@@ -793,6 +1197,7 @@ function configurarSimulacao() {
 async function iniciar() {
   medirAlturas();
   configurarEventos();
+  configurarEdicao();
   iniciarCinzas(30);
   if (MODO_PREVIA) configurarSimulacao();
 
