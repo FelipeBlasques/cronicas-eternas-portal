@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Linha do Tempo · Crônicas Eternas</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alegreya:ital,wght@0,400;0,500;0,700;1,400;1,500&family=Grenze+Gotisch:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="../style.css">
+  <link rel="stylesheet" href="linha.css">
+  <script src="linha.js" defer></script>
+</head>
+<body class="com-barra pagina-da-linha">
+
+  <!-- ============ Cenário: arte de fundo, névoa e cinzas ============ -->
+  <div class="cenario" aria-hidden="true">
+    <div class="cenario__arte"></div>
+    <div class="cenario__nevoa"></div>
+    <canvas id="cinzas" class="cenario__cinzas"></canvas>
+    <div class="cenario__vinheta"></div>
+    <div class="cenario__grao"></div>
+  </div>
+
+  <!-- ============ Desenhos usados pela página ============ -->
+  <svg class="simbolos" aria-hidden="true" focusable="false">
+    <defs>
+      <symbol id="vigia" viewBox="0 0 24 24"><path d="M2.5 12C5.5 7.4 8.6 5.6 12 5.6S18.5 7.4 21.5 12C18.5 16.6 15.4 18.4 12 18.4S5.5 16.6 2.5 12Z"/><circle cx="12" cy="12" r="3.2"/><path d="M12 1.8V3.4M12 20.6V22.2"/></symbol>
+
+      <!-- Barra lateral -->
+      <symbol id="icone-mesas" viewBox="0 0 24 24"><path d="M4.5 21V10.5a7.5 7.5 0 0 1 15 0V21M2.5 21h19M9 21v-5.5a3 3 0 0 1 6 0V21M12 3v2"/></symbol>
+      <symbol id="icone-linha" viewBox="0 0 24 24"><path d="M6 2.5h12M6 21.5h12M7.5 2.5c0 5 9 6.2 9 9.5s-9 4.5-9 9.5M16.5 2.5c0 5-9 6.2-9 9.5s9 4.5 9 9.5M10 19h4M11 8.5h2"/></symbol>
+      <symbol id="icone-personagens" viewBox="0 0 24 24"><path d="M5 20.5v-7a7 7 0 0 1 14 0v7ZM12 6.5v14M7.5 13.5h3M13.5 13.5h3M3.5 20.5h17M12 3v3.5"/></symbol>
+      <symbol id="icone-mapas" viewBox="0 0 24 24"><path d="M12 2l2.3 7.7L22 12l-7.7 2.3L12 22l-2.3-7.7L2 12l7.7-2.3Z"/><circle cx="12" cy="12" r="2.2"/></symbol>
+      <symbol id="icone-regras" viewBox="0 0 24 24"><path d="M6.5 2.5h11a1.5 1.5 0 0 1 1.5 1.5v15.5H6.5a2 2 0 0 0 0 4H19M6.5 2.5A2 2 0 0 0 4.5 4.5v17M9.5 7h6M9.5 10.5h4"/></symbol>
+
+      <!-- Tipos de acontecimento -->
+      <symbol id="glifo-origem" viewBox="0 0 24 24"><circle cx="12" cy="14.5" r="6.2"/><path d="M7.4 10.4C5.6 8 5.2 5 6.1 2.6c1.1 2.8 2.7 4.6 4.6 5.9M16.6 10.4c1.8-2.4 2.2-5.4 1.3-7.8c-1.1 2.8-2.7 4.6-4.6 5.9M9 12.5h6l-3 5.2Z"/></symbol>
+      <symbol id="glifo-marco" viewBox="0 0 24 24"><path d="M9.2 21l1-14.5L12 3l1.8 3.5l1 14.5ZM5.5 21h13M10.6 10.5h2.8M10.4 14.5h3.2"/></symbol>
+      <symbol id="glifo-guerra" viewBox="0 0 24 24"><path d="M4 4l9.6 9.6M20 4l-9.6 9.6M4 4h3.2M4 4v3.2M20 4h-3.2M20 4v3.2M12.4 16.8l4.4-4.4M11.6 16.8l-4.4-4.4M16.2 16.2l3.6 3.6M7.8 16.2l-3.6 3.6"/></symbol>
+      <symbol id="glifo-queda" viewBox="0 0 24 24"><path d="M6 21V10a6 6 0 0 1 12 0v11ZM3.5 21h17M12 8.5v7.5M9.3 11.3h5.4"/></symbol>
+      <symbol id="glifo-fundacao" viewBox="0 0 24 24"><path d="M4 21V9h2.2V6.5h2.3V9h2V6.5h3V9h2V6.5h2.3V9H20v12ZM10 21v-4.5a2 2 0 0 1 4 0V21M2.5 21h19"/></symbol>
+      <symbol id="glifo-catastrofe" viewBox="0 0 24 24"><path d="M12 21.5c-4 0-6.5-2.6-6.5-6.2c0-4.1 3.3-5.4 3.3-9.8c2.2 1.1 3.4 3.1 3.4 5.3c1-1.1 1.8-2.4 1.8-4.4c3.2 2.2 4.5 5.3 4.5 8.6c0 3.8-2.4 6.5-6.5 6.5Z"/><path d="M12 21.5c-1.6 0-2.7-1.1-2.7-2.7c0-1.7 1.6-2.8 2.7-4.4c1.1 1.6 2.7 2.7 2.7 4.4c0 1.6-1.1 2.7-2.7 2.7Z"/></symbol>
+      <symbol id="glifo-poder" viewBox="0 0 24 24"><path d="M4.5 17.5L3 7.5l5.2 4.2L12 5l3.8 6.7L21 7.5l-1.5 10ZM4.5 20.5h15"/><circle cx="12" cy="13.6" r="1.1"/></symbol>
+      <symbol id="glifo-pacto" viewBox="0 0 24 24"><circle cx="8.8" cy="12" r="5.3"/><circle cx="15.2" cy="12" r="5.3"/></symbol>
+      <symbol id="glifo-arcano" viewBox="0 0 24 24"><path d="M12 1.8v20.4M1.8 12h20.4M4.8 4.8l14.4 14.4M19.2 4.8L4.8 19.2"/><circle cx="12" cy="12" r="4.4"/></symbol>
+      <symbol id="glifo-descoberta" viewBox="0 0 24 24"><circle cx="7.2" cy="12" r="4.2"/><path d="M11.4 12H21.5M17.6 12v3.4M20.6 12v2.4"/><circle cx="7.2" cy="12" r="1.4"/></symbol>
+      <symbol id="glifo-feito" viewBox="0 0 24 24"><path d="M6 21.5V2.5M6 3.5h12.5l-2.6 4.6l2.6 4.6H6"/></symbol>
+      <symbol id="glifo-lua" viewBox="0 0 24 24"><path d="M15.5 2.8a9.2 9.2 0 1 0 6 13.6A7.2 7.2 0 0 1 15.5 2.8Z"/></symbol>
+      <symbol id="glifo-olho" viewBox="0 0 24 24"><path d="M2.5 12C5.5 7.4 8.6 5.6 12 5.6S18.5 7.4 21.5 12C18.5 16.6 15.4 18.4 12 18.4S5.5 16.6 2.5 12Z"/><circle cx="12" cy="12" r="3.2"/></symbol>
+      <symbol id="glifo-escudo" viewBox="0 0 24 24"><path d="M12 2.8l8 3v6.3c0 5-3.5 8.3-8 9.4c-4.5-1.1-8-4.4-8-9.4V5.8ZM12 6.5v11M7.5 10.5h9"/></symbol>
+      <symbol id="glifo-montanha" viewBox="0 0 24 24"><path d="M1.5 20.5l7.5-12l4 6.2l3-4.2l6.5 10ZM7.4 11.1l1.6 1.6l1.5-1.4"/></symbol>
+      <symbol id="glifo-sol" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.2"/><path d="M12 1.8v3M12 19.2v3M1.8 12h3M19.2 12h3M4.8 4.8l2.1 2.1M17.1 17.1l2.1 2.1M19.2 4.8l-2.1 2.1M6.9 17.1l-2.1 2.1"/></symbol>
+      <symbol id="glifo-gota" viewBox="0 0 24 24"><path d="M12 2.5c3.1 4.2 6.2 7.7 6.2 11.6a6.2 6.2 0 0 1-12.4 0C5.8 10.2 8.9 6.7 12 2.5Z"/></symbol>
+      <symbol id="glifo-navio" viewBox="0 0 24 24"><path d="M2.5 15.5h19l-3.2 5H5.7ZM12 2.5v13M12 3.5l6.5 9H12M12 6l-5.5 6.5H12"/></symbol>
+      <symbol id="glifo-torre" viewBox="0 0 24 24"><path d="M7.5 21.5l1-13h7l1 13ZM7 8.5V4.5h2V6h2V4.5h2V6h2V4.5h2v4ZM10.5 21.5v-4a1.5 1.5 0 0 1 3 0v4M11 11.5h2M5 21.5h14"/></symbol>
+
+      <!-- Outros desenhos -->
+      <symbol id="icone-lupa" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.4 15.4L21 21"/></symbol>
+      <symbol id="icone-lapis" viewBox="0 0 24 24"><path d="M15.5 4.5l4 4L8.5 19.5H4.5v-4ZM13 7l4 4"/></symbol>
+      <symbol id="icone-corrente" viewBox="0 0 24 24"><rect x="8.5" y="1.5" width="7" height="8.5" rx="3.5"/><rect x="8.5" y="14" width="7" height="8.5" rx="3.5"/><path d="M4.5 12h3M16.5 12h3"/></symbol>
+      <symbol id="icone-oculto" viewBox="0 0 24 24"><path d="M2.5 12C5.5 7.4 8.6 5.6 12 5.6S18.5 7.4 21.5 12C18.5 16.6 15.4 18.4 12 18.4S5.5 16.6 2.5 12ZM4 20L20 4"/></symbol>
+      <symbol id="runa-selo" viewBox="0 0 24 40"><path d="M12 4V36M12 10L4 18L12 26L20 18Z"/></symbol>
+      <symbol id="divisor" viewBox="0 0 320 20">
+        <path d="M0 10H132M188 10H320M132 10L142 6L150 10L142 14ZM188 10L178 6L170 10L178 14Z"/>
+        <path d="M160 2L168 10L160 18L152 10Z"/>
+      </symbol>
+    </defs>
+  </svg>
+
+  <!-- ============ Cabeçalho ============ -->
+  <header id="topo" class="topo">
+    <a class="topo__marca topo__marca--link" href="../">Crônicas Eternas</a>
+
+    <p id="status" class="status" role="status" aria-live="polite">
+      <svg class="status__vigia" aria-hidden="true"><use href="#vigia"/></svg>
+      <span id="status-texto">Consultando o servidor…</span>
+    </p>
+
+    <nav class="topo__conta" aria-label="Sua conta">
+      <span id="nome-conta" class="topo__nome"></span>
+      <span id="cargo-conta" class="topo__cargo" hidden></span>
+      <button id="botao-sair" class="botao botao--leve" type="button">Sair</button>
+    </nav>
+  </header>
+
+  <!-- ============ Barra lateral ============ -->
+  <nav class="barra-lateral" aria-label="Páginas do grupo">
+    <a class="barra-lateral__botao" href="../" data-curto="Mesas">
+      <svg aria-hidden="true"><use href="#icone-mesas"/></svg>
+      <span class="barra-lateral__rotulo">Mesas</span>
+    </a>
+    <a class="barra-lateral__botao" href="./" aria-current="page" data-curto="Linha">
+      <svg aria-hidden="true"><use href="#icone-linha"/></svg>
+      <span class="barra-lateral__rotulo">Linha do Tempo</span>
+    </a>
+    <span class="barra-lateral__botao barra-lateral__botao--em-breve" role="link" aria-disabled="true" tabindex="0" data-curto="Personagens">
+      <svg aria-hidden="true"><use href="#icone-personagens"/></svg>
+      <span class="barra-lateral__rotulo">Personagens <small>Em breve</small></span>
+    </span>
+    <span class="barra-lateral__botao barra-lateral__botao--em-breve" role="link" aria-disabled="true" tabindex="0" data-curto="Mapas">
+      <svg aria-hidden="true"><use href="#icone-mapas"/></svg>
+      <span class="barra-lateral__rotulo">Mapas <small>Em breve</small></span>
+    </span>
+    <span class="barra-lateral__botao barra-lateral__botao--em-breve" role="link" aria-disabled="true" tabindex="0" data-curto="Regras">
+      <svg aria-hidden="true"><use href="#icone-regras"/></svg>
+      <span class="barra-lateral__rotulo">Regras da casa <small>Em breve</small></span>
+    </span>
+  </nav>
+
+  <!-- ============ A página ============ -->
+  <main id="pagina" class="pagina-linha" hidden>
+    <div class="cabeca-linha">
+      <div class="cabeca-linha__texto">
+        <h1 class="cabeca-linha__titulo">Linha do Tempo</h1>
+        <p class="cabeca-linha__sub">A história de Draevor, do Expurgo Demoníaco até hoje, contada no Ciclo de Sylara.</p>
+      </div>
+      <div class="cabeca-linha__acoes">
+        <button id="botao-pendencias" class="botao botao--leve" type="button" hidden>Pendências <span id="contador-pendencias" class="contador"></span></button>
+        <button id="botao-tipos-admin" class="botao botao--leve" type="button" hidden>Tipos</button>
+        <button id="botao-mesas-antigas" class="botao botao--leve" type="button" hidden>Mesas antigas</button>
+        <button id="botao-registrar" class="botao botao--principal" type="button" hidden>+ Registrar</button>
+      </div>
+      <span class="cabeca-linha__regua" aria-hidden="true"></span>
+    </div>
+
+    <!-- Filtros, presos no topo enquanto a linha rola -->
+    <div id="filtros" class="filtros">
+      <button id="filtros-alternar" class="filtros__alternar botao botao--leve" type="button" aria-expanded="false" aria-controls="filtros-corpo">
+        Filtros <span id="filtros-contador" class="contador" hidden></span>
+      </button>
+      <div id="filtros-corpo" class="filtros__corpo">
+        <div id="filtro-mesas" class="filtros__mesas" role="group" aria-label="Mesas citadas"></div>
+
+        <div class="filtros__controles">
+          <div class="filtro-tipos">
+            <button id="botao-filtro-tipos" class="filtro-campo filtro-campo--botao" type="button" aria-expanded="false" aria-controls="painel-tipos">
+              <span id="rotulo-filtro-tipos">Todos os tipos</span>
+            </button>
+            <div id="painel-tipos" class="painel-tipos" hidden></div>
+          </div>
+
+          <label class="filtro-campo">
+            <span class="sr">Personagem</span>
+            <select id="filtro-personagem"></select>
+          </label>
+
+          <label class="caixa filtro-marcos">
+            <input id="filtro-marcos" type="checkbox">
+            <span class="caixa__marca" aria-hidden="true"></span>
+            <span>Só marcos</span>
+          </label>
+
+          <label class="filtro-campo filtro-campo--busca">
+            <svg aria-hidden="true"><use href="#icone-lupa"/></svg>
+            <span class="sr">Buscar</span>
+            <input id="filtro-busca" type="search" placeholder="Buscar" autocomplete="off" spellcheck="false">
+          </label>
+
+          <form id="form-ir-ano" class="filtro-campo filtro-campo--ano" novalidate>
+            <label>
+              <span class="sr">Ir para o ano</span>
+              <input id="ir-ano" type="number" inputmode="numeric" min="0" placeholder="Ir para o ano">
+            </label>
+            <span class="filtro-campo__sufixo" aria-hidden="true">ED</span>
+          </form>
+
+          <button id="limpar-filtros" class="botao botao--leve" type="button" hidden>Limpar filtros</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Panorama: a régua de 0 ED até hoje -->
+    <section class="panorama" aria-label="Panorama da história">
+      <div class="panorama__cabeca">
+        <span class="panorama__titulo">Panorama</span>
+        <span id="panorama-legenda" class="panorama__legenda"></span>
+      </div>
+      <div id="panorama-trilho" class="panorama__trilho">
+        <div id="panorama-janela" class="panorama__janela" aria-hidden="true"></div>
+      </div>
+    </section>
+
+    <div id="ano-fixo" class="ano-fixo" aria-hidden="true" hidden></div>
+
+    <!-- A linha -->
+    <div id="linha" class="linha-tempo" aria-label="Acontecimentos, do mais recente ao mais antigo"></div>
+  </main>
+
+  <!-- ============ Acontecimento aberto ============ -->
+  <dialog id="dialogo-evento" class="dialogo dialogo--evento">
+    <div id="evento-conteudo" class="evento-aberto"></div>
+  </dialog>
+
+  <!-- ============ Registrar ou alterar ============ -->
+  <dialog id="dialogo-registro" class="dialogo dialogo--registro">
+    <form id="form-registro" class="dialogo__form" novalidate>
+      <h2 id="registro-titulo" class="dialogo__titulo">Registrar acontecimento</h2>
+      <p id="registro-aviso" class="dialogo__texto registro-aviso" hidden></p>
+
+      <div class="registro__campos">
+        <label class="campo">
+          <span class="campo__rotulo">Título</span>
+          <input name="titulo" maxlength="120" autocomplete="off" required>
+          <span class="campo__ajuda">O fato em si, numa frase curta. As mesas entram mais abaixo, nunca no título.</span>
+        </label>
+
+        <fieldset id="grupo-data" class="grupo">
+          <legend class="campo__rotulo">Data no mundo</legend>
+          <div class="data-campos">
+            <label class="campo campo--ano">
+              <span class="campo__rotulo">Ano</span>
+              <input name="ano" type="number" inputmode="numeric" min="0" required>
+            </label>
+            <label class="campo">
+              <span class="campo__rotulo">Mês</span>
+              <select name="mes"></select>
+            </label>
+            <label class="caixa caixa--aprox">
+              <input name="aprox" type="checkbox">
+              <span class="caixa__marca" aria-hidden="true"></span>
+              <span>Data aproximada</span>
+            </label>
+          </div>
+          <div id="grade-dias" class="grade-dias" role="group" aria-label="Dia do mês" hidden></div>
+          <p id="previa-data" class="previa-data" aria-live="polite"></p>
+
+          <label class="caixa">
+            <input name="periodo" type="checkbox">
+            <span class="caixa__marca" aria-hidden="true"></span>
+            <span>Dura um período</span>
+          </label>
+          <div id="campos-ate" class="data-campos data-campos--ate" hidden>
+            <label class="campo campo--ano">
+              <span class="campo__rotulo">Até o ano</span>
+              <input name="ate_ano" type="number" inputmode="numeric" min="0">
+            </label>
+            <label class="campo">
+              <span class="campo__rotulo">Mês</span>
+              <select name="ate_mes"></select>
+            </label>
+            <label class="campo">
+              <span class="campo__rotulo">Dia</span>
+              <select name="ate_dia"></select>
+            </label>
+          </div>
+        </fieldset>
+
+        <div id="grupo-tipo" class="registro__duas">
+          <label class="campo">
+            <span class="campo__rotulo">Tipo</span>
+            <select name="tipo"></select>
+          </label>
+          <fieldset class="grupo">
+            <legend class="campo__rotulo">Importância</legend>
+            <div class="alternador">
+              <label><input type="radio" name="importancia" value="comum" checked><span>Registro comum</span></label>
+              <label><input type="radio" name="importancia" value="marco"><span>Marco maior</span></label>
+            </div>
+          </fieldset>
+        </div>
+
+        <fieldset id="grupo-mesas" class="grupo">
+          <legend class="campo__rotulo">Mesas citadas</legend>
+          <div id="escolha-mesas" class="escolhas"></div>
+        </fieldset>
+
+        <fieldset id="grupo-personagens" class="grupo">
+          <legend class="campo__rotulo">Personagens citados</legend>
+          <div id="escolha-personagens" class="escolhas"></div>
+        </fieldset>
+
+        <label class="campo">
+          <span class="campo__rotulo">Descrição</span>
+          <textarea name="descricao" rows="4" maxlength="3000"></textarea>
+          <span class="campo__ajuda">Use **negrito** e *itálico*; uma linha em branco separa parágrafos.</span>
+        </label>
+
+        <div class="campo">
+          <span class="campo__rotulo">Imagem</span>
+          <div id="imagem-atual" class="imagem-registro" hidden>
+            <img alt="">
+            <button id="remover-imagem" class="botao botao--leve botao--perigo" type="button">Remover imagem</button>
+          </div>
+          <input name="imagem" type="file" accept="image/png,image/jpeg,image/webp,image/gif">
+          <span class="campo__ajuda">Arte, mapa ou ilustração do momento.</span>
+        </div>
+
+        <div id="campos-frase" class="registro__duas registro__duas--frase">
+          <label class="campo">
+            <span class="campo__rotulo">Frase marcante</span>
+            <input name="frase" maxlength="300" autocomplete="off">
+          </label>
+          <label class="campo">
+            <span class="campo__rotulo">Quem disse</span>
+            <input name="frase_autor" maxlength="80" autocomplete="off">
+          </label>
+        </div>
+
+        <fieldset id="campo-visibilidade" class="grupo" hidden>
+          <legend class="campo__rotulo">Visibilidade</legend>
+          <div class="alternador alternador--tres">
+            <label><input type="radio" name="visibilidade" value="todos" checked><span>Todos</span></label>
+            <label><input type="radio" name="visibilidade" value="revelar"><span>Revelar depois</span></label>
+            <label><input type="radio" name="visibilidade" value="admin"><span>Só o administrador</span></label>
+          </div>
+        </fieldset>
+      </div>
+
+      <p id="erro-registro" class="mensagem-erro" role="alert" hidden></p>
+      <div class="dialogo__acoes">
+        <button id="registro-cancelar" class="botao botao--leve" type="button">Cancelar</button>
+        <button id="registro-enviar" class="botao botao--principal" type="submit">Registrar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- ============ Painéis do administrador ============ -->
+  <dialog id="dialogo-painel" class="dialogo dialogo--largo">
+    <h2 id="painel-titulo" class="dialogo__titulo"></h2>
+    <div id="painel-conteudo" class="painel"></div>
+    <div class="dialogo__acoes">
+      <button id="painel-fechar" class="botao botao--leve" type="button">Fechar</button>
+    </div>
+  </dialog>
+
+  <!-- ============ Aviso e confirmação ============ -->
+  <dialog id="dialogo-aviso" class="dialogo">
+    <form method="dialog">
+      <h2 id="aviso-titulo" class="dialogo__titulo"></h2>
+      <p id="aviso-texto" class="dialogo__texto"></p>
+      <div class="dialogo__acoes">
+        <button id="aviso-cancelar" class="botao botao--leve" value="cancelar" hidden></button>
+        <button id="aviso-confirmar" class="botao botao--principal" value="confirmar">Entendi</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="aviso-rapido" class="aviso-rapido" role="status" aria-live="polite" hidden></div>
+
+  <!-- ============ Só na prévia ============ -->
+  <details id="simulacao" class="simulacao" hidden>
+    <summary id="simulacao-resumo">Prévia</summary>
+    <label class="campo">
+      <span class="campo__rotulo">Ver a página como</span>
+      <select id="sim-cargo">
+        <option value="admin">Administrador (mestre)</option>
+        <option value="editor">Editor (Takezo)</option>
+        <option value="jogador">Jogador (Neia)</option>
+      </select>
+    </label>
+    <button id="sim-restaurar" class="botao botao--leve" type="button">Restaurar os exemplos</button>
+    <p class="simulacao__nota">Só existe na prévia. Os acontecimentos são exemplos para ver o visual; na página real, a linha começa só com o Expurgo Demoníaco.</p>
+  </details>
+</body>
+</html>

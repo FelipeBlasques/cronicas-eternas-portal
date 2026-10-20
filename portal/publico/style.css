@@ -1,0 +1,2032 @@
+/* =================================================================
+   Crônicas Eternas: "Cinza e centelha"
+   -----------------------------------------------------------------
+   O mundo é fuligem, ferro, pedra e luz de vela. A magia é rara:
+   a luz arcana (azul fria) só aparece quando algo desperta.
+   ================================================================= */
+
+:root {
+  /* Matéria */
+  --fuligem: #0e0c0b;
+  --carvao: #15120f;
+  --pedra: #1e1a16;
+  --ferro: rgba(181, 154, 118, 0.38);
+  --ferro-forte: rgba(201, 171, 128, 0.62);
+  --ferro-fraco: rgba(181, 154, 118, 0.16);
+  --pergaminho: #e8ddc8;
+  --pergaminho-apagado: #a8987f;
+  --cinza: #7d7366;
+
+  /* Fogo comum e perigo */
+  --brasa: #c46a35;
+  --brasa-brilho: rgba(196, 106, 53, 0.55);
+  --sangue: #93342a;
+  --alerta: #e0937c;
+
+  /* Magia: rara, fria */
+  --arcano: #a8dcff;
+  --arcano-brilho: rgba(110, 190, 255, 0.6);
+  --arcano-halo: rgba(110, 190, 255, 0.28);
+
+  /* Tipografia */
+  --fonte-gotica: "Grenze Gotisch", "UnifrakturMaguntia", "Palatino Linotype", Georgia, serif;
+  --fonte-texto: "Alegreya", "Palatino Linotype", Georgia, serif;
+
+  /* Formas */
+  --card-altura: 300px;
+  --raio: 3px;
+
+  /* Texturas desenhadas */
+  --grao: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .55 0 0 0 0 .5 0 0 0 0 .45 0 0 0 .6 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
+  --moldura-card: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 300' preserveAspectRatio='none'%3E%3Cg fill='none' stroke='%23c9ab80'%3E%3Crect x='8' y='8' width='184' height='284' stroke-opacity='.32' vector-effect='non-scaling-stroke'/%3E%3Cpath d='M8 36V8H36M164 8H192V36M192 264V292H164M36 292H8V264' stroke-width='2' stroke-opacity='.78' vector-effect='non-scaling-stroke'/%3E%3Cpath d='M15 15H25M15 15V25M185 15H175M185 15V25M185 285H175M185 285V275M15 285H25M15 285V275' stroke-opacity='.5' vector-effect='non-scaling-stroke'/%3E%3C/g%3E%3C/svg%3E");
+  --runas-card: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 20'%3E%3Cg fill='none' stroke='%23bfe6ff' stroke-width='1.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M10 3V17M10 5L15 8M10 9L15 12M30 3V17M30 9L26 4M30 9L34 4M50 3L54 8L50 13L46 8ZM50 13L46 17M50 13L54 17M64 4L74 16V4L64 16ZM90 4L84 10L90 16M104 3V17M100 7L104 3L108 7M126 3L120 9L128 11L122 17M142 10L146 5L150 10L146 15ZM160 3V17M160 3L166 7L160 10L166 13L160 17M180 17V3L186 8'/%3E%3C/g%3E%3C/svg%3E");
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+html {
+  color-scheme: dark;
+  background: var(--fuligem);
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: var(--fonte-texto);
+  font-size: 1.0625rem;
+  line-height: 1.6;
+  color: var(--pergaminho);
+  -webkit-font-smoothing: antialiased;
+}
+
+body.com-ritual {
+  overflow: hidden;
+}
+
+.simbolos {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+
+::selection {
+  background: rgba(196, 106, 53, 0.45);
+  color: var(--pergaminho);
+}
+
+/* =================================================================
+   Cenário
+   ================================================================= */
+
+.cenario {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.cenario__arte {
+  position: absolute;
+  inset: -2%;
+  background: url("imagens/background.png") center / cover no-repeat;
+  filter: grayscale(0.35) sepia(0.18) brightness(0.42) contrast(1.08);
+  transition: filter 1.2s ease;
+}
+
+body.no-portal .cenario__arte {
+  filter: grayscale(0.55) sepia(0.12) brightness(0.2) blur(3px);
+}
+
+.cenario__nevoa {
+  position: absolute;
+  left: -25%;
+  right: -25%;
+  bottom: -12%;
+  height: 60%;
+  background:
+    radial-gradient(55% 45% at 28% 78%, rgba(176, 166, 150, 0.13), transparent 70%),
+    radial-gradient(45% 40% at 72% 86%, rgba(176, 166, 150, 0.1), transparent 70%),
+    radial-gradient(35% 30% at 50% 100%, rgba(176, 166, 150, 0.12), transparent 70%);
+  filter: blur(18px);
+  animation: nevoa 70s ease-in-out infinite alternate;
+}
+
+@keyframes nevoa {
+  from {
+    transform: translateX(-5%);
+  }
+  to {
+    transform: translateX(5%);
+  }
+}
+
+.cenario__cinzas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.cenario__vinheta {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 50% 38%, transparent 30%, rgba(8, 7, 6, 0.82) 100%);
+}
+
+.cenario__grao {
+  position: absolute;
+  inset: 0;
+  background-image: var(--grao);
+  opacity: 0.32;
+  mix-blend-mode: overlay;
+}
+
+/* =================================================================
+   Campos, caixas e botões
+   ================================================================= */
+
+.campo {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.campo__rotulo {
+  font-style: italic;
+  font-size: 0.98rem;
+  color: var(--pergaminho-apagado);
+}
+
+.campo__ajuda {
+  font-size: 0.9rem;
+  line-height: 1.45;
+  color: var(--cinza);
+}
+
+.campo input,
+.campo select {
+  width: 100%;
+  font: inherit;
+  font-size: 1.1rem;
+  color: var(--pergaminho);
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--ferro);
+  border-radius: 0;
+  padding: 0.4rem 0.1rem 0.45rem;
+  transition: border-color 0.3s, box-shadow 0.3s;
+}
+
+.campo select {
+  cursor: pointer;
+}
+
+.campo select option {
+  background: var(--carvao);
+  color: var(--pergaminho);
+}
+
+.campo input:focus-visible,
+.campo select:focus-visible {
+  outline: none;
+  border-bottom-color: var(--brasa);
+  box-shadow: 0 1px 0 0 var(--brasa), 0 10px 16px -14px var(--brasa-brilho);
+}
+
+.campo input[type="color"] {
+  width: 4.5rem;
+  height: 2.4rem;
+  padding: 0.15rem;
+  border: 1px solid var(--ferro);
+  cursor: pointer;
+}
+
+.campo input[type="file"] {
+  font-size: 0.95rem;
+  color: var(--pergaminho-apagado);
+  border-bottom: 0;
+  padding: 0.3rem 0;
+  cursor: pointer;
+}
+
+.campo input[type="file"]::file-selector-button {
+  margin-right: 0.9rem;
+  font: inherit;
+  font-size: 0.95rem;
+  color: var(--pergaminho);
+  background: linear-gradient(180deg, #2b2520, #1a1613);
+  border: 1px solid var(--ferro);
+  border-radius: var(--raio);
+  padding: 0.35rem 0.9rem;
+  cursor: pointer;
+}
+
+.campo input[type="file"]::file-selector-button:hover {
+  border-color: var(--brasa);
+}
+
+/* Caixa de marcar, com o visto desenhado em brasa */
+.caixa {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  cursor: pointer;
+  color: var(--pergaminho-apagado);
+  font-size: 0.98rem;
+}
+
+.caixa input {
+  position: absolute;
+  opacity: 0;
+  width: 1.1rem;
+  height: 1.1rem;
+  margin: 0;
+  cursor: pointer;
+}
+
+.caixa__marca {
+  flex: none;
+  position: relative;
+  width: 1.1rem;
+  height: 1.1rem;
+  border: 1px solid var(--ferro-forte);
+  background: rgba(14, 12, 11, 0.6);
+  transition: border-color 0.25s;
+}
+
+.caixa__marca::after {
+  content: "";
+  position: absolute;
+  left: 0.32rem;
+  top: 0.08rem;
+  width: 0.35rem;
+  height: 0.65rem;
+  border: solid var(--brasa);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg) scale(0);
+  transition: transform 0.2s;
+}
+
+.caixa input:checked + .caixa__marca::after {
+  transform: rotate(45deg) scale(1);
+}
+
+.caixa input:focus-visible + .caixa__marca {
+  outline: 2px solid var(--brasa);
+  outline-offset: 3px;
+}
+
+.caixa:hover .caixa__marca {
+  border-color: var(--brasa);
+}
+
+.mensagem-erro {
+  margin: 0;
+  font-size: 0.98rem;
+  color: var(--alerta);
+}
+
+.dica {
+  margin: 0;
+  text-align: center;
+  font-size: 0.92rem;
+  font-style: italic;
+  color: var(--cinza);
+}
+
+.dica strong {
+  font-style: normal;
+  font-weight: 500;
+  color: var(--pergaminho-apagado);
+}
+
+.botao {
+  font: inherit;
+  font-weight: 500;
+  line-height: 1.2;
+  color: var(--pergaminho);
+  cursor: pointer;
+  border-radius: var(--raio);
+  transition: color 0.25s, border-color 0.25s, box-shadow 0.35s, background-color 0.25s;
+}
+
+.botao:focus-visible {
+  outline: 2px solid var(--brasa);
+  outline-offset: 3px;
+}
+
+.botao:disabled {
+  opacity: 0.55;
+  cursor: progress;
+}
+
+/* Placa de ferro forjado */
+.botao--principal {
+  padding: 0.7rem 1.4rem;
+  background: linear-gradient(180deg, #2c2621 0%, #1a1613 100%);
+  border: 1px solid var(--ferro);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 240, 215, 0.07),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.45),
+    0 8px 20px -10px rgba(0, 0, 0, 0.9);
+}
+
+.botao--principal:hover:not(:disabled) {
+  border-color: rgba(196, 106, 53, 0.85);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 240, 215, 0.09),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.45),
+    0 0 0 1px rgba(196, 106, 53, 0.22),
+    0 12px 28px -12px var(--brasa-brilho);
+}
+
+/* Texto com sublinhado de brasa */
+.botao--leve {
+  padding: 0.35rem 0.1rem;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  border-radius: 0;
+  color: var(--pergaminho-apagado);
+}
+
+.botao--leve:hover:not(:disabled) {
+  color: var(--pergaminho);
+  border-bottom-color: var(--brasa);
+}
+
+.botao--perigo {
+  background: linear-gradient(180deg, #5c1e17 0%, #3a120e 100%);
+  border-color: rgba(211, 100, 80, 0.6);
+}
+
+.botao--perigo:hover:not(:disabled) {
+  border-color: #d36450;
+  box-shadow: 0 12px 28px -12px rgba(211, 100, 80, 0.6);
+}
+
+.botao--leve.botao--perigo {
+  background: none;
+  color: var(--alerta);
+}
+
+.botao--leve.botao--perigo:hover:not(:disabled) {
+  color: #f3b3a2;
+  border-bottom-color: #d36450;
+  box-shadow: none;
+}
+
+.botao--pequeno {
+  font-size: 0.97rem;
+}
+
+/* =================================================================
+   Tela de entrada: o portão
+   ================================================================= */
+
+.entrada {
+  min-height: 100vh;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 2.4rem;
+  padding: 3rem 1.25rem 4rem;
+}
+
+.entrada__cabeca {
+  display: grid;
+  justify-items: center;
+  gap: 1.1rem;
+}
+
+/* O nome entalhado, em duas linhas desencontradas */
+.marca {
+  margin: 0;
+  font-family: var(--fonte-gotica);
+  font-weight: 500;
+  font-size: clamp(3.6rem, 10vw, 7.4rem);
+  line-height: 0.84;
+  letter-spacing: 0.005em;
+  color: var(--pergaminho);
+  text-shadow:
+    0 1px 0 rgba(255, 238, 210, 0.1),
+    0 -1px 0 rgba(0, 0, 0, 0.75),
+    0 8px 28px rgba(0, 0, 0, 0.9);
+}
+
+.marca__linha {
+  display: block;
+}
+
+.marca__linha--recuo {
+  padding-left: 1.15em;
+}
+
+.entrada__divisor {
+  position: relative;
+  width: min(20rem, 72vw);
+  height: 20px;
+  color: var(--ferro-forte);
+}
+
+.divisor {
+  display: block;
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1;
+}
+
+.centelha {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 5px;
+  height: 5px;
+  transform: translate(-50%, -50%) rotate(45deg);
+  background: var(--brasa);
+  box-shadow: 0 0 8px 1px var(--brasa-brilho);
+}
+
+/* O formulário em forma de arco */
+.portao {
+  position: relative;
+  width: min(25rem, 100%);
+  display: grid;
+  gap: 1.25rem;
+  padding: 4rem 2.2rem 2rem;
+  border-radius: 12.5rem 12.5rem 0.5rem 0.5rem / 8.5rem 8.5rem 0.5rem 0.5rem;
+  background:
+    radial-gradient(120% 60% at 50% 0%, rgba(232, 221, 200, 0.06), transparent 62%),
+    linear-gradient(180deg, rgba(32, 28, 24, 0.94) 0%, rgba(16, 14, 12, 0.96) 100%);
+  box-shadow:
+    inset 0 0 0 1px var(--ferro),
+    inset 0 0 0 7px rgba(12, 10, 9, 0.65),
+    inset 0 0 0 8px var(--ferro-fraco),
+    0 46px 90px -24px rgba(0, 0, 0, 0.92);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+
+/* Pedra de fecho no alto do arco: acende quando usuário e senha estão preenchidos */
+.portao__fecho {
+  position: absolute;
+  top: -13px;
+  left: 50%;
+  width: 26px;
+  height: 26px;
+  transform: translateX(-50%) rotate(45deg);
+  background: linear-gradient(135deg, #2e2722, #15120f);
+  border: 1px solid var(--ferro-forte);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.75);
+}
+
+.portao__fecho::after {
+  content: "";
+  position: absolute;
+  inset: 8px;
+  background: rgba(181, 154, 118, 0.4);
+  transition: background 0.8s ease, box-shadow 0.8s ease;
+}
+
+.portao--pronto .portao__fecho::after {
+  background: var(--arcano);
+  box-shadow: 0 0 10px 2px var(--arcano-brilho), 0 0 26px 8px var(--arcano-halo);
+}
+
+.portao__convite {
+  margin: 0 0 0.3rem;
+  text-align: center;
+  font-style: italic;
+  color: var(--pergaminho-apagado);
+}
+
+.botao--entrar {
+  width: 100%;
+  margin-top: 0.4rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.7rem;
+  font-family: var(--fonte-gotica);
+  font-size: 1.45rem;
+  font-weight: 500;
+  padding: 0.55rem 1rem 0.65rem;
+}
+
+/* A runa do botão é o único brilho mágico do portão */
+.botao__runa {
+  width: 13px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  color: var(--ferro-forte);
+  transition: color 0.5s, filter 0.5s;
+}
+
+.botao--entrar:is(:hover, :focus-visible) .botao__runa {
+  color: var(--arcano);
+  filter: drop-shadow(0 0 5px var(--arcano-brilho));
+}
+
+/* =================================================================
+   Cabeçalho do portal
+   ================================================================= */
+
+.topo {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem 2.2rem;
+  padding: 0.95rem clamp(1rem, 4vw, 3rem);
+  background: linear-gradient(180deg, rgba(14, 12, 11, 0.97), rgba(14, 12, 11, 0.86));
+  border-bottom: 1px solid var(--ferro-fraco);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+
+.topo::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -5px;
+  width: 9px;
+  height: 9px;
+  transform: translateX(-50%) rotate(45deg);
+  background: var(--fuligem);
+  border: 1px solid var(--ferro);
+}
+
+.topo__marca {
+  margin: 0;
+  font-family: var(--fonte-gotica);
+  font-size: 1.75rem;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.status {
+  flex: 1 1 18rem;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  margin: 0;
+  font-style: italic;
+  color: var(--pergaminho-apagado);
+}
+
+.status__vigia {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  color: var(--cinza);
+  transition: color 0.8s, filter 0.8s;
+}
+
+.status[data-tom="aberto"] .status__vigia {
+  color: var(--arcano);
+  filter: drop-shadow(0 0 6px var(--arcano-brilho));
+}
+
+.status[data-tom="em-sessao"] .status__vigia {
+  color: var(--brasa);
+  filter: drop-shadow(0 0 6px var(--brasa-brilho));
+}
+
+.status[data-tom="trocando"] .status__vigia {
+  color: var(--arcano);
+  animation: pulsar 1.4s ease-in-out infinite;
+}
+
+.status[data-tom="reiniciando"] .status__vigia {
+  animation: pulsar 1.4s ease-in-out infinite;
+}
+
+@keyframes pulsar {
+  50% {
+    opacity: 0.3;
+  }
+}
+
+.topo__conta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.2rem 1.15rem;
+}
+
+.topo__nome {
+  margin-right: 0.35rem;
+  font-family: var(--fonte-gotica);
+  font-size: 1.3rem;
+  line-height: 1;
+}
+
+/* =================================================================
+   Campanhas
+   ================================================================= */
+
+.campanhas {
+  width: min(78rem, 100%);
+  margin: 0 auto;
+  padding: 3.2rem clamp(1rem, 4vw, 3rem) 7rem;
+  display: grid;
+  gap: 4.2rem;
+}
+
+.campanha__topo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem 1.5rem;
+}
+
+.campanha__titulo {
+  margin: 0;
+  font-family: var(--fonte-gotica);
+  font-weight: 500;
+  font-size: clamp(2.3rem, 4.6vw, 3.5rem);
+  line-height: 1;
+  color: var(--pergaminho);
+  text-wrap: balance;
+  text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.7), 0 6px 26px rgba(0, 0, 0, 0.85);
+}
+
+.campanha__acoes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem 1.3rem;
+  margin-left: auto;
+}
+
+/* Régua de ferro que nasce num losango e some para a direita */
+.campanha__regua {
+  position: relative;
+  display: block;
+  height: 11px;
+  margin-top: 0.9rem;
+  background: linear-gradient(90deg, var(--ferro-forte), var(--ferro-fraco) 55%, transparent) 0 50% / 100% 1px no-repeat;
+}
+
+.campanha__regua::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  transform: translateY(-50%) rotate(45deg);
+  background: var(--fuligem);
+  border: 1px solid var(--ferro-forte);
+}
+
+.selo {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-style: italic;
+  font-size: 1.02rem;
+  color: var(--cinza);
+}
+
+.selo::before {
+  content: "";
+  width: 0.5rem;
+  height: 0.5rem;
+  transform: rotate(45deg);
+  background: currentColor;
+}
+
+.selo--aberto {
+  color: var(--arcano);
+}
+
+.selo--aberto::before {
+  box-shadow: 0 0 10px 1px var(--arcano-brilho);
+}
+
+.selo--disponivel {
+  color: var(--pergaminho-apagado);
+}
+
+.selo--ocupado {
+  color: var(--alerta);
+}
+
+.selo--abrindo {
+  color: var(--arcano);
+}
+
+.selo--abrindo::before {
+  animation: pulsar 1.4s ease-in-out infinite;
+}
+
+.selo--trocando,
+.selo--sem-mundo {
+  color: var(--cinza);
+}
+
+.campanha__cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2.6rem 2.6rem;
+  padding-top: 5.8rem; /* espaço para a arte saltar para fora do card */
+}
+
+.campanha__cards--vazia {
+  padding-top: 1.4rem;
+}
+
+.campanha__vazio {
+  margin: 0;
+  font-style: italic;
+  color: var(--pergaminho-apagado);
+}
+
+.vazio {
+  padding: 5rem 1rem;
+  text-align: center;
+}
+
+.vazio__titulo {
+  margin: 0 0 0.6rem;
+  font-family: var(--fonte-gotica);
+  font-weight: 500;
+  font-size: clamp(2rem, 4vw, 2.8rem);
+  line-height: 1.05;
+}
+
+.vazio__texto {
+  margin: 0;
+  font-style: italic;
+  color: var(--pergaminho-apagado);
+}
+
+/* =================================================================
+   Card do personagem
+   -----------------------------------------------------------------
+   Em repouso, a cor está apagada, como todo o resto do mundo.
+   Quando o personagem desperta (mouse, teclado ou ritual), a cor
+   volta, uma aura arcana surge atrás e runas acendem na moldura.
+   O movimento é o da página original: a capa inclina para trás,
+   o título sobe e a arte salta para fora.
+   ================================================================= */
+
+.card-item {
+  display: grid;
+  justify-items: center;
+  gap: 0.9rem;
+}
+
+.card-item__dono {
+  margin: 0;
+  font-style: italic;
+  font-size: 1rem;
+  color: var(--pergaminho-apagado);
+}
+
+.card-item__dono--proprio {
+  color: var(--pergaminho);
+}
+
+/* Personagem de outro jogador: mais apagado em repouso, desperta igual ao seu quando
+   o mouse passa, mas o clique só mostra de quem ele é */
+.card--alheio {
+  cursor: help;
+}
+
+.card--alheio .card__capa {
+  filter: grayscale(0.7) sepia(0.12) saturate(0.6) brightness(0.6) contrast(1.05);
+}
+
+.card--alheio .card__nome {
+  color: var(--pergaminho-apagado);
+  transition: transform 0.5s, color 0.5s;
+}
+
+button.card--alheio:is(:hover, :focus-visible) .card__nome {
+  color: var(--pergaminho);
+}
+
+.card {
+  appearance: none;
+  -webkit-appearance: none;
+  background: none;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+
+  width: calc(var(--card-altura) / 1.5);
+  height: var(--card-altura);
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  padding: 0 36px;
+  perspective: 2500px;
+  border-radius: var(--raio);
+}
+
+.card:focus-visible {
+  outline: 2px solid var(--brasa);
+  outline-offset: 12px;
+}
+
+.card:disabled {
+  cursor: default;
+}
+
+/* Aura arcana atrás do card */
+.card::before {
+  content: "";
+  position: absolute;
+  inset: -24% -46% -34%;
+  z-index: -2;
+  background:
+    radial-gradient(closest-side at 50% 54%, rgba(110, 190, 255, 0.5), rgba(110, 190, 255, 0.16) 56%, transparent 78%),
+    radial-gradient(34% 9% at 50% 80%, rgba(150, 210, 255, 0.4), transparent 100%);
+  opacity: 0;
+  transform: scale(0.82);
+  transition: opacity 0.7s ease, transform 0.9s ease;
+  pointer-events: none;
+}
+
+.card__moldura {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: var(--raio);
+  background: var(--carvao);
+  box-shadow:
+    0 0 0 1px var(--ferro),
+    0 0 0 5px rgba(12, 10, 9, 0.92),
+    0 0 0 6px var(--ferro-fraco),
+    0 22px 34px -14px rgba(0, 0, 0, 0.95);
+  transition: transform 0.5s, box-shadow 0.5s;
+}
+
+.card__capa {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: var(--raio);
+  filter: grayscale(0.5) sepia(0.15) saturate(0.75) brightness(0.74) contrast(1.06);
+  transition: filter 0.8s ease;
+}
+
+/* Véu escuro só na base, para o nome ficar legível */
+.card__moldura::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  width: 100%;
+  border-radius: var(--raio);
+  pointer-events: none;
+  transition: height 0.5s;
+  bottom: 0;
+  height: 90px;
+  background-image: linear-gradient(to bottom, transparent 40%, rgba(12, 11, 10, 0.6) 66%, rgb(12, 11, 10) 97%);
+}
+
+.card__cantos {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: var(--moldura-card) center / 100% 100% no-repeat;
+  pointer-events: none;
+}
+
+.card__runas {
+  position: absolute;
+  left: 13%;
+  right: 13%;
+  bottom: 6.5%;
+  height: 13px;
+  z-index: 2;
+  background: var(--runas-card) center / contain no-repeat;
+  opacity: 0;
+  filter: drop-shadow(0 0 4px var(--arcano-brilho));
+  transition: opacity 0.6s ease 0.15s;
+  pointer-events: none;
+}
+
+/* Sem imagem de capa: pedra no tom da campanha */
+.card--sem-capa .card__moldura {
+  background:
+    radial-gradient(120% 70% at 50% 18%, rgba(232, 221, 200, 0.1), transparent 60%),
+    linear-gradient(180deg, var(--cor, #2a2520) 0%, var(--carvao) 100%);
+}
+
+.card__titulo {
+  width: 100%;
+  transition: transform 0.5s;
+}
+
+.card__nome {
+  margin: 0 -22px 1.25rem;
+  font-family: var(--fonte-gotica);
+  font-size: calc(1.75rem * var(--escala-nome, 1));
+  font-weight: 500;
+  line-height: 0.95;
+  text-align: center;
+  text-wrap: balance;
+  color: var(--pergaminho);
+  text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.7), 0 3px 12px rgba(0, 0, 0, 0.95);
+  transition: transform 0.5s;
+}
+
+.card__arte {
+  position: absolute;
+  z-index: -1;
+  width: 100%;
+  opacity: 0;
+  transition: opacity 0.5s, transform 0.5s;
+}
+
+/* Despertar */
+button.card:is(:hover, :focus-visible)::before,
+.card--destaque::before {
+  opacity: 1;
+  transform: scale(1);
+}
+
+button.card:is(:hover, :focus-visible) .card__moldura,
+.card--destaque .card__moldura {
+  transform: perspective(900px) translateY(-5%) rotateX(25deg) translateZ(0);
+  box-shadow:
+    0 0 0 1px var(--ferro-forte),
+    0 0 0 5px rgba(12, 10, 9, 0.92),
+    0 0 0 6px var(--ferro),
+    2px 35px 32px -8px rgba(0, 0, 0, 0.85);
+}
+
+button.card:is(:hover, :focus-visible) .card__capa,
+.card--destaque .card__capa {
+  /* filtro neutro em vez de none: a capa não muda de camada no fim da transição */
+  filter: grayscale(0) brightness(1);
+}
+
+button.card:is(:hover, :focus-visible) .card__moldura::after,
+.card--destaque .card__moldura::after {
+  height: 130px;
+}
+
+button.card:is(:hover, :focus-visible) .card__runas,
+.card--destaque .card__runas {
+  opacity: 0.92;
+  animation: tremeluzir 2.6s ease-in-out 0.6s infinite;
+}
+
+@keyframes tremeluzir {
+  0%,
+  100% {
+    opacity: 0.92;
+  }
+  45% {
+    opacity: 0.55;
+  }
+  55% {
+    opacity: 0.85;
+  }
+}
+
+button.card:is(:hover, :focus-visible) :is(.card__titulo, .card__nome),
+.card--destaque :is(.card__titulo, .card__nome) {
+  transform: translate3d(0, -50px, 100px);
+}
+
+button.card:is(:hover, :focus-visible) .card__arte,
+.card--destaque .card__arte {
+  opacity: 1;
+  transform: translate3d(0, -30%, 100px);
+}
+
+/* =================================================================
+   O ritual de abertura de mundo
+   ================================================================= */
+
+.ritual {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: var(--fuligem);
+  animation: surgir 0.6s ease both;
+}
+
+@keyframes surgir {
+  from {
+    opacity: 0;
+  }
+}
+
+.ritual__fundo {
+  position: absolute;
+  inset: -4rem;
+  background: var(--cor, var(--fuligem)) center / cover no-repeat;
+  filter: blur(28px) grayscale(0.3) brightness(0.3);
+}
+
+.ritual::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 50% 42%, transparent 25%, rgba(8, 7, 6, 0.88) 85%);
+}
+
+.ritual__conteudo {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 0.9rem;
+  padding: 1.5rem;
+  text-align: center;
+}
+
+.ritual__circulo {
+  position: relative;
+  width: min(600px, 88vw, 62vh);
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+}
+
+.sigilo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.sigilo__giro {
+  transform-box: view-box;
+  transform-origin: 50% 50%;
+  animation: girar 160s linear infinite;
+}
+
+@keyframes girar {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Os traços do círculo se desenham ao abrir */
+.sigilo__traco {
+  fill: none;
+  stroke: rgba(201, 171, 128, 0.42);
+  stroke-width: 1.4;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: desenhar 1.6s cubic-bezier(0.6, 0, 0.3, 1) forwards;
+  transition: stroke 1s, filter 1s;
+}
+
+.sigilo__traco--2 {
+  animation-delay: 0.15s;
+}
+
+.sigilo__traco--3 {
+  animation-delay: 0.45s;
+}
+
+.sigilo__traco--4 {
+  animation-delay: 0.6s;
+}
+
+.sigilo__traco--5 {
+  animation-delay: 0.3s;
+  stroke: rgba(201, 171, 128, 0.25);
+}
+
+@keyframes desenhar {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.sigilo__pontilhado {
+  fill: none;
+  stroke: rgba(201, 171, 128, 0.35);
+  stroke-width: 2;
+  stroke-dasharray: 2 10;
+  stroke-linecap: round;
+  opacity: 0;
+  animation: surgir-pontos 1.2s ease 0.8s forwards;
+}
+
+@keyframes surgir-pontos {
+  to {
+    opacity: 1;
+  }
+}
+
+.sigilo__runa circle {
+  fill: rgba(12, 10, 9, 0.92);
+  stroke: rgba(201, 171, 128, 0.5);
+  stroke-width: 1.2;
+  transition: stroke 0.8s, filter 0.8s;
+}
+
+.sigilo__runa use {
+  fill: none;
+  stroke: rgba(201, 171, 128, 0.5);
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: stroke 0.8s, filter 0.8s;
+}
+
+.sigilo__runa.acesa circle {
+  stroke: var(--arcano);
+  filter: drop-shadow(0 0 10px var(--arcano-brilho));
+}
+
+.sigilo__runa.acesa use {
+  stroke: var(--arcano);
+  filter: drop-shadow(0 0 7px var(--arcano-brilho));
+  animation: acender 0.9s ease;
+}
+
+@keyframes acender {
+  0% {
+    opacity: 0.2;
+  }
+  30% {
+    opacity: 1;
+  }
+  45% {
+    opacity: 0.5;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+.ritual--pronto .sigilo__traco,
+.ritual--pronto .sigilo__pontilhado {
+  stroke: rgba(168, 220, 255, 0.85);
+  filter: drop-shadow(0 0 6px var(--arcano-brilho));
+}
+
+.ritual__palco {
+  position: relative;
+  padding-top: 3.5rem;
+}
+
+.ritual__palco .card {
+  --card-altura: min(280px, 34vh);
+}
+
+.ritual__palco .card__nome {
+  font-size: calc(1.9rem * var(--escala-nome, 1));
+}
+
+.ritual__titulo {
+  max-width: 24ch;
+  margin: 0.3rem 0 0;
+  font-family: var(--fonte-gotica);
+  font-weight: 500;
+  font-size: clamp(2rem, 4.4vw, 3.1rem);
+  line-height: 1;
+  text-wrap: balance;
+  text-shadow: 0 6px 26px rgba(0, 0, 0, 0.9);
+}
+
+.ritual__etapa {
+  margin: 0;
+  min-height: 1.6em;
+  font-style: italic;
+  color: var(--pergaminho-apagado);
+}
+
+/* Quando o mundo desperta: um clarão de luz arcana */
+.ritual__clarao {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  background: radial-gradient(circle at 50% 42%, rgba(205, 236, 255, 0.95), rgba(110, 190, 255, 0.35) 32%, transparent 68%);
+}
+
+.ritual--pronto .ritual__clarao {
+  animation: clarao 1.2s ease-out forwards;
+}
+
+@keyframes clarao {
+  0% {
+    opacity: 0;
+  }
+  35% {
+    opacity: 0.85;
+  }
+  100% {
+    opacity: 0.25;
+  }
+}
+
+/* =================================================================
+   Personalizar o próprio personagem
+   ================================================================= */
+
+.card-item__personalizar {
+  margin-top: -0.55rem;
+  font-size: 0.92rem;
+  font-style: italic;
+}
+
+.dialogo.dialogo--personagem {
+  width: min(58rem, calc(100vw - 2rem));
+}
+
+.personalizar {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: start;
+  gap: 1.5rem 2.4rem;
+}
+
+.personalizar__palco {
+  padding: 5.4rem 1.6rem 1rem;
+  display: grid;
+  justify-items: center;
+}
+
+.personalizar__campos {
+  display: grid;
+  gap: 1.3rem;
+  min-width: 0;
+}
+
+.fontes {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.fontes legend {
+  padding: 0;
+  margin-bottom: 0.55rem;
+}
+
+.fontes__grade {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(9.2rem, 1fr));
+  gap: 0.55rem;
+  max-height: min(46vh, 25rem);
+  overflow: auto;
+  padding: 0.2rem 0.5rem 0.2rem 0.2rem;
+}
+
+/* Cada fonte é um ladrilho que mostra o nome escrito nela */
+.fonte {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 0.25rem;
+  padding: 0.75rem 0.5rem 0.55rem;
+  text-align: center;
+  background: rgba(12, 10, 9, 0.55);
+  border: 1px solid var(--ferro-fraco);
+  border-radius: 2px;
+  cursor: pointer;
+  transition: border-color 0.25s, background-color 0.25s, box-shadow 0.3s;
+}
+
+.fonte:hover {
+  border-color: var(--ferro);
+}
+
+.fonte input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.fonte__amostra {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: calc(1.45rem * var(--escala-nome, 1));
+  line-height: 1.2;
+  color: var(--pergaminho);
+}
+
+.fonte__rotulo {
+  font-size: 0.85rem;
+  font-style: italic;
+  color: var(--pergaminho-apagado);
+}
+
+.fonte:has(input:checked) {
+  border-color: var(--brasa);
+  background: rgba(196, 106, 53, 0.07);
+  box-shadow: 0 0 0 1px var(--brasa), 0 12px 24px -16px var(--brasa-brilho);
+}
+
+.fonte:has(input:checked) .fonte__rotulo {
+  color: var(--brasa);
+}
+
+.fonte:has(input:focus-visible) {
+  outline: 2px solid var(--brasa);
+  outline-offset: 2px;
+}
+
+/* =================================================================
+   Diálogos e avisos
+   ================================================================= */
+
+.dialogo {
+  width: min(28rem, calc(100vw - 2rem));
+  padding: 2rem 2.1rem 1.7rem;
+  color: var(--pergaminho);
+  background:
+    radial-gradient(120% 60% at 50% 0%, rgba(232, 221, 200, 0.05), transparent 60%),
+    linear-gradient(180deg, #221d19 0%, #15120f 100%);
+  border: 1px solid var(--ferro);
+  border-radius: var(--raio);
+  box-shadow:
+    inset 0 0 0 6px rgba(12, 10, 9, 0.6),
+    inset 0 0 0 7px var(--ferro-fraco),
+    0 46px 100px -24px rgba(0, 0, 0, 0.95);
+}
+
+.dialogo[open] {
+  animation: surgir 0.25s ease;
+}
+
+.dialogo::backdrop {
+  background: rgba(6, 5, 4, 0.74);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+}
+
+.dialogo__titulo {
+  margin: 0 0 0.75rem;
+  font-family: var(--fonte-gotica);
+  font-weight: 500;
+  font-size: 2.05rem;
+  line-height: 1.02;
+}
+
+.dialogo__texto {
+  margin: 0;
+  color: var(--pergaminho-apagado);
+}
+
+.dialogo__form {
+  display: grid;
+  gap: 1.15rem;
+}
+
+.dialogo__acoes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.8rem 1.4rem;
+  margin-top: 1.6rem;
+}
+
+.dialogo__form .dialogo__acoes {
+  margin-top: 0.5rem;
+}
+
+.dialogo--largo {
+  width: min(35rem, calc(100vw - 2rem));
+}
+
+.dialogo__campos {
+  display: grid;
+  gap: 1.2rem;
+  max-height: min(60vh, 36rem);
+  overflow: auto;
+  padding: 0.2rem 0.6rem 0.4rem 0;
+}
+
+.aviso-rapido {
+  position: fixed;
+  left: 50%;
+  bottom: 1.6rem;
+  z-index: 70;
+  transform: translateX(-50%);
+  padding: 0.7rem 1.4rem;
+  font-style: italic;
+  background: linear-gradient(180deg, #27211c, #17130f);
+  border: 1px solid var(--ferro);
+  border-radius: var(--raio);
+  box-shadow: 0 20px 44px -14px rgba(0, 0, 0, 0.95);
+  animation: surgir 0.3s ease;
+}
+
+/* =================================================================
+   Administração
+   ================================================================= */
+
+.administracao {
+  width: min(62rem, 100%);
+  margin: 0 auto;
+  padding: 3.2rem clamp(1rem, 4vw, 3rem) 6rem;
+  display: grid;
+  gap: 1.8rem;
+}
+
+.administracao__cabecalho {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem 2rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--ferro);
+}
+
+.administracao__titulo {
+  margin: 0;
+  font-family: var(--fonte-gotica);
+  font-weight: 500;
+  font-size: clamp(2.4rem, 4.6vw, 3.3rem);
+  line-height: 1;
+}
+
+.administracao__conteudo {
+  display: grid;
+  gap: 1rem;
+}
+
+.abas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.5rem;
+}
+
+.aba {
+  font: inherit;
+  font-size: 1.08rem;
+  color: var(--pergaminho-apagado);
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  padding: 0.3rem 0;
+  cursor: pointer;
+  transition: color 0.25s, border-color 0.25s;
+}
+
+.aba:hover {
+  color: var(--pergaminho);
+}
+
+.aba[aria-selected="true"] {
+  color: var(--pergaminho);
+  border-bottom-color: var(--brasa);
+}
+
+.aba:focus-visible {
+  outline: 2px solid var(--brasa);
+  outline-offset: 4px;
+}
+
+.administracao__barra {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem 1.5rem;
+}
+
+.administracao__explicacao {
+  margin: 0;
+  max-width: 40rem;
+  font-style: italic;
+  color: var(--pergaminho-apagado);
+}
+
+.lista {
+  display: grid;
+}
+
+.lista__vazia {
+  margin: 0;
+  padding: 1.6rem 0;
+  font-style: italic;
+  color: var(--pergaminho-apagado);
+}
+
+.linha {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 1.2rem;
+  padding: 0.95rem 0.3rem;
+  border-bottom: 1px solid var(--ferro-fraco);
+  transition: background-color 0.3s;
+}
+
+.linha:hover {
+  background-color: rgba(232, 221, 200, 0.025);
+}
+
+.linha__miniatura {
+  width: 2.8rem;
+  height: 4.2rem;
+  overflow: hidden;
+  border-radius: 2px;
+  background: linear-gradient(180deg, var(--cor, #2a2520), var(--carvao));
+  box-shadow: 0 0 0 1px var(--ferro), 0 0 0 3px rgba(12, 10, 9, 0.9), 0 0 0 4px var(--ferro-fraco);
+}
+
+.linha__miniatura img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: grayscale(0.4) brightness(0.85);
+}
+
+.linha__miniatura--conta {
+  display: grid;
+  place-items: center;
+  height: 2.8rem;
+  border-radius: 50%;
+  font-family: var(--fonte-gotica);
+  font-size: 1.5rem;
+  color: var(--pergaminho);
+  background: radial-gradient(circle at 35% 30%, #3b332c, #171310);
+}
+
+.linha__nome {
+  margin: 0;
+  font-family: var(--fonte-gotica);
+  font-size: 1.4rem;
+  font-weight: 500;
+  line-height: 1.1;
+}
+
+.linha__detalhe {
+  margin: 0.15rem 0 0;
+  font-size: 0.97rem;
+  color: var(--pergaminho-apagado);
+}
+
+.linha__alerta {
+  color: var(--alerta);
+}
+
+.linha__acoes {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.2rem 1.1rem;
+}
+
+.imagem-atual {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin: 0.2rem 0 0.3rem;
+}
+
+.imagem-atual img {
+  width: 3rem;
+  height: 4.5rem;
+  object-fit: cover;
+  border-radius: 2px;
+  background: var(--carvao);
+  box-shadow: 0 0 0 1px var(--ferro);
+}
+
+.imagem-atual--larga img {
+  width: 7rem;
+  height: 3rem;
+  object-fit: contain;
+}
+
+/* =================================================================
+   Painel de simulação (só na pré-visualização)
+   ================================================================= */
+
+.simulacao {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 40;
+  width: min(17rem, calc(100vw - 2rem));
+  padding: 0.65rem 0.95rem;
+  font-size: 0.95rem;
+  background: rgba(21, 18, 15, 0.95);
+  border: 1px dashed rgba(196, 106, 53, 0.6);
+  border-radius: var(--raio);
+}
+
+.simulacao summary {
+  cursor: pointer;
+  font-style: italic;
+  color: var(--brasa);
+}
+
+.simulacao[open] {
+  display: grid;
+  gap: 0.8rem;
+  padding-bottom: 0.95rem;
+}
+
+.simulacao__nota {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--cinza);
+}
+
+/* =================================================================
+   Telas pequenas
+   ================================================================= */
+
+@media (max-width: 640px) {
+  :root {
+    --card-altura: 270px;
+  }
+
+  .portao {
+    padding: 3.6rem 1.5rem 1.8rem;
+  }
+
+  .topo {
+    gap: 0.5rem 1rem;
+  }
+
+  .status {
+    order: 3;
+    flex-basis: 100%;
+  }
+
+  .topo__conta {
+    margin-left: auto;
+  }
+
+  .campanha__acoes {
+    margin-left: 0;
+  }
+
+  .campanha__cards {
+    justify-content: center;
+    gap: 1.8rem 1.4rem;
+  }
+
+  .linha {
+    grid-template-columns: auto 1fr;
+  }
+
+  .personalizar {
+    grid-template-columns: 1fr;
+  }
+
+  .personalizar__palco {
+    --card-altura: 240px;
+    padding-top: 4.4rem;
+  }
+
+  .fontes__grade {
+    grid-template-columns: repeat(auto-fill, minmax(7.4rem, 1fr));
+    max-height: none;
+  }
+
+  .linha__acoes {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+}
+
+/* =================================================================
+   Menos movimento, para quem pediu isso no sistema
+   ================================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+  .cenario__nevoa,
+  .sigilo__giro,
+  .status__vigia,
+  .selo--abrindo::before,
+  .card__runas {
+    animation: none !important;
+  }
+
+  .card__moldura,
+  .card__moldura::after,
+  .card__capa,
+  .card__titulo,
+  .card__nome,
+  .card__arte,
+  .card::before {
+    transition: none;
+  }
+
+  button.card:is(:hover, :focus-visible) .card__moldura {
+    transform: none;
+  }
+
+  button.card:is(:hover, :focus-visible) :is(.card__titulo, .card__nome),
+  button.card:is(:hover, :focus-visible) .card__arte {
+    transform: none;
+  }
+
+  button.card:is(:hover, :focus-visible) .card__arte {
+    opacity: 0;
+  }
+
+  .sigilo__traco {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+
+  .sigilo__pontilhado {
+    animation: none;
+    opacity: 1;
+  }
+
+  .ritual,
+  .dialogo[open],
+  .aviso-rapido {
+    animation: none;
+  }
+}
+
+/* =================================================================
+   Barra lateral: as páginas do grupo
+   -----------------------------------------------------------------
+   Uma coluna de placas de ferro presa à esquerda. Ao passar o mouse,
+   um rótulo em pergaminho desliza para o lado. A página atual fica
+   com a borda em brasa; as que ainda não existem, tracejadas.
+   No celular, a coluna vira uma barra no rodapé.
+   ================================================================= */
+
+:root {
+  --largura-barra: 4.75rem;
+  --altura-topo: 4.2rem; /* cada página ajusta pelo tamanho real do cabeçalho */
+}
+
+body.com-barra {
+  padding-left: var(--largura-barra);
+}
+
+/* O cabeçalho continua na largura toda; só o conteúdo abre espaço para a barra */
+body.com-barra .topo {
+  margin-left: calc(-1 * var(--largura-barra));
+}
+
+.topo__marca--link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.topo__marca--link:focus-visible {
+  outline: 2px solid var(--brasa);
+  outline-offset: 4px;
+}
+
+.barra-lateral {
+  position: fixed;
+  top: var(--altura-topo);
+  bottom: 0;
+  left: 0;
+  z-index: 9;
+  width: var(--largura-barra);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.6rem 0 1rem;
+  background: linear-gradient(90deg, rgba(14, 12, 11, 0.95), rgba(14, 12, 11, 0.84));
+  border-right: 1px solid var(--ferro-fraco);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+
+.barra-lateral__botao {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 3rem;
+  height: 3rem;
+  color: var(--pergaminho-apagado);
+  text-decoration: none;
+  background: linear-gradient(180deg, #2a2420 0%, #171310 100%);
+  border: 1px solid var(--ferro);
+  border-radius: var(--raio);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 240, 215, 0.06),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.45),
+    0 8px 18px -10px rgba(0, 0, 0, 0.9);
+  transition: color 0.25s, border-color 0.25s, box-shadow 0.35s;
+}
+
+.barra-lateral__botao svg {
+  width: 1.5rem;
+  height: 1.5rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.35;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.barra-lateral__botao:is(:hover, :focus-visible) {
+  color: var(--pergaminho);
+  border-color: var(--ferro-forte);
+  outline: none;
+}
+
+.barra-lateral__botao:focus-visible {
+  box-shadow: 0 0 0 2px var(--brasa);
+}
+
+.barra-lateral__botao[aria-current="page"] {
+  color: var(--pergaminho);
+  border-color: rgba(196, 106, 53, 0.9);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 240, 215, 0.08),
+    0 0 0 1px rgba(196, 106, 53, 0.25),
+    0 0 22px -6px var(--brasa-brilho);
+}
+
+.barra-lateral__botao--em-breve {
+  cursor: not-allowed;
+  color: var(--cinza);
+  background: rgba(21, 18, 15, 0.6);
+  border-style: dashed;
+  box-shadow: none;
+}
+
+.barra-lateral__botao--em-breve svg {
+  opacity: 0.55;
+}
+
+.barra-lateral__botao--em-breve:is(:hover, :focus-visible) {
+  color: var(--pergaminho-apagado);
+}
+
+/* O rótulo em pergaminho */
+.barra-lateral__rotulo {
+  position: absolute;
+  left: calc(100% + 0.85rem);
+  top: 50%;
+  display: grid;
+  white-space: nowrap;
+  padding: 0.3rem 0.85rem 0.35rem;
+  font-family: var(--fonte-gotica);
+  font-size: 1.2rem;
+  line-height: 1.1;
+  color: #2b2118;
+  background: linear-gradient(180deg, #ece2cd, #cfbd9b);
+  border: 1px solid #8a7356;
+  border-radius: 2px;
+  box-shadow: 0 10px 24px -10px rgba(0, 0, 0, 0.9);
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-0.5rem, -50%);
+  transition: opacity 0.2s, transform 0.25s;
+}
+
+.barra-lateral__rotulo::before {
+  content: "";
+  position: absolute;
+  left: -5px;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  transform: translateY(-50%) rotate(45deg);
+  background: #e2d6bd;
+  border-left: 1px solid #8a7356;
+  border-bottom: 1px solid #8a7356;
+}
+
+.barra-lateral__rotulo small {
+  font-family: var(--fonte-texto);
+  font-style: italic;
+  font-size: 0.82rem;
+  color: #6b5640;
+}
+
+.barra-lateral__botao:is(:hover, :focus-visible) .barra-lateral__rotulo {
+  opacity: 1;
+  transform: translate(0, -50%);
+}
+
+/* Pedidos dos editores esperando o administrador */
+.barra-lateral__contador {
+  position: absolute;
+  top: -0.5rem;
+  right: -0.5rem;
+  display: grid;
+  place-items: center;
+  min-width: 1.3rem;
+  height: 1.3rem;
+  padding: 0 0.3rem;
+  font-family: var(--fonte-texto);
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1;
+  color: #1a120c;
+  background: var(--brasa);
+  border-radius: 999px;
+  box-shadow: 0 0 0 2px var(--fuligem), 0 0 14px -2px var(--brasa-brilho);
+}
+
+@media (max-width: 760px) {
+  body.com-barra {
+    padding-left: 0;
+    padding-bottom: 4.9rem;
+  }
+
+  /* Os avisos sobem para não cobrir a barra do rodapé */
+  body.com-barra .aviso-rapido {
+    bottom: calc(5.6rem + env(safe-area-inset-bottom));
+  }
+
+  body.com-barra .simulacao {
+    bottom: 5.6rem;
+  }
+
+  .barra-lateral__contador {
+    top: 0;
+    right: 0.35rem;
+  }
+
+  body.com-barra .topo {
+    margin-left: 0;
+  }
+
+  .barra-lateral {
+    top: auto;
+    right: 0;
+    width: auto;
+    flex-direction: row;
+    justify-content: space-around;
+    gap: 0.2rem;
+    padding: 0.4rem 0.4rem calc(0.4rem + env(safe-area-inset-bottom));
+    background: rgba(14, 12, 11, 0.96);
+    border-right: 0;
+    border-top: 1px solid var(--ferro-fraco);
+  }
+
+  .barra-lateral__botao {
+    width: auto;
+    min-width: 3.7rem;
+    height: auto;
+    gap: 0.12rem;
+    padding: 0.35rem 0.3rem 0.25rem;
+    background: none;
+    border-color: transparent;
+    box-shadow: none;
+  }
+
+  .barra-lateral__botao::after {
+    content: attr(data-curto);
+    font-size: 0.74rem;
+    font-style: italic;
+    line-height: 1.1;
+  }
+
+  .barra-lateral__botao[aria-current="page"] {
+    background: rgba(196, 106, 53, 0.08);
+    border-color: rgba(196, 106, 53, 0.6);
+    box-shadow: none;
+  }
+
+  .barra-lateral__botao--em-breve {
+    border-color: transparent;
+  }
+
+  .barra-lateral__rotulo {
+    display: none;
+  }
+}

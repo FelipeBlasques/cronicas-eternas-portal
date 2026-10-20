@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Crônicas Eternas</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alegreya:ital,wght@0,400;0,500;0,700;1,400;1,500&family=Grenze+Gotisch:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="style.css">
+  <script src="script.js" defer></script>
+</head>
+<body class="na-entrada">
+
+  <!-- ============ Cenário: arte de fundo, névoa e cinzas ============ -->
+  <div class="cenario" aria-hidden="true">
+    <div class="cenario__arte"></div>
+    <div class="cenario__nevoa"></div>
+    <canvas id="cinzas" class="cenario__cinzas"></canvas>
+    <div class="cenario__vinheta"></div>
+    <div class="cenario__grao"></div>
+  </div>
+
+  <!-- ============ Desenhos usados pela página ============ -->
+  <svg class="simbolos" aria-hidden="true" focusable="false">
+    <defs>
+      <!-- Runas do ritual, uma para cada etapa da troca de mundo -->
+      <symbol id="runa-1" viewBox="0 0 24 40"><path d="M8 4V36M8 8L18 14M8 16L18 22"/></symbol>
+      <symbol id="runa-2" viewBox="0 0 24 40"><path d="M12 4V36M12 15L4 6M12 15L20 6"/></symbol>
+      <symbol id="runa-3" viewBox="0 0 24 40"><path d="M12 4L20 14L12 24L4 14ZM12 24L4 36M12 24L20 36"/></symbol>
+      <symbol id="runa-4" viewBox="0 0 24 40"><path d="M4 6L20 34V6L4 34Z"/></symbol>
+      <!-- Runa do botão de entrar -->
+      <symbol id="runa-entrada" viewBox="0 0 24 40"><path d="M6 4V36M6 6L17 13L6 20L17 36"/></symbol>
+      <!-- Vigia: um olho que se abre em luz quando há um mundo desperto -->
+      <symbol id="vigia" viewBox="0 0 24 24"><path d="M2.5 12C5.5 7.4 8.6 5.6 12 5.6S18.5 7.4 21.5 12C18.5 16.6 15.4 18.4 12 18.4S5.5 16.6 2.5 12Z"/><circle cx="12" cy="12" r="3.2"/><path d="M12 1.8V3.4M12 20.6V22.2"/></symbol>
+      <!-- Divisor ornamental -->
+      <symbol id="divisor" viewBox="0 0 320 20">
+        <path d="M0 10H132M188 10H320M132 10L142 6L150 10L142 14ZM188 10L178 6L170 10L178 14Z"/>
+        <path d="M160 2L168 10L160 18L152 10Z"/>
+      </symbol>
+      <!-- Barra lateral: uma placa para cada página do grupo -->
+      <symbol id="icone-mesas" viewBox="0 0 24 24"><path d="M4.5 21V10.5a7.5 7.5 0 0 1 15 0V21M2.5 21h19M9 21v-5.5a3 3 0 0 1 6 0V21M12 3v2"/></symbol>
+      <symbol id="icone-linha" viewBox="0 0 24 24"><path d="M6 2.5h12M6 21.5h12M7.5 2.5c0 5 9 6.2 9 9.5s-9 4.5-9 9.5M16.5 2.5c0 5-9 6.2-9 9.5s9 4.5 9 9.5M10 19h4M11 8.5h2"/></symbol>
+      <symbol id="icone-personagens" viewBox="0 0 24 24"><path d="M5 20.5v-7a7 7 0 0 1 14 0v7ZM12 6.5v14M7.5 13.5h3M13.5 13.5h3M3.5 20.5h17M12 3v3.5"/></symbol>
+      <symbol id="icone-mapas" viewBox="0 0 24 24"><path d="M12 2l2.3 7.7L22 12l-7.7 2.3L12 22l-2.3-7.7L2 12l7.7-2.3Z"/><circle cx="12" cy="12" r="2.2"/></symbol>
+      <symbol id="icone-regras" viewBox="0 0 24 24"><path d="M6.5 2.5h11a1.5 1.5 0 0 1 1.5 1.5v15.5H6.5a2 2 0 0 0 0 4H19M6.5 2.5A2 2 0 0 0 4.5 4.5v17M9.5 7h6M9.5 10.5h4"/></symbol>
+    </defs>
+  </svg>
+
+  <!-- ============ Tela de entrada ============ -->
+  <main id="entrada" class="entrada" hidden>
+    <div class="entrada__cabeca">
+      <h1 class="marca">
+        <span class="marca__linha">Crônicas</span>
+        <span class="marca__linha marca__linha--recuo">Eternas</span>
+      </h1>
+      <div class="entrada__divisor">
+        <svg class="divisor" aria-hidden="true"><use href="#divisor"/></svg>
+        <span class="centelha" aria-hidden="true"></span>
+      </div>
+    </div>
+
+    <form id="form-entrar" class="portao" novalidate>
+      <span class="portao__fecho" aria-hidden="true"></span>
+      <p class="portao__convite">Entre para reencontrar seus personagens.</p>
+
+      <label class="campo">
+        <span class="campo__rotulo">Usuário</span>
+        <input name="usuario" autocomplete="username" autocapitalize="none" spellcheck="false" required>
+      </label>
+
+      <label class="campo">
+        <span class="campo__rotulo">Senha</span>
+        <input name="senha" type="password" autocomplete="current-password" required>
+      </label>
+
+      <label class="caixa">
+        <input name="lembrar" type="checkbox" checked>
+        <span class="caixa__marca" aria-hidden="true"></span>
+        <span>Lembrar login neste computador</span>
+      </label>
+
+      <p id="erro-entrar" class="mensagem-erro" role="alert" hidden></p>
+
+      <button class="botao botao--principal botao--entrar" type="submit">
+        <svg class="botao__runa" aria-hidden="true"><use href="#runa-entrada"/></svg>
+        <span class="botao__texto">Entrar</span>
+      </button>
+
+      <p id="dica-teste" class="dica" hidden>
+        Pré-visualização: entre como mestre, comuna, takezo, frati ou neia, com a senha <strong>teste</strong>.
+      </p>
+    </form>
+
+    <noscript>
+      <p class="dica">Ative o JavaScript do navegador para entrar.</p>
+    </noscript>
+  </main>
+
+  <!-- ============ Portal (depois do login) ============ -->
+  <div id="portal" class="portal" hidden>
+    <header class="topo">
+      <p class="topo__marca">Crônicas Eternas</p>
+
+      <p id="status" class="status" role="status" aria-live="polite">
+        <svg class="status__vigia" aria-hidden="true"><use href="#vigia"/></svg>
+        <span id="status-texto">Consultando o servidor…</span>
+      </p>
+
+      <nav class="topo__conta" aria-label="Sua conta">
+        <span id="nome-conta" class="topo__nome"></span>
+        <button id="botao-admin" class="botao botao--leve" type="button" hidden>Administração</button>
+        <button id="botao-conta" class="botao botao--leve" type="button">Minha conta</button>
+        <button id="botao-sair" class="botao botao--leve" type="button">Sair</button>
+      </nav>
+    </header>
+
+    <!-- Barra lateral: as páginas do grupo -->
+    <nav class="barra-lateral" aria-label="Páginas do grupo">
+      <a id="barra-mesas" class="barra-lateral__botao" href="./" aria-current="page" data-curto="Mesas">
+        <svg aria-hidden="true"><use href="#icone-mesas"/></svg>
+        <span class="barra-lateral__rotulo">Mesas</span>
+      </a>
+      <a id="barra-linha" class="barra-lateral__botao" href="linha-do-tempo/" data-curto="Linha">
+        <svg aria-hidden="true"><use href="#icone-linha"/></svg>
+        <span class="barra-lateral__rotulo">Linha do Tempo <small id="rotulo-pendencias" hidden></small></span>
+        <span id="contador-linha" class="barra-lateral__contador" aria-hidden="true" hidden></span>
+      </a>
+      <span class="barra-lateral__botao barra-lateral__botao--em-breve" role="link" aria-disabled="true" tabindex="0" data-curto="Personagens">
+        <svg aria-hidden="true"><use href="#icone-personagens"/></svg>
+        <span class="barra-lateral__rotulo">Personagens <small>Em breve</small></span>
+      </span>
+      <span class="barra-lateral__botao barra-lateral__botao--em-breve" role="link" aria-disabled="true" tabindex="0" data-curto="Mapas">
+        <svg aria-hidden="true"><use href="#icone-mapas"/></svg>
+        <span class="barra-lateral__rotulo">Mapas <small>Em breve</small></span>
+      </span>
+      <span class="barra-lateral__botao barra-lateral__botao--em-breve" role="link" aria-disabled="true" tabindex="0" data-curto="Regras">
+        <svg aria-hidden="true"><use href="#icone-regras"/></svg>
+        <span class="barra-lateral__rotulo">Regras da casa <small>Em breve</small></span>
+      </span>
+    </nav>
+
+    <main id="campanhas" class="campanhas"></main>
+
+    <main id="administracao" class="administracao" hidden>
+      <div class="administracao__cabecalho">
+        <h1 class="administracao__titulo">Administração</h1>
+        <div class="abas" role="tablist" aria-label="Seções da administração">
+          <button class="aba" type="button" role="tab" data-aba="personagens" aria-selected="true">Personagens</button>
+          <button class="aba" type="button" role="tab" data-aba="contas" aria-selected="false">Contas</button>
+          <button class="aba" type="button" role="tab" data-aba="campanhas" aria-selected="false">Campanhas</button>
+        </div>
+      </div>
+      <div id="adm-conteudo" class="administracao__conteudo" role="tabpanel"></div>
+    </main>
+  </div>
+
+  <!-- ============ Ritual: abrindo um mundo ============ -->
+  <div id="abertura" class="ritual" hidden>
+    <div id="abertura-fundo" class="ritual__fundo" aria-hidden="true"></div>
+    <div class="ritual__conteudo" role="status" aria-live="polite">
+      <div class="ritual__circulo">
+        <svg class="sigilo" viewBox="0 0 600 600" aria-hidden="true">
+          <g class="sigilo__giro">
+            <circle class="sigilo__traco sigilo__traco--1" cx="300" cy="300" r="286" pathLength="1"/>
+            <circle class="sigilo__traco sigilo__traco--2" cx="300" cy="300" r="270" pathLength="1"/>
+            <circle class="sigilo__pontilhado" cx="300" cy="300" r="214"/>
+            <path class="sigilo__traco sigilo__traco--3" d="M300 30L570 300L300 570L30 300Z" pathLength="1"/>
+            <path class="sigilo__traco sigilo__traco--4" d="M109 109H491V491H109Z" pathLength="1"/>
+            <circle class="sigilo__traco sigilo__traco--5" cx="300" cy="300" r="150" pathLength="1"/>
+          </g>
+          <g class="sigilo__runas">
+            <g class="sigilo__runa" data-etapa="1" transform="translate(300 30)">
+              <circle r="34"/><use href="#runa-1" x="-12" y="-20" width="24" height="40"/>
+            </g>
+            <g class="sigilo__runa" data-etapa="2" transform="translate(570 300)">
+              <circle r="34"/><use href="#runa-2" x="-12" y="-20" width="24" height="40"/>
+            </g>
+            <g class="sigilo__runa" data-etapa="3" transform="translate(300 570)">
+              <circle r="34"/><use href="#runa-3" x="-12" y="-20" width="24" height="40"/>
+            </g>
+            <g class="sigilo__runa" data-etapa="4" transform="translate(30 300)">
+              <circle r="34"/><use href="#runa-4" x="-12" y="-20" width="24" height="40"/>
+            </g>
+          </g>
+        </svg>
+        <div id="abertura-palco" class="ritual__palco" aria-hidden="true"></div>
+      </div>
+      <h2 id="abertura-titulo" class="ritual__titulo"></h2>
+      <p id="abertura-etapa" class="ritual__etapa"></p>
+    </div>
+    <div class="ritual__clarao" aria-hidden="true"></div>
+  </div>
+
+  <!-- ============ Avisos e confirmações ============ -->
+  <dialog id="dialogo-aviso" class="dialogo">
+    <form method="dialog">
+      <h2 id="aviso-titulo" class="dialogo__titulo"></h2>
+      <p id="aviso-texto" class="dialogo__texto"></p>
+      <div class="dialogo__acoes">
+        <button id="aviso-cancelar" class="botao botao--leve" value="cancelar">Cancelar</button>
+        <button id="aviso-confirmar" class="botao botao--principal" value="confirmar">Entendi</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- ============ Minha conta ============ -->
+  <dialog id="dialogo-conta" class="dialogo">
+    <form id="form-conta" class="dialogo__form" novalidate>
+      <h2 class="dialogo__titulo">Minha conta</h2>
+      <p class="dialogo__texto">Seu nome no portal é <strong id="conta-nome"></strong>. Só o mestre pode mudar o nome.</p>
+
+      <label class="campo">
+        <span class="campo__rotulo">Usuário</span>
+        <input name="usuario" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="30" required>
+        <span class="campo__ajuda">É o que você digita para entrar: letras minúsculas e números, sem espaços.</span>
+      </label>
+
+      <label class="campo">
+        <span class="campo__rotulo">Nova senha</span>
+        <input name="nova" type="password" autocomplete="new-password">
+        <span class="campo__ajuda">Deixe em branco para manter a atual. Para trocar, use pelo menos 8 caracteres.</span>
+      </label>
+
+      <label class="campo">
+        <span class="campo__rotulo">Repita a nova senha</span>
+        <input name="repetida" type="password" autocomplete="new-password">
+      </label>
+
+      <label class="campo">
+        <span class="campo__rotulo">Senha atual</span>
+        <input name="atual" type="password" autocomplete="current-password" required>
+        <span class="campo__ajuda">Necessária para salvar qualquer mudança.</span>
+      </label>
+
+      <p id="erro-conta" class="mensagem-erro" role="alert" hidden></p>
+
+      <div class="dialogo__acoes">
+        <button id="conta-cancelar" class="botao botao--leve" type="button">Cancelar</button>
+        <button class="botao botao--principal" type="submit">Salvar alterações</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- ============ Personalizar o próprio personagem ============ -->
+  <dialog id="dialogo-personagem" class="dialogo dialogo--personagem">
+    <form id="form-personagem" class="dialogo__form" novalidate>
+      <h2 class="dialogo__titulo">Seu personagem</h2>
+      <div class="personalizar">
+        <div id="personalizar-palco" class="personalizar__palco" aria-hidden="true"></div>
+        <div class="personalizar__campos">
+          <label class="campo">
+            <span class="campo__rotulo">Nome no card</span>
+            <input name="nome" maxlength="60" autocomplete="off" spellcheck="false" required>
+          </label>
+          <fieldset class="fontes">
+            <legend class="campo__rotulo">Fonte do nome</legend>
+            <div id="personalizar-fontes" class="fontes__grade"></div>
+          </fieldset>
+        </div>
+      </div>
+      <p id="erro-personagem" class="mensagem-erro" role="alert" hidden></p>
+      <div class="dialogo__acoes">
+        <button id="personagem-cancelar" class="botao botao--leve" type="button">Cancelar</button>
+        <button class="botao botao--principal" type="submit">Salvar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- ============ Formulários da administração ============ -->
+  <dialog id="dialogo-form" class="dialogo dialogo--largo">
+    <form id="form-admin" class="dialogo__form" novalidate>
+      <h2 id="form-admin-titulo" class="dialogo__titulo"></h2>
+      <div id="form-admin-campos" class="dialogo__campos"></div>
+      <p id="form-admin-erro" class="mensagem-erro" role="alert" hidden></p>
+      <div class="dialogo__acoes">
+        <button id="form-admin-cancelar" class="botao botao--leve" type="button">Cancelar</button>
+        <button id="form-admin-enviar" class="botao botao--principal" type="submit">Salvar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="aviso-rapido" class="aviso-rapido" role="status" aria-live="polite" hidden></div>
+
+  <!-- ============ Só na pré-visualização ============ -->
+  <details id="simulacao" class="simulacao" hidden>
+    <summary>Simular o servidor</summary>
+    <p class="simulacao__nota">Só existe na pré-visualização. Mude o estado do Foundry para ver cada situação.</p>
+    <label class="campo">
+      <span class="campo__rotulo">Mundo aberto</span>
+      <select id="sim-mundo"></select>
+    </label>
+    <label class="campo">
+      <span class="campo__rotulo">Pessoas conectadas</span>
+      <input id="sim-conectados" type="number" min="0" max="8" value="0">
+    </label>
+  </details>
+
+</body>
+</html>
