@@ -290,7 +290,7 @@ function corVisivel(hex) {
 }
 
 /* =================================================================
-   Texto formatado: **negrito**, *itálico* e parágrafos
+   Texto formatado: **negrito**, *itálico*, parágrafos e listas
    ================================================================= */
 
 // **negrito**, *itálico* e quebras de linha, sem nunca interpretar HTML
@@ -308,13 +308,31 @@ function textoFormatado(elemento, texto) {
   if (ultimo < texto.length) elemento.append(texto.slice(ultimo));
 }
 
-// Uma linha em branco separa parágrafos
+// Um bloco em que toda linha começa com "- " vira lista; com "1. ", "2. "..., lista numerada
+function listaDe(bloco) {
+  const linhas = bloco.split("\n").map((linha) => linha.trimStart());
+  const numerada = linhas.every((linha) => /^\d+\. /.test(linha));
+  if (!numerada && !linhas.every((linha) => linha.startsWith("- "))) return null;
+  const lista = criar(numerada ? "ol" : "ul");
+  const inicio = parseInt(linhas[0], 10);
+  if (numerada && inicio !== 1) lista.start = inicio;
+  for (const linha of linhas) {
+    const item = criar("li");
+    textoFormatado(item, linha.replace(/^(- |\d+\. )/, ""));
+    lista.append(item);
+  }
+  return lista;
+}
+
+// Uma linha em branco separa parágrafos (e listas)
 function paragrafosDe(texto) {
   return String(texto || "")
     .split(/\n\s*\n/)
     .map((bloco) => bloco.trim())
     .filter(Boolean)
     .map((bloco) => {
+      const lista = listaDe(bloco);
+      if (lista) return lista;
       const p = criar("p");
       textoFormatado(p, bloco);
       return p;

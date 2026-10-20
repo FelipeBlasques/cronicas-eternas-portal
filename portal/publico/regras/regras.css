@@ -1,0 +1,575 @@
+/* =================================================================
+   Regras da casa: o livro de regras do grupo
+   -----------------------------------------------------------------
+   Capítulos em sequência, com o sumário preso à esquerda. A brasa
+   fica para a barra lateral; o azul arcano não aparece aqui.
+   ================================================================= */
+
+.sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.topo__cargo {
+  margin-left: -0.6rem;
+  font-style: italic;
+  font-size: 0.95rem;
+  color: var(--cinza);
+}
+
+.pagina-regras {
+  width: min(76rem, 100%);
+  margin: 0 auto;
+  padding: 2.8rem clamp(1rem, 4vw, 3rem) 7rem;
+}
+
+/* =================================================================
+   Cabeça da página
+   ================================================================= */
+
+.cabeca-regras {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.8rem 1.6rem;
+}
+
+.cabeca-regras__texto {
+  flex: 1 1 24rem;
+}
+
+.cabeca-regras__titulo {
+  margin: 0;
+  font-family: var(--fonte-gotica);
+  font-weight: 500;
+  font-size: clamp(2.6rem, 5.4vw, 4rem);
+  line-height: 1;
+  text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.7), 0 6px 26px rgba(0, 0, 0, 0.85);
+}
+
+.cabeca-regras__sub {
+  max-width: 42rem;
+  margin: 0.55rem 0 0;
+  font-style: italic;
+  color: var(--pergaminho-apagado);
+}
+
+.cabeca-regras__regua {
+  position: relative;
+  flex-basis: 100%;
+  height: 11px;
+  margin-top: 0.3rem;
+  background: linear-gradient(90deg, var(--ferro-forte), var(--ferro-fraco) 55%, transparent) 0 50% / 100% 1px no-repeat;
+}
+
+.cabeca-regras__regua::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  transform: translateY(-50%) rotate(45deg);
+  background: var(--fuligem);
+  border: 1px solid var(--ferro-forte);
+}
+
+/* =================================================================
+   Filtros: busca, mesas e revogadas
+   ================================================================= */
+
+.filtros-regras {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.7rem 1.1rem;
+  margin-top: 1.4rem;
+}
+
+.filtros-regras__mesas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem 0.5rem;
+}
+
+.filtros-regras__revogadas {
+  min-height: 2.3rem;
+}
+
+/* Botão de mesa: um ponto na cor da mesa (o mesmo da Linha do Tempo) */
+.escolha {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.18rem 0.75rem 0.24rem 0.55rem;
+  font: inherit;
+  font-size: 0.95rem;
+  line-height: 1.3;
+  color: var(--pergaminho-apagado);
+  background: rgba(21, 18, 15, 0.7);
+  border: 1px solid var(--ferro-fraco);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s, background-color 0.2s;
+}
+
+.escolha--mesa::before {
+  content: "";
+  flex: none;
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  background: var(--cor, var(--cinza));
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45);
+}
+
+.escolha:hover {
+  color: var(--pergaminho);
+  border-color: var(--ferro);
+}
+
+.escolha[aria-pressed="true"] {
+  color: var(--pergaminho);
+  border-color: var(--cor, var(--ferro-forte));
+  background: color-mix(in srgb, var(--cor, var(--ferro-forte)) 24%, rgba(21, 18, 15, 0.9));
+}
+
+.escolha:focus-visible {
+  outline: 2px solid var(--brasa);
+  outline-offset: 2px;
+}
+
+.filtro-campo {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 2.3rem;
+  padding: 0 0.75rem;
+  color: var(--pergaminho-apagado);
+  background: rgba(12, 10, 9, 0.55);
+  border: 1px solid var(--ferro-fraco);
+  border-radius: var(--raio);
+  transition: border-color 0.2s;
+}
+
+.filtro-campo:focus-within {
+  border-color: var(--ferro-forte);
+}
+
+.filtro-campo select,
+.filtro-campo input {
+  min-width: 0;
+  font: inherit;
+  font-size: 0.98rem;
+  color: var(--pergaminho);
+  background: transparent;
+  border: 0;
+  outline: none;
+}
+
+.filtro-campo select {
+  cursor: pointer;
+}
+
+.filtro-campo select option {
+  background: var(--carvao);
+  color: var(--pergaminho);
+}
+
+.filtro-campo input::placeholder {
+  color: var(--cinza);
+  font-style: italic;
+}
+
+.filtro-campo--busca svg {
+  flex: none;
+  width: 1rem;
+  height: 1rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+}
+
+.filtro-campo--busca input {
+  width: 13rem;
+}
+
+.filtro-campo--busca input::-webkit-search-cancel-button {
+  filter: grayscale(1) brightness(1.6);
+}
+
+/* =================================================================
+   Novidades desde a última visita
+   ================================================================= */
+
+.faixa-novidades {
+  margin: 1.3rem 0 0;
+  padding: 0.5rem 1rem 0.55rem;
+  font-style: italic;
+  color: var(--pergaminho-apagado);
+  background: rgba(21, 18, 15, 0.72);
+  border: 1px solid var(--ferro-fraco);
+  border-left: 2px solid var(--ferro-forte);
+  border-radius: var(--raio);
+}
+
+/* =================================================================
+   Sumário e corpo
+   ================================================================= */
+
+.regras-corpo {
+  display: grid;
+  grid-template-columns: 13.5rem minmax(0, 1fr);
+  align-items: start;
+  gap: 2.8rem;
+  margin-top: 2.2rem;
+}
+
+.sumario {
+  grid-column: 1;
+  position: sticky;
+  top: calc(var(--altura-topo) + 1.6rem);
+  max-height: calc(100vh - var(--altura-topo) - 3.2rem);
+  overflow-y: auto;
+}
+
+.sumario__titulo {
+  margin: 0 0 0.6rem;
+  font-size: 0.78rem;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--cinza);
+}
+
+.sumario__lista {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-left: 1px solid var(--ferro-fraco);
+}
+
+.sumario__link {
+  display: block;
+  margin-left: -1px;
+  padding: 0.32rem 0 0.32rem 0.9rem;
+  line-height: 1.3;
+  color: var(--pergaminho-apagado);
+  text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: color 0.2s, border-color 0.2s;
+}
+
+.sumario__link:hover {
+  color: var(--pergaminho);
+}
+
+.sumario__link[aria-current="true"] {
+  color: var(--pergaminho);
+  border-left-color: var(--ferro-forte);
+}
+
+.sumario__link:focus-visible {
+  outline: 2px solid var(--brasa);
+  outline-offset: 2px;
+}
+
+/* Só no celular */
+.sumario-celular {
+  display: none;
+}
+
+.capitulos {
+  grid-column: 2;
+  min-width: 0;
+  max-width: 50rem;
+}
+
+.regras-vazio {
+  margin: 0;
+  padding: 0.8rem 1.4rem;
+  text-align: center;
+  font-style: italic;
+  color: var(--pergaminho-apagado);
+  background: var(--fuligem);
+  border: 1px solid var(--ferro-fraco);
+  border-radius: var(--raio);
+}
+
+/* =================================================================
+   Capítulos
+   ================================================================= */
+
+.capitulo {
+  scroll-margin-top: calc(var(--altura-topo) + 1.4rem);
+}
+
+.capitulo__titulo {
+  margin: 0;
+  font-family: var(--fonte-gotica);
+  font-weight: 500;
+  font-size: clamp(2rem, 3.6vw, 2.6rem);
+  line-height: 1.05;
+  color: var(--pergaminho);
+  text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.7), 0 6px 22px rgba(0, 0, 0, 0.85);
+}
+
+/* A capitular */
+.capitulo__titulo::first-letter {
+  font-size: 1.5em;
+  color: var(--pergaminho);
+  text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.7), 0 0 20px rgba(232, 221, 200, 0.22);
+}
+
+.capitulo__vazio {
+  margin: 1rem 0 0;
+  padding: 0.75rem 1.1rem;
+  font-style: italic;
+  color: var(--cinza);
+  border: 1px dashed var(--ferro-fraco);
+  border-radius: var(--raio);
+}
+
+.capitulos__divisor {
+  width: min(20rem, 72%);
+  height: 20px;
+  margin: 2.8rem auto 2.4rem;
+  color: var(--ferro-forte);
+}
+
+/* =================================================================
+   Cada regra
+   ================================================================= */
+
+.regra {
+  margin-top: 1rem;
+  padding: 1rem 1.3rem 0.8rem;
+  background: linear-gradient(180deg, rgba(37, 32, 28, 0.94) 0%, rgba(20, 17, 14, 0.97) 100%);
+  border: 1px solid var(--ferro);
+  border-radius: var(--raio);
+  box-shadow:
+    inset 0 0 0 4px rgba(12, 10, 9, 0.55),
+    inset 0 0 0 5px var(--ferro-fraco),
+    0 18px 34px -18px rgba(0, 0, 0, 0.95);
+  scroll-margin-top: calc(var(--altura-topo) + 1.4rem);
+}
+
+.regra--teste {
+  border-style: dashed;
+  border-color: var(--ferro-forte);
+}
+
+.regra--revogada {
+  opacity: 0.55;
+}
+
+.regra--revogada .regra__titulo {
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+  text-decoration-color: var(--pergaminho-apagado);
+}
+
+.regra__cabeca {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.2rem 0.75rem;
+}
+
+.regra__numero {
+  flex: none;
+  font-size: 0.95rem;
+  font-style: italic;
+  color: var(--cinza);
+  white-space: nowrap;
+}
+
+.regra__titulo {
+  flex: 1 1 12rem;
+  margin: 0;
+  font-family: var(--fonte-gotica);
+  font-weight: 500;
+  font-size: 1.55rem;
+  line-height: 1.1;
+  text-wrap: balance;
+}
+
+.regra__selos {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  align-self: center;
+  gap: 0.3rem;
+}
+
+.selo-regra {
+  padding: 0.02rem 0.55rem 0.06rem;
+  font-size: 0.78rem;
+  font-style: italic;
+  line-height: 1.35;
+  color: var(--pergaminho-apagado);
+  border: 1px solid var(--ferro-fraco);
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.selo-regra--teste {
+  border-style: dashed;
+  border-color: var(--ferro-forte);
+}
+
+.selo-regra--novidade {
+  color: var(--pergaminho);
+  background: rgba(232, 221, 200, 0.08);
+  border-color: var(--ferro-forte);
+}
+
+.etiqueta-cor {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.02rem 0.6rem 0.06rem 0.45rem;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  color: var(--pergaminho);
+  background: color-mix(in srgb, var(--cor, var(--cinza)) 22%, transparent);
+  border: 1px solid color-mix(in srgb, var(--cor, var(--cinza)) 75%, transparent);
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.etiqueta-cor::before {
+  content: "";
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--cor, var(--cinza));
+}
+
+.regra__texto {
+  margin-top: 0.3rem;
+}
+
+.regra__texto :is(p, ul, ol) {
+  margin: 0.55rem 0 0;
+}
+
+.regra__texto :is(ul, ol) {
+  padding-left: 1.35rem;
+}
+
+.regra__texto li + li {
+  margin-top: 0.2rem;
+}
+
+.regra__texto li::marker {
+  color: var(--pergaminho-apagado);
+}
+
+.regra__pe {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.3rem 1rem;
+  margin-top: 0.85rem;
+  padding-top: 0.5rem;
+  font-size: 0.92rem;
+  font-style: italic;
+  color: var(--cinza);
+  border-top: 1px solid var(--ferro-fraco);
+}
+
+.regra__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.9rem;
+}
+
+.regra__link svg {
+  flex: none;
+  width: 0.95rem;
+  height: 0.95rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+
+/* Realce ao chegar pelo link da regra */
+.regra--realce {
+  animation: realce-regra 1.8s ease;
+}
+
+@keyframes realce-regra {
+  0%,
+  35% {
+    border-color: var(--pergaminho-apagado);
+    box-shadow:
+      inset 0 0 0 4px rgba(12, 10, 9, 0.55),
+      0 0 0 2px var(--pergaminho-apagado),
+      0 0 44px -6px rgba(232, 221, 200, 0.35);
+  }
+}
+
+/* =================================================================
+   Telas pequenas: uma coluna, e o sumário vira uma lista de escolher
+   ================================================================= */
+
+@media (max-width: 760px) {
+  .pagina-regras {
+    padding-top: 2rem;
+  }
+
+  .filtro-campo--busca {
+    flex: 1 1 100%;
+  }
+
+  .filtro-campo--busca input {
+    width: 100%;
+  }
+
+  .sumario-celular {
+    display: flex;
+    margin-top: 1.2rem;
+  }
+
+  .sumario-celular select {
+    flex: 1;
+    width: 100%;
+  }
+
+  .regras-corpo {
+    grid-template-columns: minmax(0, 1fr);
+    margin-top: 1.6rem;
+  }
+
+  .sumario {
+    display: none;
+  }
+
+  .capitulos {
+    grid-column: 1;
+  }
+
+  .regra {
+    padding: 0.9rem 1rem 0.75rem;
+  }
+
+  .capitulos__divisor {
+    margin: 2.2rem auto 1.9rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .regra--realce {
+    animation: none;
+  }
+}
