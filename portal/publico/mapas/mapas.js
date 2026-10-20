@@ -7,12 +7,16 @@
    apaga mapas. A miniatura, a largura e a altura saem daqui mesmo:
    o navegador mede a imagem e reduz num <canvas> na hora do envio.
 
+   Clicar num card abre o mapa no visor, com link próprio
+   (mapas/#mapa-xxxxxxxx). O zoom e o arraste ficam no visor.js,
+   carregado antes deste.
+
    No servidor, conversa com o servidor/mapas.js. Aberta fora dele
    (arquivo no PC ou prévia), usa o mapa de Tyrenar de exemplo e um
    painel para ver a página como administrador, editor ou jogador.
 
    Usa o comum.js, carregado antes: pedir(), criar(), avisos, barra
-   lateral, status do Foundry e cinzas.
+   lateral, status do Foundry e cinzas. Do visor.js, usa criarVisor().
    ================================================================= */
 
 const CONFIG = {
@@ -292,12 +296,6 @@ function seloOculto() {
   return selo;
 }
 
-// O visor ainda não existe: por enquanto, abrir um mapa só avisa
-function abrirMapa(id) {
-  const mapa = mapaPorId(id);
-  if (mapa) avisoRapido(`O visor de ${mapa.nome} ainda está sendo feito.`);
-}
-
 // A miniatura numa moldura de ferro, com o nome abaixo. O administrador tem o lápis no canto.
 function montarCard(mapa) {
   const oculto = mapa.visibilidade === "admin";
@@ -361,6 +359,106 @@ function renderizarGaleria() {
     return;
   }
   galeria.replaceChildren(...grupos.map(montarGrupo));
+}
+
+/* =================================================================
+   O visor: um mapa aberto
+   -----------------------------------------------------------------
+   Abrir um mapa põe o id dele no endereço (#mapa-xxxxxxxx), então o
+   link funciona e o Voltar do navegador volta à galeria. O que vier
+   depois da barra (#mapa-xxxxxxxx/marca-xxxxxxxx) é o lugar, ainda
+   não usado. As cinzas do fundo somem enquanto o visor está aberto.
+   ================================================================= */
+
+const visor = criarVisor({
+  janela: $("#visor-janela"),
+  imagem: $("#visor-imagem"),
+  lugares: $("#visor-lugares"),
+  botoes: { aproximar: $("#visor-aproximar"), afastar: $("#visor-afastar"), inteiro: $("#visor-inteiro") },
+});
+
+const TITULO_DA_PAGINA = document.title;
+
+const navegacao = {
+  aberto: null, // o id do mapa no visor, ou null na galeria
+  pelaGaleria: false, // aberto por um card: "Voltar aos mapas" é o Voltar do navegador
+};
+
+const mapaDoEndereco = () => location.hash.match(/^#(mapa-[\w-]+)/)?.[1] ?? null;
+
+// Põe (ou tira) o mapa aberto no endereço da página. Devolve false se o navegador não deixar.
+function trocarEndereco(ancora, { nova = false } = {}) {
+  const endereco = ancora || location.pathname + location.search;
+  try {
+    if (nova) history.pushState(null, "", endereco);
+    else history.replaceState(null, "", endereco);
+    return true;
+  } catch {
+    // dentro de alguns quadros de prévia, o navegador não deixa mudar o endereço
+    return false;
+  }
+}
+
+function abrirMapa(id) {
+  const anotado = trocarEndereco(`#${id}`, { nova: true });
+  mostrarRota(id);
+  navegacao.pelaGaleria = anotado;
+}
+
+// Mostra o mapa do endereço no visor, ou a galeria
+function mostrarRota(id = mapaDoEndereco()) {
+  const mapa = id ? mapaPorId(id) : null;
+  if (id && !mapa) {
+    avisoRapido("Esse mapa não existe ou não está disponível para você.");
+    trocarEndereco("");
+  }
+  if (mapa) abrirVisor(mapa);
+  else fecharVisor();
+}
+
+async function abrirVisor(mapa) {
+  $("#visor-nome").textContent = mapa.nome;
+  document.title = `${mapa.nome} · ${TITULO_DA_PAGINA}`;
+  if (navegacao.aberto === mapa.id) return;
+  navegacao.aberto = mapa.id;
+  navegacao.pelaGaleria = false;
+
+  // O foco estava no card, que vai sumir: passa para o mapa
+  const focoNaGaleria = $("#pagina").contains(document.activeElement);
+  $("#pagina").hidden = true;
+  $("#visor").hidden = false;
+  document.body.classList.add("com-visor");
+  if (focoNaGaleria) $("#visor-janela").focus({ preventScroll: true });
+  const carregando = $("#visor-carregando");
+  carregando.textContent = "Abrindo o mapa…";
+  carregando.hidden = false;
+
+  try {
+    if (await visor.abrir(mapa)) carregando.hidden = true;
+  } catch (falha) {
+    if (navegacao.aberto === mapa.id) carregando.textContent = falha.message;
+  }
+}
+
+function fecharVisor() {
+  const id = navegacao.aberto;
+  if (!id) return;
+  navegacao.aberto = null;
+  navegacao.pelaGaleria = false;
+  visor.fechar();
+  const focoNoVisor = $("#visor").contains(document.activeElement) || document.activeElement === document.body;
+  $("#visor").hidden = true;
+  $("#pagina").hidden = false;
+  document.body.classList.remove("com-visor");
+  document.title = TITULO_DA_PAGINA;
+  // O foco volta ao card do mapa que estava aberto
+  if (focoNoVisor) $(`.mapa-item[data-id="${id}"] .mapa-card`)?.focus();
+}
+
+function voltarAGaleria() {
+  if (navegacao.pelaGaleria) return history.back();
+  trocarEndereco("");
+  mostrarRota(null);
 }
 
 /* =================================================================
@@ -631,21 +729,32 @@ async function recarregar() {
   const dados = await api.mapas();
   Object.assign(estado, { conta: dados.conta, mesas: dados.mesas, mapas: dados.mapas });
   renderizarTudo();
+  // Com o visor aberto, o mapa pode ter deixado de existir para esta conta
+  if (navegacao.aberto) mostrarRota();
 }
 
 /* =================================================================
    Eventos da página
    ================================================================= */
 
-// O cabeçalho fica preso no alto; a barra lateral precisa saber o tamanho dele
+// O cabeçalho fica preso no alto; a barra lateral precisa saber o tamanho dele.
+// No celular, a barra vai para o rodapé e o visor termina acima dela.
 function medirAlturas() {
-  const aplicar = () => document.documentElement.style.setProperty("--altura-topo", `${$("#topo").offsetHeight}px`);
-  new ResizeObserver(aplicar).observe($("#topo"));
+  const topo = $("#topo");
+  const barra = $(".barra-lateral");
+  const aplicar = () => {
+    document.documentElement.style.setProperty("--altura-topo", `${topo.offsetHeight}px`);
+    document.documentElement.style.setProperty("--altura-barra", `${barra.offsetHeight}px`);
+  };
+  const observador = new ResizeObserver(aplicar);
+  observador.observe(topo);
+  observador.observe(barra);
   aplicar();
 }
 
 function configurarEventos() {
   $("#botao-novo").addEventListener("click", () => abrirEdicao());
+  $("#visor-voltar").addEventListener("click", voltarAGaleria);
 
   $("#botao-sair").addEventListener("click", async () => {
     if (MODO_PREVIA) return avisoRapido("Na prévia, sair não faz nada.");
@@ -708,6 +817,11 @@ async function iniciar() {
 
   atualizarStatus();
   setInterval(atualizarStatus, CONFIG.intervaloStatus);
+
+  // Link direto para um mapa: abre no visor. O Voltar e o Avançar do navegador trocam entre visor e galeria.
+  window.addEventListener("popstate", () => mostrarRota());
+  window.addEventListener("hashchange", () => mostrarRota());
+  mostrarRota();
 }
 
 iniciar();
