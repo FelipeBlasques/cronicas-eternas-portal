@@ -1,10 +1,10 @@
 /* =================================================================
-   Mapas: a galeria
+   Mapas: a galeria e o visor
    -----------------------------------------------------------------
    As miniaturas dos mapas em molduras de ferro, em grupos: Draevor
-   primeiro, depois uma mesa em cada grupo. A brasa fica na barra
-   lateral, no "+ Mapa" e no foco dos cards; o azul arcano não
-   aparece aqui.
+   primeiro, depois uma mesa em cada grupo. Um mapa aberto ocupa o
+   visor, abaixo do cabeçalho. A brasa fica na barra lateral, no
+   "+ Mapa" e no foco; o azul arcano não aparece aqui.
    ================================================================= */
 
 .sr {
@@ -519,6 +519,219 @@
 }
 
 /* =================================================================
+   O visor: um mapa aberto
+   -----------------------------------------------------------------
+   O mapa ocupa o espaço abaixo do cabeçalho, ao lado da barra
+   lateral, numa moldura de ferro fina. A placa com "Voltar aos
+   mapas" e o nome fica no canto de cima, à esquerda; as ferramentas,
+   numa coluna à direita. Sem as cinzas do fundo.
+   ================================================================= */
+
+body.com-visor {
+  overflow: hidden;
+}
+
+body.com-visor .cenario__cinzas {
+  display: none;
+}
+
+.visor {
+  position: fixed;
+  top: var(--altura-topo);
+  left: var(--largura-barra);
+  right: 0;
+  bottom: 0;
+  z-index: 1;
+  padding: 0.85rem;
+  background: var(--fuligem);
+}
+
+.visor__moldura {
+  position: relative;
+  height: 100%;
+  overflow: hidden;
+  background: var(--carvao);
+  border: 1px solid var(--ferro);
+  border-radius: var(--raio);
+  box-shadow: 0 22px 40px -26px rgba(0, 0, 0, 0.95);
+}
+
+/* Por dentro da moldura, um filete escuro e uma vinheta leve, por cima do mapa */
+.visor__moldura::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+  box-shadow:
+    inset 0 0 0 3px rgba(12, 10, 9, 0.55),
+    inset 0 0 0 4px rgba(181, 154, 118, 0.07),
+    inset 0 0 40px rgba(8, 6, 5, 0.55);
+  pointer-events: none;
+}
+
+/* O mapa com o foco do teclado: o filete vira brasa */
+.visor__moldura:has(.visor__janela:focus-visible)::after {
+  box-shadow:
+    inset 0 0 0 2px var(--brasa),
+    inset 0 0 40px rgba(8, 6, 5, 0.55);
+}
+
+.visor__janela {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.visor__janela:focus {
+  outline: none;
+}
+
+.visor__janela.visor--arrastando {
+  cursor: grabbing;
+}
+
+/* A imagem e a camada dos lugares: do tamanho da imagem, movidas juntas pelo visor.js */
+.visor__camada {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+}
+
+.visor__imagem {
+  display: block;
+  max-width: none;
+  -webkit-user-drag: none;
+  transition: opacity 0.35s ease;
+}
+
+.visor--carregando .visor__imagem {
+  opacity: 0;
+  transition: none;
+}
+
+/* Só enquanto mexe; parado, o navegador redesenha a imagem nítida */
+.visor--movendo .visor__imagem {
+  will-change: transform;
+}
+
+/* Os lugares ligam o próprio clique; a camada deixa o arraste passar */
+.visor__lugares {
+  pointer-events: none;
+}
+
+.visor__carregando {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  padding: 2rem;
+  text-align: center;
+  font-style: italic;
+  color: var(--pergaminho-apagado);
+  pointer-events: none;
+}
+
+/* A placa: voltar aos mapas e o nome do mapa */
+.visor__placa {
+  position: absolute;
+  top: 0.9rem;
+  left: 0.9rem;
+  z-index: 2;
+  display: grid;
+  justify-items: start;
+  gap: 0.05rem;
+  max-width: calc(100% - 6.5rem);
+  padding: 0.4rem 1.1rem 0.6rem 0.9rem;
+  background: linear-gradient(180deg, rgba(34, 29, 25, 0.94), rgba(21, 18, 15, 0.94));
+  border: 1px solid var(--ferro);
+  border-radius: var(--raio);
+  box-shadow:
+    inset 0 0 0 3px rgba(12, 10, 9, 0.55),
+    0 18px 34px -18px rgba(0, 0, 0, 0.95);
+}
+
+.visor__voltar {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.95rem;
+}
+
+.visor__voltar svg {
+  flex: none;
+  width: 1rem;
+  height: 1rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.visor__nome {
+  margin: 0;
+  font-family: var(--fonte-gotica);
+  font-weight: 500;
+  font-size: clamp(1.5rem, 2.6vw, 2rem);
+  line-height: 1.05;
+  overflow-wrap: anywhere;
+  text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.7);
+}
+
+/* A coluna de ferramentas: placas de ferro só com o desenho */
+.visor__ferramentas {
+  position: absolute;
+  top: 0.9rem;
+  right: 0.9rem;
+  z-index: 2;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.visor__ferramenta {
+  display: grid;
+  place-items: center;
+  width: 2.6rem;
+  height: 2.6rem;
+  padding: 0;
+  background: linear-gradient(180deg, #2c2621 0%, #1a1613 100%);
+  border: 1px solid var(--ferro);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 240, 215, 0.07),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.45),
+    0 10px 22px -12px rgba(0, 0, 0, 0.95);
+}
+
+.visor__ferramenta:hover:not([aria-disabled="true"]) {
+  border-color: rgba(196, 106, 53, 0.85);
+}
+
+/* No limite do zoom: apagado, mas sem perder o foco */
+.visor__ferramenta[aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.visor__ferramenta svg {
+  width: 1.25rem;
+  height: 1.25rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* =================================================================
    Telas pequenas
    ================================================================= */
 
@@ -544,11 +757,37 @@
   .imagem-mapa {
     flex-wrap: wrap;
   }
+
+  /* A barra lateral vai para o rodapé: o visor vai de lado a lado e termina acima dela */
+  .visor {
+    left: 0;
+    bottom: var(--altura-barra, 4.9rem);
+    padding: 0.45rem;
+  }
+
+  .visor__placa {
+    top: 0.6rem;
+    left: 0.6rem;
+    max-width: calc(100% - 5.4rem);
+    padding: 0.3rem 0.85rem 0.5rem 0.7rem;
+  }
+
+  .visor__ferramentas {
+    top: 0.6rem;
+    right: 0.6rem;
+  }
+
+  /* Do tamanho do dedo */
+  .visor__ferramenta {
+    width: 2.9rem;
+    height: 2.9rem;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .mapa-card,
-  .mapa-card__miniatura {
+  .mapa-card__miniatura,
+  .visor__imagem {
     transition: none;
   }
 
