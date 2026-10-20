@@ -8,11 +8,10 @@
    No servidor, conversa com o servidor.js. Aberta fora dele (arquivo
    no PC ou prévia), usa acontecimentos de exemplo e um painel para
    ver a página como administrador, editor ou jogador.
-   ================================================================= */
 
-const MODO_PREVIA =
-  !/(^|\.)cronicaseternas\.com$/.test(location.hostname) &&
-  !["localhost", "127.0.0.1"].includes(location.hostname);
+   Usa o comum.js, carregado antes: pedir(), criar(), avisos, barra
+   lateral, status do Foundry, texto formatado e cinzas.
+   ================================================================= */
 
 const CONFIG = {
   intervaloStatus: 15000, // tempo entre consultas ao estado do Foundry, em ms
@@ -84,38 +83,6 @@ const GLIFOS = [
 /* =================================================================
    Conversa com o servidor
    ================================================================= */
-
-function erroComCodigo(mensagem, codigo) {
-  const erro = new Error(mensagem);
-  erro.codigo = codigo;
-  return erro;
-}
-
-async function pedir(metodo, caminho, corpo, { silencioso = false } = {}) {
-  const opcoes = { method: metodo, headers: { Accept: "application/json" }, credentials: "same-origin" };
-  if (corpo instanceof FormData) {
-    opcoes.body = corpo;
-  } else if (corpo !== undefined) {
-    opcoes.headers["Content-Type"] = "application/json";
-    opcoes.body = JSON.stringify(corpo);
-  }
-
-  let resposta;
-  try {
-    resposta = await fetch(caminho, opcoes);
-  } catch {
-    throw erroComCodigo("Sem conexão com o portal. Confira sua internet e tente de novo.", "rede");
-  }
-
-  const dados = await resposta.json().catch(() => null);
-  if (!resposta.ok) {
-    if (dados?.codigo === "sem-sessao" && !silencioso) irParaEntrada({ voltar: true });
-    throw erroComCodigo(dados?.erro || "O portal não respondeu como esperado. Tente de novo em instantes.", dados?.codigo);
-  }
-  return dados;
-}
-
-const caminhoDe = (base, id) => (id ? `${base}/${encodeURIComponent(id)}` : base);
 
 // Os dados vão como JSON; a imagem, se houver, vai junto como arquivo
 function formularioDe(dados) {
@@ -541,8 +508,6 @@ const api = MODO_PREVIA ? criarApiDePrevia() : apiDoServidor;
    Estado e utilidades
    ================================================================= */
 
-const $ = (seletor) => document.querySelector(seletor);
-
 const estado = {
   conta: null,
   anoAtual: 0,
@@ -563,37 +528,6 @@ const mesaPorId = (id) => estado.mesas.find((m) => m.id === id);
 const personagemPorId = (id) => estado.personagens.find((p) => p.id === id);
 const acontecimentoPorId = (id) => estado.acontecimentos.find((a) => a.id === id);
 const pendenciaDe = (id) => estado.pendencias.find((p) => p.acontecimento === id);
-
-const normalizar = (texto) =>
-  String(texto || "")
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .toLowerCase();
-
-function criar(tag, classe, texto) {
-  const elemento = document.createElement(tag);
-  if (classe) elemento.className = classe;
-  if (texto !== undefined && texto !== null && texto !== "") elemento.textContent = texto;
-  return elemento;
-}
-
-function botao(texto, classe, aoClicar) {
-  const elemento = criar("button", `botao ${classe}`, texto);
-  elemento.type = "button";
-  elemento.addEventListener("click", aoClicar);
-  return elemento;
-}
-
-function simbolo(id, classe) {
-  const ns = "http://www.w3.org/2000/svg";
-  const svg = document.createElementNS(ns, "svg");
-  svg.setAttribute("aria-hidden", "true");
-  if (classe) svg.setAttribute("class", classe);
-  const uso = document.createElementNS(ns, "use");
-  uso.setAttribute("href", `#${id}`);
-  svg.append(uso);
-  return svg;
-}
 
 // Um pequeno desenho da lua Drae'mora na fase do dia
 function iconeLua(fase) {
@@ -626,115 +560,11 @@ function iconeLua(fase) {
   return svg;
 }
 
-// As cores das campanhas são escuras; nas etiquetas, ficam um pouco mais claras para aparecer
-function corVisivel(hex) {
-  const m = /^#?([0-9a-f]{6})$/i.exec(hex || "");
-  if (!m) return "#a8987f";
-  const [r, g, b] = [0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16) / 255);
-  const max = Math.max(r, g, b);
-  const min = Math.min(r, g, b);
-  const l = (max + min) / 2;
-  let h = 0;
-  let s = 0;
-  if (max !== min) {
-    const d = max - min;
-    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-    h = max === r ? (g - b) / d + (g < b ? 6 : 0) : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
-    h /= 6;
-  }
-  const s2 = Math.min(Math.max(s, 0.25), 0.62);
-  const l2 = Math.max(l, 0.6);
-  return `hsl(${Math.round(h * 360)} ${Math.round(s2 * 100)}% ${Math.round(l2 * 100)}%)`;
-}
-
-// **negrito**, *itálico* e quebras de linha, sem nunca interpretar HTML
-function textoFormatado(elemento, texto) {
-  const padrao = /(\*\*[^*]+\*\*|\*[^*\n]+\*|\n)/g;
-  let ultimo = 0;
-  for (const achado of texto.matchAll(padrao)) {
-    if (achado.index > ultimo) elemento.append(texto.slice(ultimo, achado.index));
-    const pedaco = achado[0];
-    if (pedaco === "\n") elemento.append(criar("br"));
-    else if (pedaco.startsWith("**")) elemento.append(criar("strong", null, pedaco.slice(2, -2)));
-    else elemento.append(criar("em", null, pedaco.slice(1, -1)));
-    ultimo = achado.index + pedaco.length;
-  }
-  if (ultimo < texto.length) elemento.append(texto.slice(ultimo));
-}
-
-function paragrafosDe(texto) {
-  return String(texto || "")
-    .split(/\n\s*\n/)
-    .map((bloco) => bloco.trim())
-    .filter(Boolean)
-    .map((bloco) => {
-      const p = criar("p");
-      textoFormatado(p, bloco);
-      return p;
-    });
-}
-
-const resumoDe = (texto) =>
-  String(texto || "")
-    .replace(/\*\*([^*]+)\*\*/g, "$1")
-    .replace(/\*([^*\n]+)\*/g, "$1")
-    .replace(/\s*\n+\s*/g, " ")
-    .trim();
-
 function nomeDoPersonagem(personagem) {
   const repetidos = estado.personagens.filter((p) => p.nome === personagem.nome).length > 1;
   if (!repetidos) return personagem.nome;
   const mesa = mesaPorId(personagem.campanha);
   return mesa ? `${personagem.nome} (${mesa.nome})` : personagem.nome;
-}
-
-/* =================================================================
-   Diálogos e avisos
-   ================================================================= */
-
-function perguntar({ titulo, texto, confirmar = "Entendi", cancelar = "", perigo = false }) {
-  const dialogo = $("#dialogo-aviso");
-  const botaoConfirmar = $("#aviso-confirmar");
-  const botaoCancelar = $("#aviso-cancelar");
-  $("#aviso-titulo").textContent = titulo;
-  $("#aviso-texto").textContent = texto;
-  botaoConfirmar.textContent = confirmar;
-  botaoConfirmar.classList.toggle("botao--perigo", perigo);
-  botaoCancelar.hidden = !cancelar;
-  botaoCancelar.textContent = cancelar;
-  dialogo.returnValue = "";
-  dialogo.showModal();
-  return new Promise((resolver) => {
-    dialogo.addEventListener("close", () => resolver(dialogo.returnValue === "confirmar"), { once: true });
-  });
-}
-
-let timerAviso;
-function avisoRapido(texto) {
-  const aviso = $("#aviso-rapido");
-  aviso.textContent = texto;
-  aviso.hidden = false;
-  clearTimeout(timerAviso);
-  timerAviso = setTimeout(() => (aviso.hidden = true), 3400);
-}
-
-// Fecha o diálogo quando o clique cai fora dele, no fundo escurecido
-function fecharAoClicarFora(dialogo) {
-  dialogo.addEventListener("click", (evento) => {
-    if (evento.target !== dialogo) return;
-    const caixa = dialogo.getBoundingClientRect();
-    const dentro =
-      evento.clientX >= caixa.left && evento.clientX <= caixa.right && evento.clientY >= caixa.top && evento.clientY <= caixa.bottom;
-    if (!dentro) dialogo.close();
-  });
-}
-
-// Sem sessão, a página das mesas pede o login. Com "voltar", ela traz a pessoa de volta
-// para cá depois de entrar, no mesmo acontecimento do link.
-function irParaEntrada({ voltar = false } = {}) {
-  if (MODO_PREVIA) return;
-  const destino = voltar ? `?voltar=${encodeURIComponent(location.pathname + location.hash)}` : "";
-  location.href = `../${destino}`;
 }
 
 /* =================================================================
@@ -748,12 +578,6 @@ function atualizarTopo() {
   cargo.textContent = ehAdmin() ? "administrador" : "editor";
 }
 
-function frasePessoas(n) {
-  if (n === 0) return "sem ninguém conectado";
-  if (n === 1) return "com 1 pessoa conectada";
-  return `com ${n} pessoas conectadas`;
-}
-
 async function atualizarStatus() {
   let situacao;
   try {
@@ -761,24 +585,7 @@ async function atualizarStatus() {
   } catch {
     situacao = { online: false };
   }
-  const nome = (mundo) => estado.mesas.find((m) => m.mundo === mundo || m.id === mundo)?.nome ?? mundo;
-  let texto;
-  let tom;
-  if (situacao.trocandoPara) {
-    texto = `Abrindo ${nome(situacao.trocandoPara)}…`;
-    tom = "trocando";
-  } else if (!situacao.online) {
-    texto = "O Foundry está fora do ar no momento.";
-    tom = "reiniciando";
-  } else if (!situacao.mundoAtivo) {
-    texto = "Nenhum mundo aberto no momento.";
-    tom = "vazio";
-  } else {
-    texto = `${nome(situacao.mundoAtivo)} está aberto, ${frasePessoas(situacao.conectados ?? 0)}.`;
-    tom = situacao.conectados > 0 ? "em-sessao" : "aberto";
-  }
-  $("#status").dataset.tom = tom;
-  $("#status-texto").textContent = texto;
+  mostrarStatus(situacao, (mundo) => estado.mesas.find((m) => m.mundo === mundo || m.id === mundo)?.nome ?? mundo);
 }
 
 /* =================================================================
@@ -1517,7 +1324,7 @@ async function apagarEvento(ev) {
     await recarregar();
     avisoRapido(resposta.pendente ? "Pedido enviado para o administrador." : "Acontecimento apagado.");
   } catch (falha) {
-    avisar(falha);
+    avisarFalha(falha);
   }
 }
 
@@ -1536,7 +1343,7 @@ async function apagarFrase(ev, frase) {
     if ($("#dialogo-evento").open && acontecimentoPorId(ev.id)) abrirEvento(ev.id);
     avisoRapido("Frase apagada.");
   } catch (falha) {
-    avisar(falha);
+    avisarFalha(falha);
   }
 }
 
@@ -1555,7 +1362,7 @@ async function revelar(ev) {
     irParaEvento(ev.id);
     avisoRapido("O selo se rompeu. Todos já podem ver.");
   } catch (falha) {
-    avisar(falha);
+    avisarFalha(falha);
   }
 }
 
@@ -1571,11 +1378,9 @@ async function decidir(pendencia, aprovar) {
     }
     if ($("#dialogo-painel").open && painelAtual === "pendencias") abrirPendencias();
   } catch (falha) {
-    avisar(falha);
+    avisarFalha(falha);
   }
 }
-
-const avisar = (falha) => perguntar({ titulo: "Não deu certo", texto: falha.message });
 
 // Coloca (ou tira) o acontecimento aberto no endereço da página, para o link funcionar
 function trocarEndereco(ancora) {
@@ -2177,69 +1982,6 @@ async function recarregar() {
 }
 
 /* =================================================================
-   Cinzas no ar: brasas comuns e, raramente, uma centelha arcana
-   ================================================================= */
-
-function iniciarCinzas() {
-  const tela = $("#cinzas");
-  if (!tela || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-  const contexto = tela.getContext("2d");
-  const particulas = [];
-  let largura = 0;
-  let altura = 0;
-
-  const redimensionar = () => {
-    const escala = Math.min(window.devicePixelRatio || 1, 2);
-    largura = window.innerWidth;
-    altura = window.innerHeight;
-    tela.width = largura * escala;
-    tela.height = altura * escala;
-    contexto.setTransform(escala, 0, 0, escala, 0, 0);
-  };
-
-  const nova = (espalhada) => {
-    const arcana = Math.random() < 0.06; // a magia é rara
-    return {
-      arcana,
-      x: Math.random() * largura,
-      y: espalhada ? Math.random() * altura : altura + 12,
-      raio: arcana ? 1.3 + Math.random() * 1.1 : 0.6 + Math.random() * 1.2,
-      subida: arcana ? 0.12 + Math.random() * 0.16 : 0.22 + Math.random() * 0.5,
-      deriva: (Math.random() - 0.5) * 0.18,
-      fase: Math.random() * Math.PI * 2,
-    };
-  };
-
-  redimensionar();
-  window.addEventListener("resize", redimensionar);
-  for (let i = 0; i < 30; i++) particulas.push(nova(true));
-
-  let anterior = performance.now();
-  const quadro = (agora) => {
-    const passo = Math.min(50, agora - anterior) / 16.7;
-    anterior = agora;
-    contexto.clearRect(0, 0, largura, altura);
-    for (const p of particulas) {
-      p.fase += 0.02 * passo;
-      p.x += (p.deriva + Math.sin(p.fase) * 0.22) * passo;
-      p.y -= p.subida * passo;
-      if (p.y < -14) Object.assign(p, nova(false));
-      const pulso = 0.5 + 0.5 * Math.sin(p.fase * 3);
-      const sumir = Math.max(0, Math.min(1, (p.y / altura) * 1.5));
-      const alfa = sumir * (p.arcana ? 0.95 : 0.45 + pulso * 0.35);
-      contexto.beginPath();
-      contexto.fillStyle = p.arcana ? `rgba(178, 224, 255, ${alfa})` : `rgba(${225 + pulso * 25}, ${105 + pulso * 45}, 48, ${alfa})`;
-      contexto.shadowBlur = p.arcana ? 14 : 6;
-      contexto.shadowColor = p.arcana ? "rgba(110, 190, 255, 0.95)" : "rgba(230, 120, 50, 0.8)";
-      contexto.arc(p.x, p.y, p.raio, 0, Math.PI * 2);
-      contexto.fill();
-    }
-    window.requestAnimationFrame(quadro);
-  };
-  window.requestAnimationFrame(quadro);
-}
-
-/* =================================================================
    Eventos da página
    ================================================================= */
 
@@ -2317,18 +2059,6 @@ function configurarEventos() {
   window.addEventListener("scroll", agendarRolagem, { passive: true });
   window.addEventListener("resize", agendarRolagem);
 
-  // Barra lateral: as páginas que ainda não existem só avisam
-  for (const emBreve of document.querySelectorAll(".barra-lateral__botao--em-breve")) {
-    const avisar = () => avisoRapido(`${emBreve.dataset.curto === "Regras" ? "Regras da casa" : emBreve.dataset.curto}: em breve.`);
-    emBreve.addEventListener("click", avisar);
-    emBreve.addEventListener("keydown", (evento) => {
-      if (evento.key === "Enter" || evento.key === " ") {
-        evento.preventDefault();
-        avisar();
-      }
-    });
-  }
-
   $("#botao-sair").addEventListener("click", async () => {
     if (MODO_PREVIA) return avisoRapido("Na prévia, sair não faz nada.");
     try {
@@ -2337,15 +2067,6 @@ function configurarEventos() {
       irParaEntrada();
     }
   });
-
-  if (MODO_PREVIA) {
-    for (const link of document.querySelectorAll('a[href="../"]')) {
-      link.addEventListener("click", (evento) => {
-        evento.preventDefault();
-        avisoRapido("Na prévia, este botão abriria a página das mesas.");
-      });
-    }
-  }
 }
 
 /* =================================================================
@@ -2383,7 +2104,7 @@ function configurarSimulacao() {
 async function iniciar() {
   medirAlturas();
   configurarEventos();
-  iniciarCinzas();
+  iniciarCinzas(30);
   if (MODO_PREVIA) configurarSimulacao();
 
   try {

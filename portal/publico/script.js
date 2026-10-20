@@ -3,11 +3,11 @@
    -----------------------------------------------------------------
    No servidor, conversa com o servidor.js, que guarda as contas e os
    personagens e pede ao sistema a troca de mundo.
-   Aberto direto do PC (arquivo local), roda em pré-visualização, com
-   dados de exemplo e um painel para simular o estado do Foundry.
+   Aberto fora do servidor (arquivo no PC), roda em pré-visualização,
+   com dados de exemplo e um painel para simular o estado do Foundry.
+   Usa o comum.js, carregado antes: pedir(), criar(), avisos, barra
+   lateral, status do Foundry, fontes, card com moldura e cinzas.
    ================================================================= */
-
-const MODO_PREVIA = location.protocol === "file:";
 
 const CONFIG = {
   intervaloStatus: 15000, // tempo entre consultas ao servidor, em ms
@@ -17,43 +17,6 @@ const CONFIG = {
 /* =================================================================
    Conversa com o servidor
    ================================================================= */
-
-function erroComCodigo(mensagem, codigo, extra) {
-  const erro = new Error(mensagem);
-  erro.codigo = codigo;
-  erro.extra = extra;
-  return erro;
-}
-
-async function pedir(metodo, caminho, corpo, { silencioso = false } = {}) {
-  const opcoes = { method: metodo, headers: { Accept: "application/json" }, credentials: "same-origin" };
-  if (corpo instanceof FormData) {
-    opcoes.body = corpo;
-  } else if (corpo !== undefined) {
-    opcoes.headers["Content-Type"] = "application/json";
-    opcoes.body = JSON.stringify(corpo);
-  }
-
-  let resposta;
-  try {
-    resposta = await fetch(caminho, opcoes);
-  } catch {
-    throw erroComCodigo("Sem conexão com o portal. Confira sua internet e tente de novo.", "rede");
-  }
-
-  const dados = await resposta.json().catch(() => null);
-  if (!resposta.ok) {
-    if (dados?.codigo === "sem-sessao" && !silencioso) sessaoExpirada();
-    throw erroComCodigo(
-      dados?.erro || "O portal não respondeu como esperado. Tente de novo em instantes.",
-      dados?.codigo,
-      dados,
-    );
-  }
-  return dados;
-}
-
-const caminhoDe = (base, id) => (id ? `${base}/${encodeURIComponent(id)}` : base);
 
 const apiDoServidor = {
   sessao: () => pedir("GET", "/api/sessao", undefined, { silencioso: true }),
@@ -339,8 +302,6 @@ const api = MODO_PREVIA ? criarApiDePrevia() : apiDoServidor;
    Estado e utilidades
    ================================================================= */
 
-const $ = (seletor) => document.querySelector(seletor);
-
 const estado = {
   conta: null,
   campanhas: [],
@@ -362,16 +323,9 @@ const ROTULOS_SITUACAO = {
   "sem-mundo": "Sem mundo no Foundry",
 };
 
-const esperar = (ms) => new Promise((resolver) => setTimeout(resolver, ms));
 const campanhaPorId = (id) => estado.campanhas.find((c) => c.id === id);
 const campanhaPorMundo = (mundo) => estado.campanhas.find((c) => c.mundo === mundo);
 const nomeDoMundo = (mundo) => campanhaPorMundo(mundo)?.nome ?? mundo;
-
-function frasePessoas(n) {
-  if (n === 0) return "sem ninguém conectado";
-  if (n === 1) return "com 1 pessoa conectada";
-  return `com ${n} pessoas conectadas`;
-}
 
 function essasPessoas(n) {
   return n === 1 ? "essa pessoa" : `essas ${n} pessoas`;
@@ -385,76 +339,6 @@ function situacaoDe(campanha) {
   if (online && mundoAtivo === campanha.mundo) return "aberto";
   if (online && mundoAtivo && conectados > 0) return "ocupado";
   return "disponivel";
-}
-
-function criar(tag, classe, texto) {
-  const elemento = document.createElement(tag);
-  if (classe) elemento.className = classe;
-  if (texto) elemento.textContent = texto;
-  return elemento;
-}
-
-function imagem(src, classe, alt = "") {
-  const img = criar("img", classe);
-  img.alt = alt;
-  img.decoding = "async";
-  img.src = src;
-  return img;
-}
-
-function botao(texto, classe, aoClicar) {
-  const elemento = criar("button", `botao ${classe}`, texto);
-  elemento.type = "button";
-  elemento.addEventListener("click", aoClicar);
-  return elemento;
-}
-
-/* =================================================================
-   Fontes para o nome dos personagens
-   -----------------------------------------------------------------
-   "escala" equilibra o tamanho visual entre fontes mais largas ou
-   mais estreitas. A Gótica já vem carregada com a página; as outras
-   só são baixadas quando algum card ou o seletor precisa delas.
-   ================================================================= */
-
-const FONTES = [
-  { chave: "gotica", rotulo: "Gótica", familia: "Grenze Gotisch", peso: 500, escala: 1 },
-  { chave: "fraktur", rotulo: "Fraktur", familia: "UnifrakturMaguntia", google: "UnifrakturMaguntia", escala: 0.9 },
-  { chave: "textura", rotulo: "Textura", familia: "Texturina", google: "Texturina:wght@500", peso: 500, escala: 0.88 },
-  { chave: "germanica", rotulo: "Germânica", familia: "Germania One", google: "Germania One", escala: 0.92 },
-  { chave: "pirata", rotulo: "Corsária", familia: "Pirata One", google: "Pirata One", escala: 1 },
-  { chave: "ferro", rotulo: "Ferro", familia: "New Rocker", google: "New Rocker", escala: 0.88 },
-  { chave: "uncial", rotulo: "Uncial", familia: "Uncial Antiqua", google: "Uncial Antiqua", escala: 0.76 },
-  { chave: "medieval", rotulo: "Medieval", familia: "MedievalSharp", google: "MedievalSharp", escala: 0.86 },
-  { chave: "elfica", rotulo: "Élfica", familia: "Almendra", google: "Almendra", escala: 0.94 },
-  { chave: "arcana", rotulo: "Arcana", familia: "Metamorphous", google: "Metamorphous", escala: 0.76 },
-  { chave: "romana", rotulo: "Romana", familia: "Cinzel Decorative", google: "Cinzel Decorative", escala: 0.72 },
-  { chave: "classica", rotulo: "Clássica", familia: "Cormorant SC", google: "Cormorant SC:wght@600", peso: 600, escala: 0.92 },
-  { chave: "tinta", rotulo: "Tinta antiga", familia: "IM Fell English SC", google: "IM Fell English SC", escala: 0.9 },
-  { chave: "caligrafia", rotulo: "Caligrafia", familia: "Fondamento", google: "Fondamento", escala: 0.9 },
-  { chave: "pena", rotulo: "Pena", familia: "Great Vibes", google: "Great Vibes", escala: 1.12 },
-  { chave: "sangue", rotulo: "Sangue", familia: "Nosifer", google: "Nosifer", escala: 0.62 },
-];
-
-const fontePor = (chave) => FONTES.find((f) => f.chave === chave) ?? FONTES[0];
-const fontesCarregadas = new Set(["gotica"]);
-
-function carregarFontes(chaves) {
-  const novas = [...new Set(chaves)].map(fontePor).filter((f) => f.google && !fontesCarregadas.has(f.chave));
-  if (!novas.length) return;
-  for (const fonte of novas) fontesCarregadas.add(fonte.chave);
-  const familias = novas.map((f) => `family=${f.google.replace(/ /g, "+")}`).join("&");
-  const link = document.createElement("link");
-  link.rel = "stylesheet";
-  link.href = `https://fonts.googleapis.com/css2?${familias}&display=swap`;
-  document.head.append(link);
-}
-
-function aplicarFonte(elemento, chave) {
-  const fonte = fontePor(chave);
-  elemento.style.fontFamily = `"${fonte.familia}", var(--fonte-gotica)`;
-  elemento.style.fontWeight = String(fonte.peso ?? 400);
-  elemento.style.setProperty("--escala-nome", fonte.escala);
 }
 
 /* =================================================================
@@ -477,24 +361,7 @@ async function atualizarStatus() {
 }
 
 function atualizarTopo() {
-  const { online, mundoAtivo, conectados, trocandoPara } = estado.status;
-  let texto;
-  let tom;
-  if (trocandoPara) {
-    texto = `Abrindo ${nomeDoMundo(trocandoPara)}…`;
-    tom = "trocando";
-  } else if (!online) {
-    texto = "O Foundry está fora do ar no momento.";
-    tom = "reiniciando";
-  } else if (!mundoAtivo) {
-    texto = "Nenhum mundo aberto no momento.";
-    tom = "vazio";
-  } else {
-    texto = `${nomeDoMundo(mundoAtivo)} está aberto, ${frasePessoas(conectados)}.`;
-    tom = conectados > 0 ? "em-sessao" : "aberto";
-  }
-  $("#status").dataset.tom = tom;
-  $("#status-texto").textContent = texto;
+  mostrarStatus(estado.status, nomeDoMundo);
 }
 
 function atualizarSelos() {
@@ -512,63 +379,13 @@ function atualizarSelos() {
    Cards e campanhas
    ================================================================= */
 
-function nomeEmTexto(nome, fonte) {
-  const elemento = criar("span", "card__nome", nome);
-  if (fonte) aplicarFonte(elemento, fonte);
-  return elemento;
-}
-
-// Se alguma imagem não carregar, o card se ajusta sozinho
-function protegerImagens(card) {
-  const capa = card.querySelector(".card__capa");
-  capa?.addEventListener(
-    "error",
-    () => {
-      capa.remove();
-      card.classList.add("card--sem-capa");
-    },
-    { once: true },
-  );
-
-  const titulo = card.querySelector(".card__titulo");
-  titulo?.addEventListener("error", () => titulo.replaceWith(nomeEmTexto(card.dataset.nome)), {
-    once: true,
-  });
-
-  const arte = card.querySelector(".card__arte");
-  arte?.addEventListener("error", () => arte.remove(), { once: true });
-}
-
-// Personagens mostram o nome em texto, na fonte escolhida pelo dono.
-// O card da campanha (no ritual do mestre) ainda pode usar o logo em imagem.
-function montarCard({ nome, capa, titulo, arte, fonte }, campanha, { alheio = false } = {}) {
-  const card = criar("button", alheio ? "card card--alheio" : "card");
-  card.type = "button";
-  card.dataset.nome = nome;
-  card.style.setProperty("--cor", campanha.cor);
-
-  const moldura = criar("span", "card__moldura");
-  const capaFinal = capa || campanha.capa;
-  if (capaFinal) moldura.append(imagem(capaFinal, "card__capa"));
-  else card.classList.add("card--sem-capa");
-  // Cantos de ferro e as runas que acendem quando o personagem desperta
-  moldura.append(criar("span", "card__cantos"), criar("span", "card__runas"));
-  card.append(moldura);
-
-  card.append(titulo ? imagem(titulo, "card__titulo", nome) : nomeEmTexto(nome, fonte));
-  if (arte) card.append(imagem(arte, "card__arte"));
-
-  protegerImagens(card);
-  return card;
-}
-
 // Cada jogador vê os personagens de todas as campanhas e pode admirar a arte de
 // qualquer um, mas só entra no mundo com o próprio. O mestre entra por qualquer card.
 function criarItemPersonagem(personagem, campanha) {
   const proprio = personagem.dono === estado.conta.usuario;
   const podeEntrar = proprio || estado.conta.admin;
   const item = criar("div", "card-item");
-  const card = montarCard(personagem, campanha, { alheio: !podeEntrar });
+  const card = montarCardComMoldura(personagem, campanha, { alheio: !podeEntrar });
 
   if (podeEntrar) {
     card.setAttribute("aria-label", `Entrar com ${personagem.nome} em ${campanha.nome}`);
@@ -632,7 +449,7 @@ function abrirPersonalizacao(personagem, campanha) {
     const nome = form.elements.nome.value.trim() || personagem.nome;
     const fonte = form.elements.fonte.value || personagem.fonte;
     for (const amostra of grade.querySelectorAll(".fonte__amostra")) amostra.textContent = nome;
-    const card = montarCard({ ...personagem, nome, fonte }, campanha);
+    const card = montarCardComMoldura({ ...personagem, nome, fonte }, campanha);
     card.disabled = true;
     card.tabIndex = -1;
     card.classList.add("card--destaque");
@@ -899,7 +716,7 @@ function mostrarAbertura(campanha, cardOrigem) {
     card = cardOrigem.cloneNode(true);
     protegerImagens(card);
   } else {
-    card = montarCard({ nome: campanha.nome, titulo: campanha.titulo, arte: campanha.arte }, campanha);
+    card = montarCardComMoldura({ nome: campanha.nome, titulo: campanha.titulo, arte: campanha.arte }, campanha);
   }
   card.disabled = true;
   card.tabIndex = -1;
@@ -935,41 +752,11 @@ function encerrarAbertura() {
 }
 
 /* =================================================================
-   Diálogos e avisos
+   Avisos
    ================================================================= */
-
-function perguntar({ titulo, texto, confirmar = "Entendi", cancelar = "", perigo = false }) {
-  const dialogo = $("#dialogo-aviso");
-  const botaoConfirmar = $("#aviso-confirmar");
-  const botaoCancelar = $("#aviso-cancelar");
-
-  $("#aviso-titulo").textContent = titulo;
-  $("#aviso-texto").textContent = texto;
-  botaoConfirmar.textContent = confirmar;
-  botaoConfirmar.classList.toggle("botao--perigo", perigo);
-  botaoCancelar.hidden = !cancelar;
-  botaoCancelar.textContent = cancelar;
-
-  dialogo.returnValue = "";
-  dialogo.showModal();
-  return new Promise((resolver) => {
-    dialogo.addEventListener("close", () => resolver(dialogo.returnValue === "confirmar"), {
-      once: true,
-    });
-  });
-}
 
 function avisar({ titulo, texto }) {
   return perguntar({ titulo, texto });
-}
-
-let timerAvisoRapido;
-function avisoRapido(texto) {
-  const aviso = $("#aviso-rapido");
-  aviso.textContent = texto;
-  aviso.hidden = false;
-  clearTimeout(timerAvisoRapido);
-  timerAvisoRapido = setTimeout(() => (aviso.hidden = true), 3200);
 }
 
 /* =================================================================
@@ -1047,11 +834,13 @@ function configurarEntrada() {
   });
 }
 
-// Quem abriu um link da Linha do Tempo sem estar logado volta para ele depois de entrar.
-// Só vale para a própria Linha do Tempo, para o endereço nunca levar a outro site.
+// Quem abriu o link de uma página do grupo sem estar logado volta para ele depois de entrar.
+// Só vale para as páginas prontas da lista PAGINAS (comum.js), para o endereço nunca levar a outro site.
 function destinoDepoisDeEntrar() {
   const destino = new URLSearchParams(location.search).get("voltar") ?? "";
-  return /^\/linha-do-tempo\/(index\.html)?(#evento-[\w-]+)?$/.test(destino) ? destino : "";
+  const pastas = PAGINAS.filter((p) => p.pronta && p.caminho).map((p) => p.caminho.replace(/\/$/, ""));
+  const permitido = new RegExp(`^/(${pastas.join("|")})/(index\\.html)?(#[\\w-]+)?$`);
+  return permitido.test(destino) ? destino : "";
 }
 
 async function abrirPortal() {
@@ -1651,14 +1440,10 @@ function configurarAdmin() {
 
 // O administrador vê na placa da Linha do Tempo quantos pedidos dos editores esperam por ele
 function mostrarPendenciasDaLinha(quantas) {
-  const contador = $("#contador-linha");
-  const rotulo = $("#rotulo-pendencias");
-  contador.hidden = !quantas;
-  contador.textContent = String(quantas);
-  rotulo.hidden = !quantas;
-  rotulo.textContent = quantas === 1 ? "1 pedido para aprovar" : `${quantas} pedidos para aprovar`;
+  marcarNaBarra("linha", quantas, quantas === 1 ? "1 pedido para aprovar" : `${quantas} pedidos para aprovar`);
 }
 
+// A barra em si é montada pelo comum.js (lista PAGINAS)
 function configurarBarraLateral() {
   // O cabeçalho fica preso no alto, e a barra começa logo abaixo dele
   const topo = $("#portal .topo");
@@ -1675,86 +1460,6 @@ function configurarBarraLateral() {
     window.scrollTo({ top: 0, behavior: suave ? "smooth" : "auto" });
   });
 
-  // Aberta como arquivo no PC, a pasta não abre sozinha o index.html
-  if (MODO_PREVIA) $("#barra-linha").href = "linha-do-tempo/index.html";
-
-  // As páginas que ainda não existem só avisam
-  for (const emBreve of document.querySelectorAll(".barra-lateral__botao--em-breve")) {
-    const nome = emBreve.dataset.curto === "Regras" ? "Regras da casa" : emBreve.dataset.curto;
-    const avisar = () => avisoRapido(`${nome}: em breve.`);
-    emBreve.addEventListener("click", avisar);
-    emBreve.addEventListener("keydown", (evento) => {
-      if (evento.key === "Enter" || evento.key === " ") {
-        evento.preventDefault();
-        avisar();
-      }
-    });
-  }
-}
-
-/* =================================================================
-   Cinzas no ar: brasas comuns e, raramente, uma centelha arcana
-   ================================================================= */
-
-function iniciarCinzas() {
-  const tela = $("#cinzas");
-  if (!tela || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-  const contexto = tela.getContext("2d");
-  const particulas = [];
-  let largura = 0;
-  let altura = 0;
-
-  const redimensionar = () => {
-    const escala = Math.min(window.devicePixelRatio || 1, 2);
-    largura = window.innerWidth;
-    altura = window.innerHeight;
-    tela.width = largura * escala;
-    tela.height = altura * escala;
-    contexto.setTransform(escala, 0, 0, escala, 0, 0);
-  };
-
-  const nova = (espalhada) => {
-    const arcana = Math.random() < 0.06; // a magia é rara
-    return {
-      arcana,
-      x: Math.random() * largura,
-      y: espalhada ? Math.random() * altura : altura + 12,
-      raio: arcana ? 1.3 + Math.random() * 1.1 : 0.6 + Math.random() * 1.2,
-      subida: arcana ? 0.12 + Math.random() * 0.16 : 0.22 + Math.random() * 0.5,
-      deriva: (Math.random() - 0.5) * 0.18,
-      fase: Math.random() * Math.PI * 2,
-    };
-  };
-
-  redimensionar();
-  window.addEventListener("resize", redimensionar);
-  for (let i = 0; i < 34; i++) particulas.push(nova(true));
-
-  let anterior = performance.now();
-  const quadro = (agora) => {
-    const passo = Math.min(50, agora - anterior) / 16.7;
-    anterior = agora;
-    contexto.clearRect(0, 0, largura, altura);
-    for (const p of particulas) {
-      p.fase += 0.02 * passo;
-      p.x += (p.deriva + Math.sin(p.fase) * 0.22) * passo;
-      p.y -= p.subida * passo;
-      if (p.y < -14) Object.assign(p, nova(false));
-      const pulso = 0.5 + 0.5 * Math.sin(p.fase * 3);
-      const sumir = Math.max(0, Math.min(1, (p.y / altura) * 1.5));
-      const alfa = sumir * (p.arcana ? 0.95 : 0.45 + pulso * 0.35);
-      contexto.beginPath();
-      contexto.fillStyle = p.arcana
-        ? `rgba(178, 224, 255, ${alfa})`
-        : `rgba(${225 + pulso * 25}, ${105 + pulso * 45}, 48, ${alfa})`;
-      contexto.shadowBlur = p.arcana ? 14 : 6;
-      contexto.shadowColor = p.arcana ? "rgba(110, 190, 255, 0.95)" : "rgba(230, 120, 50, 0.8)";
-      contexto.arc(p.x, p.y, p.raio, 0, Math.PI * 2);
-      contexto.fill();
-    }
-    window.requestAnimationFrame(quadro);
-  };
-  window.requestAnimationFrame(quadro);
 }
 
 /* =================================================================
@@ -1795,12 +1500,13 @@ function sincronizarPainelSimulacao() {
    ================================================================= */
 
 async function iniciar() {
+  quandoPerderSessao(sessaoExpirada);
   configurarEntrada();
   configurarMinhaConta();
   configurarAdmin();
   configurarBarraLateral();
   configurarSimulacao();
-  iniciarCinzas();
+  iniciarCinzas(34);
   $("#botao-sair").addEventListener("click", sair);
 
   try {

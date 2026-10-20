@@ -1,0 +1,5 @@
+# Dados criados pelo rodar-local.cmd
+dados-teste/
+
+# Zips gerados pelo empacotar.cmd
+*.zip

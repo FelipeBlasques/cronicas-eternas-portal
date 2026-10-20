@@ -1,0 +1,2 @@
+# Os atalhos do Windows precisam de quebra de linha do Windows
+*.cmd text eol=crlf

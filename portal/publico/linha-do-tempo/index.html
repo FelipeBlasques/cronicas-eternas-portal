@@ -9,9 +9,10 @@
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alegreya:ital,wght@0,400;0,500;0,700;1,400;1,500&family=Grenze+Gotisch:wght@400;500;600;700&display=swap">
   <link rel="stylesheet" href="../style.css">
   <link rel="stylesheet" href="linha.css">
+  <script src="../comum.js" defer></script>
   <script src="linha.js" defer></script>
 </head>
-<body class="com-barra pagina-da-linha">
+<body class="com-barra pagina-da-linha" data-pagina="linha" data-raiz="../">
 
   <!-- ============ Cenário: arte de fundo, névoa e cinzas ============ -->
   <div class="cenario" aria-hidden="true">
@@ -26,13 +27,6 @@
   <svg class="simbolos" aria-hidden="true" focusable="false">
     <defs>
       <symbol id="vigia" viewBox="0 0 24 24"><path d="M2.5 12C5.5 7.4 8.6 5.6 12 5.6S18.5 7.4 21.5 12C18.5 16.6 15.4 18.4 12 18.4S5.5 16.6 2.5 12Z"/><circle cx="12" cy="12" r="3.2"/><path d="M12 1.8V3.4M12 20.6V22.2"/></symbol>
-
-      <!-- Barra lateral -->
-      <symbol id="icone-mesas" viewBox="0 0 24 24"><path d="M4.5 21V10.5a7.5 7.5 0 0 1 15 0V21M2.5 21h19M9 21v-5.5a3 3 0 0 1 6 0V21M12 3v2"/></symbol>
-      <symbol id="icone-linha" viewBox="0 0 24 24"><path d="M6 2.5h12M6 21.5h12M7.5 2.5c0 5 9 6.2 9 9.5s-9 4.5-9 9.5M16.5 2.5c0 5-9 6.2-9 9.5s9 4.5 9 9.5M10 19h4M11 8.5h2"/></symbol>
-      <symbol id="icone-personagens" viewBox="0 0 24 24"><path d="M5 20.5v-7a7 7 0 0 1 14 0v7ZM12 6.5v14M7.5 13.5h3M13.5 13.5h3M3.5 20.5h17M12 3v3.5"/></symbol>
-      <symbol id="icone-mapas" viewBox="0 0 24 24"><path d="M12 2l2.3 7.7L22 12l-7.7 2.3L12 22l-2.3-7.7L2 12l7.7-2.3Z"/><circle cx="12" cy="12" r="2.2"/></symbol>
-      <symbol id="icone-regras" viewBox="0 0 24 24"><path d="M6.5 2.5h11a1.5 1.5 0 0 1 1.5 1.5v15.5H6.5a2 2 0 0 0 0 4H19M6.5 2.5A2 2 0 0 0 4.5 4.5v17M9.5 7h6M9.5 10.5h4"/></symbol>
 
       <!-- Tipos de acontecimento -->
       <symbol id="glifo-origem" viewBox="0 0 24 24"><circle cx="12" cy="14.5" r="6.2"/><path d="M7.4 10.4C5.6 8 5.2 5 6.1 2.6c1.1 2.8 2.7 4.6 4.6 5.9M16.6 10.4c1.8-2.4 2.2-5.4 1.3-7.8c-1.1 2.8-2.7 4.6-4.6 5.9M9 12.5h6l-3 5.2Z"/></symbol>
@@ -84,29 +78,8 @@
     </nav>
   </header>
 
-  <!-- ============ Barra lateral ============ -->
-  <nav class="barra-lateral" aria-label="Páginas do grupo">
-    <a class="barra-lateral__botao" href="../" data-curto="Mesas">
-      <svg aria-hidden="true"><use href="#icone-mesas"/></svg>
-      <span class="barra-lateral__rotulo">Mesas</span>
-    </a>
-    <a class="barra-lateral__botao" href="./" aria-current="page" data-curto="Linha">
-      <svg aria-hidden="true"><use href="#icone-linha"/></svg>
-      <span class="barra-lateral__rotulo">Linha do Tempo</span>
-    </a>
-    <span class="barra-lateral__botao barra-lateral__botao--em-breve" role="link" aria-disabled="true" tabindex="0" data-curto="Personagens">
-      <svg aria-hidden="true"><use href="#icone-personagens"/></svg>
-      <span class="barra-lateral__rotulo">Personagens <small>Em breve</small></span>
-    </span>
-    <span class="barra-lateral__botao barra-lateral__botao--em-breve" role="link" aria-disabled="true" tabindex="0" data-curto="Mapas">
-      <svg aria-hidden="true"><use href="#icone-mapas"/></svg>
-      <span class="barra-lateral__rotulo">Mapas <small>Em breve</small></span>
-    </span>
-    <span class="barra-lateral__botao barra-lateral__botao--em-breve" role="link" aria-disabled="true" tabindex="0" data-curto="Regras">
-      <svg aria-hidden="true"><use href="#icone-regras"/></svg>
-      <span class="barra-lateral__rotulo">Regras da casa <small>Em breve</small></span>
-    </span>
-  </nav>
+  <!-- ============ Barra lateral (montada pelo comum.js) ============ -->
+  <nav class="barra-lateral" aria-label="Páginas do grupo"></nav>
 
   <!-- ============ A página ============ -->
   <main id="pagina" class="pagina-linha" hidden>

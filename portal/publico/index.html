@@ -8,9 +8,10 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alegreya:ital,wght@0,400;0,500;0,700;1,400;1,500&family=Grenze+Gotisch:wght@400;500;600;700&display=swap">
   <link rel="stylesheet" href="style.css">
+  <script src="comum.js" defer></script>
   <script src="script.js" defer></script>
 </head>
-<body class="na-entrada">
+<body class="na-entrada" data-pagina="mesas" data-raiz="./">
 
   <!-- ============ Cenário: arte de fundo, névoa e cinzas ============ -->
   <div class="cenario" aria-hidden="true">
@@ -38,12 +39,6 @@
         <path d="M0 10H132M188 10H320M132 10L142 6L150 10L142 14ZM188 10L178 6L170 10L178 14Z"/>
         <path d="M160 2L168 10L160 18L152 10Z"/>
       </symbol>
-      <!-- Barra lateral: uma placa para cada página do grupo -->
-      <symbol id="icone-mesas" viewBox="0 0 24 24"><path d="M4.5 21V10.5a7.5 7.5 0 0 1 15 0V21M2.5 21h19M9 21v-5.5a3 3 0 0 1 6 0V21M12 3v2"/></symbol>
-      <symbol id="icone-linha" viewBox="0 0 24 24"><path d="M6 2.5h12M6 21.5h12M7.5 2.5c0 5 9 6.2 9 9.5s-9 4.5-9 9.5M16.5 2.5c0 5-9 6.2-9 9.5s9 4.5 9 9.5M10 19h4M11 8.5h2"/></symbol>
-      <symbol id="icone-personagens" viewBox="0 0 24 24"><path d="M5 20.5v-7a7 7 0 0 1 14 0v7ZM12 6.5v14M7.5 13.5h3M13.5 13.5h3M3.5 20.5h17M12 3v3.5"/></symbol>
-      <symbol id="icone-mapas" viewBox="0 0 24 24"><path d="M12 2l2.3 7.7L22 12l-7.7 2.3L12 22l-2.3-7.7L2 12l7.7-2.3Z"/><circle cx="12" cy="12" r="2.2"/></symbol>
-      <symbol id="icone-regras" viewBox="0 0 24 24"><path d="M6.5 2.5h11a1.5 1.5 0 0 1 1.5 1.5v15.5H6.5a2 2 0 0 0 0 4H19M6.5 2.5A2 2 0 0 0 4.5 4.5v17M9.5 7h6M9.5 10.5h4"/></symbol>
     </defs>
   </svg>
 
@@ -115,30 +110,8 @@
       </nav>
     </header>
 
-    <!-- Barra lateral: as páginas do grupo -->
-    <nav class="barra-lateral" aria-label="Páginas do grupo">
-      <a id="barra-mesas" class="barra-lateral__botao" href="./" aria-current="page" data-curto="Mesas">
-        <svg aria-hidden="true"><use href="#icone-mesas"/></svg>
-        <span class="barra-lateral__rotulo">Mesas</span>
-      </a>
-      <a id="barra-linha" class="barra-lateral__botao" href="linha-do-tempo/" data-curto="Linha">
-        <svg aria-hidden="true"><use href="#icone-linha"/></svg>
-        <span class="barra-lateral__rotulo">Linha do Tempo <small id="rotulo-pendencias" hidden></small></span>
-        <span id="contador-linha" class="barra-lateral__contador" aria-hidden="true" hidden></span>
-      </a>
-      <span class="barra-lateral__botao barra-lateral__botao--em-breve" role="link" aria-disabled="true" tabindex="0" data-curto="Personagens">
-        <svg aria-hidden="true"><use href="#icone-personagens"/></svg>
-        <span class="barra-lateral__rotulo">Personagens <small>Em breve</small></span>
-      </span>
-      <span class="barra-lateral__botao barra-lateral__botao--em-breve" role="link" aria-disabled="true" tabindex="0" data-curto="Mapas">
-        <svg aria-hidden="true"><use href="#icone-mapas"/></svg>
-        <span class="barra-lateral__rotulo">Mapas <small>Em breve</small></span>
-      </span>
-      <span class="barra-lateral__botao barra-lateral__botao--em-breve" role="link" aria-disabled="true" tabindex="0" data-curto="Regras">
-        <svg aria-hidden="true"><use href="#icone-regras"/></svg>
-        <span class="barra-lateral__rotulo">Regras da casa <small>Em breve</small></span>
-      </span>
-    </nav>
+    <!-- Barra lateral: as páginas do grupo (montada pelo comum.js) -->
+    <nav class="barra-lateral" aria-label="Páginas do grupo"></nav>
 
     <main id="campanhas" class="campanhas"></main>
 
