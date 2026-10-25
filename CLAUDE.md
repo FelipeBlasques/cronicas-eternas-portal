@@ -1,6 +1,6 @@
 # Crônicas Eternas: portal
 
-Portal do grupo de RPG em https://cronicaseternas.com. Cada jogador tem conta, vê os personagens na página **Mesas** e entra no mundo certo do Foundry com um clique. Também tem a **Linha do Tempo** do mundo de Draevor, as **Regras da casa**, a galeria de **Personagens** e os **Mapas**. As especificações de cada página estão em `planejamento/`.
+Portal do grupo de RPG em https://cronicaseternas.com. Cada jogador tem conta, vê os personagens na página **Mesas** e entra no mundo certo do Foundry com um clique. Também tem a **Linha do Tempo** do mundo de Draevor, as **Regras da casa**, a galeria de **Personagens**, os **Mapas** e as **Memórias de Draevor** (textos do cenário). As especificações de cada página estão em `planejamento/`.
 
 ## Onde roda
 
@@ -64,6 +64,7 @@ portal/
     personagens.js  /api/galeria/... (Personagens: fichas e outros personagens; a arte da galeria
                     fica em `retrato`, separada da capa e da arte do card das Mesas)
     mapas.js        /api/mapas/... (Mapas e lugares)
+    memorias.js     /api/memorias/... (Memórias de Draevor: textos que só o administrador escreve e revela)
   publico/
     comum.js        lista PAGINAS e barra lateral, pedir(), $, criar(), botao(), imagem(),
                     simbolo(), perguntar(), avisoRapido(), avisarFalha(), fecharAoClicarFora(),
@@ -77,6 +78,7 @@ portal/
     regras/                      index.html, regras.js, regras.css
     personagens/                 index.html, personagens.js, personagens.css
     mapas/                       index.html, visor.js, mapas.js, mapas.css
+    memorias/                    index.html, memorias.js, memorias.css
 planejamento/       especificações e roteiro das sessões; referencias/ com o Atlas de Tyrenar
 ```
 
