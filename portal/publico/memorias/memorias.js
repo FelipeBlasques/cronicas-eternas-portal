@@ -13,7 +13,7 @@
    para ver a página como administrador, editor ou jogador.
 
    Usa o comum.js, carregado antes: pedir(), criar(), avisos, barra
-   lateral, status do Foundry, texto formatado e cinzas. Do
+   lateral, status do Foundry, texto formatado, fontes e cinzas. Do
    calendario.js, textoDaData() e chaveDaData().
    ================================================================= */
 
@@ -22,16 +22,18 @@ const CONFIG = {
 };
 
 // As classificações, com o rótulo do campo "detalhe" de cada uma (null: não tem o campo)
+// e as fontes que a cara dela usa, da lista FONTES do comum.js (a Gótica e a Alegreya
+// já vêm com a página)
 const TIPOS_DE_MEMORIA = [
-  { id: "carta", nome: "Carta", detalhe: "Assinatura" },
-  { id: "conto", nome: "Conto", detalhe: null },
-  { id: "diario", nome: "Diário", detalhe: null },
-  { id: "recorte", nome: "Recorte", detalhe: "Recortado de" },
-  { id: "trecho", nome: "Trecho de livro", detalhe: "Do livro" },
-  { id: "livro", nome: "Livro", detalhe: null },
-  { id: "poema", nome: "Poema ou canção", detalhe: null },
-  { id: "documento", nome: "Documento", detalhe: "Emitido por" },
-  { id: "inscricao", nome: "Inscrição", detalhe: "Onde está gravada" },
+  { id: "carta", nome: "Carta", detalhe: "Assinatura", fontes: ["caligrafia", "pena"] },
+  { id: "conto", nome: "Conto", detalhe: null, fontes: [] },
+  { id: "diario", nome: "Diário", detalhe: null, fontes: ["caligrafia"] },
+  { id: "recorte", nome: "Recorte", detalhe: "Recortado de", fontes: ["fraktur", "tinta"] },
+  { id: "trecho", nome: "Trecho de livro", detalhe: "Do livro", fontes: ["tinta"] },
+  { id: "livro", nome: "Livro", detalhe: null, fontes: [] },
+  { id: "poema", nome: "Poema ou canção", detalhe: null, fontes: [] },
+  { id: "documento", nome: "Documento", detalhe: "Emitido por", fontes: ["romana"] },
+  { id: "inscricao", nome: "Inscrição", detalhe: "Onde está gravada", fontes: ["romana"] },
 ];
 
 const tipoDeMemoria = (id) => TIPOS_DE_MEMORIA.find((t) => t.id === id);
@@ -561,9 +563,11 @@ function renderizarLista() {
 /* =================================================================
    A leitura
    -----------------------------------------------------------------
-   Por enquanto, uma cara só para todas as classificações: o texto
-   numa folha de pergaminho. A folha leva a classificação em
-   data-tipo.
+   Cada classificação tem a própria cara, feita no memorias.css: a
+   memória aberta leva a classificação em data-tipo e a folha, a
+   classe folha--<tipo>. Acima da folha, no fundo escuro, fica a
+   classificação (e a data, quando a folha não tem lugar para ela);
+   na Carta, no Diário e na Inscrição, também o título.
    ================================================================= */
 
 function mostrarAvisoNaLeitura(mensagem) {
@@ -611,11 +615,15 @@ function barraDaLeitura(memoria, rota) {
   return barra;
 }
 
-// "Carta · 12 de Solcanis de 365 ED"
+// As classificações que escrevem a data na própria folha (no alto da carta, no cabeçalho
+// da entrada do diário, embaixo do título do documento)
+const DATA_NA_FOLHA = new Set(["carta", "diario", "documento"]);
+
+// Acima da folha: "Recorte · Lumenir de 365 ED", ou só "Carta" quando a data vai na folha
 function linhaDaClassificacao(memoria) {
   const partes = [tipoDeMemoria(memoria.tipo)?.nome ?? "Memória"];
-  if (memoria.data) partes.push(textoDaData(memoria.data));
-  return criar("p", "folha__meta", partes.join(" · "));
+  if (memoria.data && !DATA_NA_FOLHA.has(memoria.tipo)) partes.push(textoDaData(memoria.data));
+  return criar("p", "memoria__classificacao", partes.join(" · "));
 }
 
 // Uma menção vira link só quando a conta vê o alvo; senão, fica só o que aparece, como texto.
@@ -658,7 +666,64 @@ function textoDaFolha(texto, links) {
   return corpo;
 }
 
-// O livro aberto: a capa, com o título, e o índice dos capítulos
+// Um enfeite que só desenha (o lacre de cera, o número da página): os leitores de tela pulam
+function enfeite(classe, texto) {
+  const elemento = criar("span", classe, texto);
+  elemento.setAttribute("aria-hidden", "true");
+  return elemento;
+}
+
+// O número de página de mentira do Trecho de livro, tirado do id: sempre o mesmo para a
+// mesma memória, entre 12 e 399
+function numeroDaPagina(id) {
+  let soma = 7;
+  for (const letra of id) soma = (soma * 31 + letra.charCodeAt(0)) % 9973;
+  return 12 + (soma % 388);
+}
+
+// A folha de cada classificação (o Livro tem as dele, logo abaixo). Devolve o que vem depois
+// da classificação: a folha e, em alguns tipos, o título antes dela e o detalhe depois, fora dela.
+function folhaDaMemoria(memoria, links) {
+  const { tipo, titulo, detalhe } = memoria;
+  const folha = criar("div", `folha folha--${tipo}`);
+  const tituloNaFolha = () => criar("h1", "folha__titulo", titulo);
+  const tituloFora = () => criar("h1", "memoria__titulo", titulo);
+  // A data e o detalhe são opcionais: sem eles, nada de elemento vazio
+  const se = (valor, classe) => (valor ? [criar("p", classe, valor)] : []);
+  const data = memoria.data ? textoDaData(memoria.data) : "";
+  const texto = textoDaFolha(memoria.texto, links);
+
+  switch (tipo) {
+    case "carta":
+      folha.append(...se(data, "carta__data"), texto, ...se(detalhe, "carta__assinatura"), enfeite("lacre"));
+      return [tituloFora(), folha];
+    case "diario":
+      folha.append(...se(data, "diario__data"), texto);
+      return [tituloFora(), folha];
+    case "recorte":
+      folha.append(...se(detalhe, "recorte__jornal"), tituloNaFolha(), texto);
+      return [folha];
+    case "trecho":
+      folha.append(...se(detalhe, "trecho__cabeca"), tituloNaFolha(), texto, enfeite("trecho__pagina", String(numeroDaPagina(memoria.id))));
+      return [folha];
+    case "documento":
+      folha.append(tituloNaFolha(), ...se(data, "documento__data"), texto, ...se(detalhe, "documento__emissor"), enfeite("lacre lacre--selo"));
+      return [folha];
+    case "inscricao":
+      folha.append(texto);
+      return [tituloFora(), folha, ...se(detalhe, "inscricao__lugar")];
+    case "conto":
+      // A mesma página das leituras dos capítulos de um livro, com capitular
+      folha.classList.add("folha--pagina");
+      folha.append(tituloNaFolha(), texto);
+      return [folha];
+    default:
+      folha.append(tituloNaFolha(), texto);
+      return [folha];
+  }
+}
+
+// O livro aberto: a capa de couro, com o título, e o índice dos capítulos num pergaminho
 function capaEIndice(memoria) {
   const capa = criar("div", "capa");
   capa.append(criar("h1", "capa__titulo", memoria.titulo));
@@ -674,7 +739,9 @@ function capaEIndice(memoria) {
     lista.append(item);
   });
   indice.append(criar("h2", "indice__titulo", "Índice"), lista);
-  return [capa, indice];
+  const folha = criar("div", "folha folha--indice");
+  folha.append(indice);
+  return [capa, folha];
 }
 
 // No fim do capítulo: "← Capítulo anterior", "Índice" e "Próximo capítulo →"
@@ -692,14 +759,17 @@ function passosEntreCapitulos(memoria, n) {
   return nav;
 }
 
+// Cada capítulo numa página como a do Conto, com capitular
 function capituloDoLivro(memoria, n, links) {
   const capitulo = memoria.capitulos[n - 1];
-  return [
+  const folha = criar("div", "folha folha--pagina");
+  folha.append(
     criar("p", "folha__capitulo", `Capítulo ${n}`),
     criar("h1", "folha__titulo", capitulo.titulo),
     textoDaFolha(capitulo.texto, links),
     passosEntreCapitulos(memoria, n),
-  ];
+  );
+  return [folha];
 }
 
 function renderizarLeitura(pedida) {
@@ -714,15 +784,16 @@ function renderizarLeitura(pedida) {
   const rota = { id: memoria.id, capitulo };
   navegacao.rota = rota;
   document.title = memoria.titulo;
+  carregarFontes(tipoDeMemoria(memoria.tipo)?.fontes ?? []);
 
-  const folha = criar("article", "folha");
-  folha.dataset.tipo = memoria.tipo;
-  folha.append(linhaDaClassificacao(memoria));
-  if (memoria.tipo !== "livro") folha.append(criar("h1", "folha__titulo", memoria.titulo), textoDaFolha(memoria.texto, links));
-  else if (capitulo === null) folha.append(...capaEIndice(memoria));
-  else folha.append(...capituloDoLivro(memoria, capitulo, links));
+  const aberta = criar("article", "memoria");
+  aberta.dataset.tipo = memoria.tipo;
+  aberta.append(linhaDaClassificacao(memoria));
+  if (memoria.tipo !== "livro") aberta.append(...folhaDaMemoria(memoria, links));
+  else if (capitulo === null) aberta.append(...capaEIndice(memoria));
+  else aberta.append(...capituloDoLivro(memoria, capitulo, links));
 
-  $("#leitura").replaceChildren(barraDaLeitura(memoria, rota), folha);
+  $("#leitura").replaceChildren(barraDaLeitura(memoria, rota), aberta);
   window.scrollTo(0, 0);
 }
 
