@@ -1012,7 +1012,7 @@ function campoDoCapitulo({ titulo = "", texto = "" } = {}) {
   const area = criar("textarea", "capitulo-form__texto");
   area.id = `capitulo-texto-${++edicao.capitulos}`;
   area.rows = 10;
-  area.maxLength = 40000;
+  area.maxLength = 100000;
   area.value = texto;
   const rotulo = criar("label", "campo__rotulo", "Texto");
   rotulo.htmlFor = area.id;
