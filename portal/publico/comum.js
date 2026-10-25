@@ -70,6 +70,14 @@ const PAGINAS = [
     icone: "M12 2l2.3 7.7L22 12l-7.7 2.3L12 22l-2.3-7.7L2 12l7.7-2.3ZM14.2 12a2.2 2.2 0 1 1-4.4 0a2.2 2.2 0 1 1 4.4 0Z", // rosa dos ventos
   },
   {
+    id: "memorias",
+    nome: "Memórias de Draevor",
+    curto: "Memórias",
+    caminho: "memorias/",
+    pronta: false,
+    icone: "M2.5 21.5h12M4 21.5c0-3 1.6-4.5 4.5-4.5s4.5 1.5 4.5 4.5M7 17v-2h3v2M8.5 15 14 9.5M14 9.5c1-4 4-6.5 7.5-7-.5 3.5-3 6.5-7 7.5ZM16.5 7.5l-1.5 1.5", // pena e tinteiro
+  },
+  {
     id: "regras",
     nome: "Regras da casa",
     curto: "Regras",
