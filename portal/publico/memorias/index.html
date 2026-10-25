@@ -74,6 +74,139 @@
     <section id="leitura" class="leitura" tabindex="-1" hidden></section>
   </main>
 
+  <!-- ============ Escrever ou alterar (só o administrador) ============ -->
+  <dialog id="dialogo-memoria" class="dialogo dialogo--memoria">
+    <form id="form-memoria" class="dialogo__form" novalidate>
+      <h2 id="memoria-form-titulo" class="dialogo__titulo">Nova memória</h2>
+      <p id="memoria-aviso" class="dialogo__texto memoria-aviso" hidden>Ela nasce escondida: só você a vê, até usar o "Revelar…" na leitura.</p>
+
+      <div class="memoria-form__campos">
+        <label class="campo">
+          <span class="campo__rotulo">Título</span>
+          <input name="titulo" maxlength="120" autocomplete="off" required>
+          <span class="campo__ajuda">É o que aparece na lista.</span>
+        </label>
+
+        <div class="memoria-form__duas">
+          <label class="campo">
+            <span class="campo__rotulo">Classificação</span>
+            <select name="tipo"></select>
+          </label>
+          <label id="campo-detalhe" class="campo" hidden>
+            <span id="rotulo-detalhe" class="campo__rotulo"></span>
+            <input name="detalhe" maxlength="120" autocomplete="off">
+            <span id="ajuda-detalhe" class="campo__ajuda"></span>
+          </label>
+        </div>
+
+        <fieldset class="grupo">
+          <legend class="campo__rotulo">Data no mundo</legend>
+          <div class="data-campos">
+            <label class="campo campo--ano">
+              <span class="campo__rotulo">Ano</span>
+              <input name="ano" type="number" inputmode="numeric" min="0">
+            </label>
+            <label class="campo">
+              <span class="campo__rotulo">Mês</span>
+              <select name="mes"></select>
+            </label>
+            <label class="campo">
+              <span class="campo__rotulo">Dia</span>
+              <select name="dia"></select>
+            </label>
+            <label class="caixa caixa--aprox">
+              <input name="aprox" type="checkbox">
+              <span class="caixa__marca" aria-hidden="true"></span>
+              <span>Data aproximada</span>
+            </label>
+          </div>
+          <span class="campo__ajuda">No Ciclo de Sylara. Opcional; mês e dia também. Sem o ano, a memória fica sem data.</span>
+        </fieldset>
+
+        <!-- O texto, em todas as classificações menos o Livro -->
+        <div id="grupo-texto" class="campo">
+          <div class="campo__cabeca">
+            <label class="campo__rotulo" for="campo-texto">Texto</label>
+            <button id="citar-texto" class="botao botao--leve botao--pequeno botao-citar" type="button">Citar</button>
+          </div>
+          <textarea id="campo-texto" name="texto" rows="14" maxlength="40000"></textarea>
+        </div>
+
+        <!-- No Livro, os capítulos (montados pelo memorias.js) -->
+        <fieldset id="grupo-capitulos" class="grupo" hidden>
+          <legend class="campo__rotulo">Capítulos</legend>
+          <ol id="lista-capitulos" class="capitulos-form"></ol>
+          <button id="botao-mais-capitulo" class="botao botao--leve capitulos-form__mais" type="button">+ Capítulo</button>
+        </fieldset>
+
+        <div class="memoria-form__ajuda">
+          <p class="campo__ajuda">Use **negrito** e *itálico*. Uma linha em branco separa parágrafos; linhas que começam com "- " ou "1. " viram lista. No Poema, cada linha é um verso e a linha em branco separa as estrofes.</p>
+          <p class="campo__ajuda">Links: o "Citar" põe [[evento:id|título]] ou [[personagem:id|nome]] onde está o cursor. O que vem depois da barra é o que aparece no texto, e pode ser mudado à vontade. Quem não vê o acontecimento ou o personagem lê só o texto, sem link.</p>
+        </div>
+      </div>
+
+      <p id="erro-memoria" class="mensagem-erro" role="alert" hidden></p>
+      <div class="dialogo__acoes">
+        <button id="memoria-apagar" class="botao botao--leve botao--perigo dialogo__apagar" type="button" hidden>Apagar</button>
+        <button id="memoria-cancelar" class="botao botao--leve" type="button">Cancelar</button>
+        <button id="memoria-enviar" class="botao botao--principal" type="submit">Escrever</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- ============ Citar: busca pelos acontecimentos e personagens ============ -->
+  <dialog id="dialogo-citar" class="dialogo dialogo--citar">
+    <h2 class="dialogo__titulo">Citar</h2>
+    <label class="campo">
+      <span class="campo__rotulo">Buscar um acontecimento ou personagem</span>
+      <input id="citar-busca" type="search" autocomplete="off" spellcheck="false">
+    </label>
+    <div id="citar-resultados" class="citar__resultados"></div>
+    <div class="dialogo__acoes">
+      <button id="citar-cancelar" class="botao botao--leve" type="button">Cancelar</button>
+    </div>
+  </dialog>
+
+  <!-- ============ Revelar (só o administrador) ============ -->
+  <dialog id="dialogo-revelar" class="dialogo">
+    <form id="form-revelar" class="dialogo__form" novalidate>
+      <h2 class="dialogo__titulo">Revelar</h2>
+      <p id="revelar-memoria" class="dialogo__texto revelar__memoria"></p>
+
+      <fieldset class="grupo">
+        <legend class="campo__rotulo">Quem pode ler</legend>
+        <div class="revelar__opcoes">
+          <label class="caixa caixa--opcao">
+            <input type="radio" name="para" value="ninguem">
+            <span class="caixa__marca" aria-hidden="true"></span>
+            <span>Ninguém, fica escondida</span>
+          </label>
+          <label class="caixa caixa--opcao">
+            <input type="radio" name="para" value="todos">
+            <span class="caixa__marca" aria-hidden="true"></span>
+            <span>Todos</span>
+          </label>
+          <label class="caixa caixa--opcao">
+            <input type="radio" name="para" value="contas">
+            <span class="caixa__marca" aria-hidden="true"></span>
+            <span>Só algumas contas</span>
+          </label>
+        </div>
+      </fieldset>
+
+      <fieldset id="grupo-contas" class="grupo revelar__contas" hidden>
+        <legend class="campo__rotulo">As contas</legend>
+        <div id="escolha-contas" class="revelar__lista"></div>
+      </fieldset>
+
+      <p id="erro-revelar" class="mensagem-erro" role="alert" hidden></p>
+      <div class="dialogo__acoes">
+        <button id="revelar-cancelar" class="botao botao--leve" type="button">Cancelar</button>
+        <button id="revelar-enviar" class="botao botao--principal" type="submit">Salvar</button>
+      </div>
+    </form>
+  </dialog>
+
   <!-- ============ Aviso e confirmação ============ -->
   <dialog id="dialogo-aviso" class="dialogo">
     <form method="dialog">

@@ -6,7 +6,8 @@
    de cada memória; clicar num nome troca a lista pela leitura, com
    endereço próprio (#memoria-<id>, e #memoria-<id>-capitulo-<n>
    nos capítulos de um livro). O texto pode mencionar acontecimentos
-   da Linha do Tempo e personagens da galeria com links.
+   da Linha do Tempo e personagens da galeria com links. Só o
+   administrador escreve, altera, apaga e revela as memórias.
 
    No servidor, conversa com o servidor/memorias.js. Aberta fora dele
    (arquivo no PC ou prévia), usa memórias de exemplo e um painel
@@ -48,6 +49,10 @@ const REGEX_LINK = /\[\[(evento|personagem):([^\]|\n]+)\|([^\]\n]*)\]\]/g;
 const apiDoServidor = {
   memorias: () => pedir("GET", "/api/memorias"),
   memoria: (id) => pedir("GET", caminhoDe("/api/memorias", id)),
+  escrever: (dados) => pedir("POST", "/api/memorias", dados),
+  alterar: (id, dados) => pedir("PUT", caminhoDe("/api/memorias", id), dados),
+  apagar: (id) => pedir("DELETE", caminhoDe("/api/memorias", id)),
+  revelar: (id, escolha) => pedir("PUT", `${caminhoDe("/api/memorias", id)}/revelacao`, escolha),
   estado: () => pedir("GET", "/api/estado", undefined, { silencioso: true }),
   sair: () => pedir("POST", "/api/sair"),
 };
@@ -314,6 +319,116 @@ function criarApiDePrevia() {
     return publica;
   }
 
+  // As mesmas conferências e mensagens do servidor/memorias.js
+  const ANO_ATUAL = 366; // o ano atual da prévia da Linha do Tempo
+  const LIMITES = { memorias: 500, capitulos: 80, texto: 40000, livro: 400000, link: 120 };
+
+  function exigirAdmin() {
+    if (!contaEhAdmin()) throw erroComCodigo("Só o administrador pode fazer isso.", "proibido");
+  }
+
+  // Para quem não pode ler, a memória escondida não existe
+  function acharMemoria(id) {
+    const memoria = banco.memorias.find((m) => m.id === id);
+    if (!memoria || !podeLer(memoria)) throw erroComCodigo("Essa memória não existe.", "nao-encontrado");
+    return memoria;
+  }
+
+  function novoId() {
+    let id;
+    do id = `mem-${Math.random().toString(16).slice(2, 10).padEnd(8, "0")}`;
+    while (banco.memorias.some((m) => m.id === id));
+    return id;
+  }
+
+  function textoValido(valor, campo, max) {
+    const limpo = typeof valor === "string" ? valor.trim() : "";
+    if (!limpo) throw erroComCodigo(`Preencha o campo ${campo}.`);
+    if (limpo.length > max) throw erroComCodigo(`O campo ${campo} pode ter no máximo ${max} caracteres.`);
+    return limpo;
+  }
+
+  function textoOpcional(valor, campo, max) {
+    const limpo = typeof valor === "string" ? valor.replace(/\r\n?/g, "\n").trim() : "";
+    if (limpo.length > max) throw erroComCodigo(`O campo ${campo} pode ter no máximo ${max} caracteres.`);
+    return limpo;
+  }
+
+  // Mês e dia são opcionais: vazio, nulo ou zero quer dizer "sem"
+  function numeroOuNada(valor, min, max, mensagem) {
+    if (valor === null || valor === undefined || valor === "" || valor === 0) return null;
+    if (!Number.isInteger(valor) || valor < min || valor > max) throw erroComCodigo(mensagem);
+    return valor;
+  }
+
+  // A data no formato e com as regras da Linha do Tempo: só o ano é obrigatório
+  function dataDaMemoria(bruta) {
+    const ano = bruta && typeof bruta === "object" ? bruta.ano : undefined;
+    if (!Number.isInteger(ano) || ano < 0 || ano > ANO_ATUAL) {
+      throw erroComCodigo(`O ano precisa ser um número inteiro de 0 a ${ANO_ATUAL}.`);
+    }
+    const mes = numeroOuNada(bruta.mes, 1, 10, "Escolha um mês da lista.");
+    const dia = mes ? numeroOuNada(bruta.dia, 1, 30, "Escolha um dia de 1 a 30.") : null;
+    return { ano, mes, dia, aprox: bruta.aprox === true };
+  }
+
+  // Todo link precisa mostrar alguma coisa, e no máximo 120 caracteres
+  function conferirLinks(textoDaMemoria, campo) {
+    for (const [, , , aparece] of textoDaMemoria.matchAll(REGEX_LINK)) {
+      if (!aparece.trim()) {
+        throw erroComCodigo(`Um link no campo ${campo} está sem o que aparece. Escreva depois da barra: [[evento:id|o que aparece]].`);
+      }
+      if (aparece.length > LIMITES.link) {
+        throw erroComCodigo(`O que aparece num link pode ter no máximo ${LIMITES.link} caracteres (campo ${campo}).`);
+      }
+    }
+  }
+
+  function textoDaMemoria(valor, campo) {
+    const limpo = textoOpcional(valor, campo, LIMITES.texto);
+    conferirLinks(limpo, campo);
+    return limpo;
+  }
+
+  function capitulosDoLivro(lista) {
+    if (!Array.isArray(lista) || !lista.length) throw erroComCodigo("O livro precisa ter pelo menos um capítulo.");
+    if (lista.length > LIMITES.capitulos) throw erroComCodigo(`O livro pode ter no máximo ${LIMITES.capitulos} capítulos.`);
+    let total = 0;
+    const capitulos = lista.map((bruto, i) => {
+      const capitulo = bruto && typeof bruto === "object" ? bruto : {};
+      const titulo = textoValido(capitulo.titulo, `Título do capítulo ${i + 1}`, 120);
+      const textoDoCapitulo = textoDaMemoria(capitulo.texto, `Texto do capítulo ${i + 1}`);
+      total += textoDoCapitulo.length;
+      return { titulo, texto: textoDoCapitulo };
+    });
+    if (total > LIMITES.livro) throw erroComCodigo(`O livro inteiro pode ter no máximo ${LIMITES.livro} caracteres.`);
+    return capitulos;
+  }
+
+  // No Livro vale "capitulos" e o texto fica vazio; nos outros, o contrário.
+  // O "detalhe" só fica nas classificações que têm o campo.
+  function valoresDaMemoria(dados) {
+    const titulo = textoValido(dados.titulo, "Título", 120);
+    const tipo = typeof dados.tipo === "string" ? tipoDeMemoria(dados.tipo) : null;
+    if (!tipo) throw erroComCodigo("Escolha uma classificação da lista.");
+    const data = dados.data ? dataDaMemoria(dados.data) : null;
+    const detalhe = tipo.detalhe ? textoOpcional(dados.detalhe, tipo.detalhe, 120).replace(/\s*\n\s*/g, " ") : "";
+    if (tipo.id === "livro") return { titulo, tipo: tipo.id, data, detalhe, texto: "", capitulos: capitulosDoLivro(dados.capitulos) };
+    return { titulo, tipo: tipo.id, data, detalhe, texto: textoDaMemoria(dados.texto, "Texto"), capitulos: [] };
+  }
+
+  // Repete usuários à vontade; uma conta que não existe, ou de administrador, é recusada
+  function contasEscolhidas(lista) {
+    if (!Array.isArray(lista)) throw erroComCodigo("Escolha as contas que vão ler a memória.");
+    const usuarios = [...new Set(lista)];
+    for (const usuario of usuarios) {
+      const dona = banco.contas.find((c) => c.usuario === usuario);
+      if (!dona) throw erroComCodigo("Uma das contas escolhidas não existe. Recarregue a página.");
+      if (dona.admin) throw erroComCodigo("O administrador já vê todas as memórias. Escolha só as outras contas.");
+    }
+    return usuarios;
+  }
+
   return {
     trocarConta(cargo) {
       conta = CONTAS_DA_PREVIA[cargo] ?? CONTAS_DA_PREVIA.admin;
@@ -340,9 +455,55 @@ function criarApiDePrevia() {
     },
     async memoria(id) {
       await esperar(120);
-      const memoria = banco.memorias.find((m) => m.id === id);
-      if (!memoria || !podeLer(memoria)) throw erroComCodigo("Essa memória não existe.", "nao-encontrado");
+      const memoria = acharMemoria(id);
       return { memoria: memoriaPublica(memoria), links: linksPara(textosDe(memoria)) };
+    },
+    // Toda memória nasce escondida
+    async escrever(dados) {
+      await esperar(150);
+      exigirAdmin();
+      const valores = valoresDaMemoria(dados);
+      if (banco.memorias.length >= LIMITES.memorias) throw erroComCodigo(`Podem existir no máximo ${LIMITES.memorias} memórias.`);
+      const quando = new Date().toISOString();
+      const memoria = { id: novoId(), ...valores, revelacao: { todos: null, contas: {} }, criadoEm: quando, alteradoEm: quando };
+      banco.memorias.push(memoria);
+      return { memoria: { id: memoria.id } };
+    },
+    // Alterar não mexe na revelação
+    async alterar(id, dados) {
+      await esperar(150);
+      exigirAdmin();
+      const valores = valoresDaMemoria(dados);
+      const memoria = acharMemoria(id);
+      Object.assign(memoria, valores, { alteradoEm: new Date().toISOString() });
+      return { ok: true };
+    },
+    async apagar(id) {
+      await esperar(120);
+      exigirAdmin();
+      const memoria = acharMemoria(id);
+      banco.memorias = banco.memorias.filter((m) => m !== memoria);
+      return { ok: true };
+    },
+    // Ninguém: escondida de novo. Todos: a data de agora, ou a que já tinha, e as contas ficam como estão.
+    // Algumas contas: cada marcada fica com a data que já tinha, ou a de agora; as desmarcadas saem.
+    async revelar(id, escolha) {
+      await esperar(120);
+      exigirAdmin();
+      const memoria = acharMemoria(id);
+      const atual = memoria.revelacao;
+      const agora = new Date().toISOString();
+      if (escolha?.para === "ninguem") {
+        memoria.revelacao = { todos: null, contas: {} };
+      } else if (escolha?.para === "todos") {
+        atual.todos = atual.todos || agora;
+      } else if (escolha?.para === "contas") {
+        const usuarios = contasEscolhidas(escolha.contas);
+        memoria.revelacao = { todos: null, contas: Object.fromEntries(usuarios.map((u) => [u, dataDaConta(atual, u) || agora])) };
+      } else {
+        throw erroComCodigo("Escolha para quem revelar: ninguém, todos ou algumas contas.");
+      }
+      return { ok: true };
     },
     async estado() {
       return { online: true, mundoAtivo: "ode-to-sleep", conectados: 0, trocandoPara: null };
@@ -364,6 +525,7 @@ const estado = {
   conta: null,
   memorias: [],
   contas: [], // só para o administrador: as contas que podem receber uma memória
+  citaveis: { acontecimentos: [], personagens: [] }, // só para o administrador: o que o "Citar" oferece
 };
 
 const ehAdmin = () => estado.conta?.cargo === "admin";
@@ -589,15 +751,6 @@ async function copiarLink(rota) {
   }
 }
 
-// Escrever, alterar e revelar ainda não chegaram: por enquanto, os botões só avisam
-function abrirEdicao() {
-  avisoRapido("Escrever e alterar memórias: em breve.");
-}
-
-function abrirRevelacao() {
-  avisoRapido("Revelar memórias: em breve.");
-}
-
 // No alto: "← Memórias" e "Copiar link"; para o administrador, também "Alterar" e "Revelar…",
 // com o estado atual ao lado
 function barraDaLeitura(memoria, rota) {
@@ -798,12 +951,516 @@ function renderizarLeitura(pedida) {
 }
 
 /* =================================================================
+   Escrever e alterar (só o administrador)
+   -----------------------------------------------------------------
+   Um formulário só, aberto pelo "+ Memória" ou pelo "Alterar". No
+   Livro, o texto dá lugar aos capítulos. Trocar a classificação de
+   Livro para outra junta os capítulos num texto só; de outra para
+   Livro, o texto vira o capítulo 1. Nada se perde.
+   ================================================================= */
+
+const LIMITE_DE_CAPITULOS = 80; // como no servidor
+
+// A ajuda abaixo do campo "detalhe", nas classificações que têm o campo
+const AJUDA_DO_DETALHE = {
+  carta: "Aparece no fim da carta.",
+  recorte: "O nome do jornal. Ex.: Gazeta de Westna",
+  trecho: "O nome da obra.",
+  documento: "Aparece no fim, com o selo. Ex.: Conselho de Westna",
+  inscricao: "Aparece abaixo da pedra. Ex.: Lápide no cemitério de Hando",
+};
+
+const edicao = {
+  memoria: null, // a memória sendo alterada, ou null para uma nova
+  tipo: null, // a classificação escolhida, para saber de qual se trocou
+  capitulos: 0, // conta os capítulos montados, para o id de cada campo de texto
+};
+
+const formMemoria = () => $("#form-memoria");
+
+function opcoesDeMes(seletor, valor) {
+  seletor.replaceChildren(new Option("Sem mês", ""), ...MESES.map((mes, i) => new Option(mes, String(i + 1))));
+  seletor.value = valor ? String(valor) : "";
+}
+
+function opcoesDeDia(seletor, valor) {
+  seletor.replaceChildren(new Option("Sem dia", ""));
+  for (let dia = 1; dia <= 30; dia++) seletor.append(new Option(String(dia), String(dia)));
+  seletor.value = valor ? String(valor) : "";
+}
+
+// Um capítulo no formulário: o número, as setas e o "Remover" no alto; depois o título e o texto,
+// com o "Citar" acima dele
+function campoDoCapitulo({ titulo = "", texto = "" } = {}) {
+  const item = criar("li", "capitulo-form");
+  const subir = botao("↑", "botao--leve capitulo-form__seta", () => moverCapitulo(item, -1));
+  const descer = botao("↓", "botao--leve capitulo-form__seta", () => moverCapitulo(item, 1));
+  subir.title = "Subir";
+  descer.title = "Descer";
+  const acoes = criar("div", "capitulo-form__acoes");
+  acoes.append(subir, descer, botao("Remover", "botao--leve botao--perigo", () => removerCapitulo(item)));
+  const cabeca = criar("div", "capitulo-form__cabeca");
+  cabeca.append(criar("span", "capitulo-form__numero"), acoes);
+
+  const entrada = criar("input", "capitulo-form__titulo");
+  entrada.maxLength = 120;
+  entrada.autocomplete = "off";
+  entrada.value = titulo;
+  const campoTitulo = criar("label", "campo");
+  campoTitulo.append(criar("span", "campo__rotulo", "Título"), entrada);
+
+  const area = criar("textarea", "capitulo-form__texto");
+  area.id = `capitulo-texto-${++edicao.capitulos}`;
+  area.rows = 10;
+  area.maxLength = 40000;
+  area.value = texto;
+  const rotulo = criar("label", "campo__rotulo", "Texto");
+  rotulo.htmlFor = area.id;
+  const cabecaDoTexto = criar("div", "campo__cabeca");
+  cabecaDoTexto.append(rotulo, botao("Citar", "botao--leve botao--pequeno botao-citar", () => abrirCitar(area)));
+  const campoTexto = criar("div", "campo");
+  campoTexto.append(cabecaDoTexto, area);
+
+  item.append(cabeca, campoTitulo, campoTexto);
+  return item;
+}
+
+// Depois de mexer na lista: o número de cada capítulo, as setas das pontas apagadas
+// e o "Remover" apagado quando só sobra um
+function numerarCapitulos() {
+  const itens = [...$("#lista-capitulos").children];
+  itens.forEach((item, i) => {
+    const n = i + 1;
+    item.querySelector(".capitulo-form__numero").textContent = `Capítulo ${n}`;
+    const [subir, descer, remover] = item.querySelectorAll(".capitulo-form__acoes button");
+    subir.disabled = i === 0;
+    descer.disabled = n === itens.length;
+    remover.disabled = itens.length === 1;
+    subir.setAttribute("aria-label", `Subir o capítulo ${n}`);
+    descer.setAttribute("aria-label", `Descer o capítulo ${n}`);
+    remover.setAttribute("aria-label", `Remover o capítulo ${n}`);
+    item.querySelector(".botao-citar").setAttribute("aria-label", `Citar no capítulo ${n}`);
+  });
+  $("#botao-mais-capitulo").disabled = itens.length >= LIMITE_DE_CAPITULOS;
+}
+
+function mostrarCapitulos(capitulos) {
+  $("#lista-capitulos").replaceChildren(...capitulos.map(campoDoCapitulo));
+  numerarCapitulos();
+}
+
+function capitulosDoFormulario() {
+  return [...$("#lista-capitulos").children].map((item) => ({
+    titulo: item.querySelector(".capitulo-form__titulo").value.trim(),
+    texto: item.querySelector(".capitulo-form__texto").value.trim(),
+  }));
+}
+
+function adicionarCapitulo() {
+  const lista = $("#lista-capitulos");
+  if (lista.children.length >= LIMITE_DE_CAPITULOS) return;
+  const item = campoDoCapitulo();
+  lista.append(item);
+  numerarCapitulos();
+  item.querySelector(".capitulo-form__titulo").focus();
+}
+
+// O foco segue o capítulo que andou; na ponta, passa para a seta que ainda anda
+function moverCapitulo(item, passo) {
+  const vizinho = passo < 0 ? item.previousElementSibling : item.nextElementSibling;
+  if (!vizinho) return;
+  if (passo < 0) vizinho.before(item);
+  else vizinho.after(item);
+  numerarCapitulos();
+  const [subir, descer] = item.querySelectorAll(".capitulo-form__seta");
+  const seta = passo < 0 ? subir : descer;
+  (seta.disabled ? (passo < 0 ? descer : subir) : seta).focus();
+  item.scrollIntoView({ block: "nearest" });
+}
+
+// Um capítulo com texto pede confirmação antes de sair
+async function removerCapitulo(item) {
+  if ($("#lista-capitulos").children.length <= 1) return;
+  if (item.querySelector(".capitulo-form__texto").value.trim()) {
+    const titulo = item.querySelector(".capitulo-form__titulo").value.trim();
+    const confirmado = await perguntar({
+      titulo: "Remover este capítulo?",
+      texto: `${titulo ? `"${titulo}"` : "O capítulo"} sai do livro, com o texto. Nada muda até você salvar a memória.`,
+      confirmar: "Remover",
+      cancelar: "Cancelar",
+      perigo: true,
+    });
+    if (!confirmado) return;
+  }
+  const vizinho = item.nextElementSibling ?? item.previousElementSibling;
+  item.remove();
+  numerarCapitulos();
+  vizinho.querySelector(".capitulo-form__titulo").focus();
+}
+
+// Os capítulos num texto só: o título de cada um vira uma linha em negrito
+function textoDosCapitulos(capitulos) {
+  return capitulos
+    .map(({ titulo, texto }) => [titulo && `**${titulo}**`, texto].filter(Boolean).join("\n\n"))
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+function trocarClassificacao() {
+  const form = formMemoria();
+  const nova = form.tipo.value;
+  if (edicao.tipo === "livro" && nova !== "livro") {
+    form.texto.value = textoDosCapitulos(capitulosDoFormulario());
+    mostrarCapitulos([]);
+  } else if (edicao.tipo !== "livro" && nova === "livro") {
+    mostrarCapitulos([{ titulo: "Capítulo 1", texto: form.texto.value.trim() }]);
+    form.texto.value = "";
+  }
+  edicao.tipo = nova;
+  mostrarCamposDoTipo();
+}
+
+// O "detalhe" leva o rótulo da classificação e some nas que não têm o campo;
+// no Livro, os capítulos ficam no lugar do texto
+function mostrarCamposDoTipo() {
+  const tipo = tipoDeMemoria(formMemoria().tipo.value);
+  $("#campo-detalhe").hidden = !tipo.detalhe;
+  $("#rotulo-detalhe").textContent = tipo.detalhe ?? "";
+  $("#ajuda-detalhe").textContent = AJUDA_DO_DETALHE[tipo.id] ?? "";
+  $("#grupo-texto").hidden = tipo.id === "livro";
+  $("#grupo-capitulos").hidden = tipo.id !== "livro";
+}
+
+function abrirEdicao(memoria = null) {
+  if (!ehAdmin()) return;
+  const form = formMemoria();
+  form.reset();
+  edicao.memoria = memoria;
+  $("#erro-memoria").hidden = true;
+  $("#memoria-form-titulo").textContent = memoria ? "Alterar memória" : "Nova memória";
+  $("#memoria-enviar").textContent = memoria ? "Salvar" : "Escrever";
+  $("#memoria-aviso").hidden = Boolean(memoria);
+  $("#memoria-apagar").hidden = !memoria;
+
+  form.titulo.value = memoria?.titulo ?? "";
+  form.tipo.replaceChildren(...TIPOS_DE_MEMORIA.map((t) => new Option(t.nome, t.id)));
+  form.tipo.value = memoria?.tipo ?? TIPOS_DE_MEMORIA[0].id;
+  edicao.tipo = form.tipo.value;
+  form.detalhe.value = memoria?.detalhe ?? "";
+
+  const data = memoria?.data;
+  form.ano.value = data ? String(data.ano) : "";
+  opcoesDeMes(form.mes, data?.mes);
+  opcoesDeDia(form.dia, data?.dia);
+  form.aprox.checked = Boolean(data?.aprox);
+
+  form.texto.value = memoria?.texto ?? "";
+  mostrarCapitulos(memoria?.tipo === "livro" ? memoria.capitulos : []);
+  mostrarCamposDoTipo();
+
+  $("#dialogo-memoria").showModal();
+  $(".memoria-form__campos").scrollTop = 0;
+  form.titulo.focus();
+}
+
+// A data é opcional: sem o ano, a memória fica sem data
+function dataDoFormulario() {
+  const form = formMemoria();
+  const mes = Number(form.mes.value) || null;
+  if (form.ano.validity.badInput) throw new Error("O ano precisa ser um número inteiro, de 0 em diante.");
+  if (form.ano.value === "") {
+    if (mes) throw new Error("Escreva o ano, ou deixe o mês em branco.");
+    return null;
+  }
+  const ano = Number(form.ano.value);
+  if (!Number.isInteger(ano) || ano < 0) throw new Error("O ano precisa ser um número inteiro, de 0 em diante.");
+  return { ano, mes, dia: mes ? Number(form.dia.value) || null : null, aprox: form.aprox.checked };
+}
+
+function coletarMemoria() {
+  const form = formMemoria();
+  const titulo = form.titulo.value.trim();
+  if (!titulo) throw new Error("Escreva o título da memória.");
+  const tipo = tipoDeMemoria(form.tipo.value);
+  const dados = { titulo, tipo: tipo.id, data: dataDoFormulario(), detalhe: tipo.detalhe ? form.detalhe.value.trim() : "" };
+  if (tipo.id !== "livro") return { ...dados, texto: form.texto.value.trim() };
+  const capitulos = capitulosDoFormulario();
+  const semTitulo = capitulos.findIndex((c) => !c.titulo);
+  if (semTitulo >= 0) throw new Error(`Escreva o título do capítulo ${semTitulo + 1}.`);
+  return { ...dados, capitulos };
+}
+
+// Uma falha antes de fechar o formulário aparece nele; depois, num aviso
+function mostrarFalha(dialogo, erro, falha) {
+  if (!dialogo.open) return avisarFalha(falha);
+  erro.textContent = falha.message;
+  erro.hidden = false;
+}
+
+// Depois de salvar, a leitura mostra a memória como ficou; a memória nova já abre na leitura
+async function enviarMemoria(evento) {
+  evento.preventDefault();
+  const dialogo = $("#dialogo-memoria");
+  const erro = $("#erro-memoria");
+  const enviar = $("#memoria-enviar");
+  erro.hidden = true;
+  let dados;
+  try {
+    dados = coletarMemoria();
+  } catch (falha) {
+    return mostrarFalha(dialogo, erro, falha);
+  }
+  enviar.disabled = true;
+  try {
+    const alterada = edicao.memoria;
+    if (alterada) await api.alterar(alterada.id, dados);
+    const nova = alterada ? null : (await api.escrever(dados)).memoria;
+    dialogo.close();
+    avisoRapido(nova ? "Memória escrita. Ela fica escondida até você revelar." : "Memória salva.");
+    await recarregar();
+    if (nova) abrir({ id: nova.id, capitulo: null });
+    else if (navegacao.rota) await mostrarRota(navegacao.rota, { forcar: true });
+  } catch (falha) {
+    mostrarFalha(dialogo, erro, falha);
+  } finally {
+    enviar.disabled = false;
+  }
+}
+
+async function apagarMemoria() {
+  const memoria = edicao.memoria;
+  if (!memoria) return;
+  const confirmado = await perguntar({
+    titulo: "Apagar esta memória?",
+    texto: `"${memoria.titulo}" sai das Memórias de Draevor de vez, também para quem já a leu.`,
+    confirmar: "Apagar",
+    cancelar: "Cancelar",
+    perigo: true,
+  });
+  if (!confirmado) return;
+  try {
+    await api.apagar(memoria.id);
+    $("#dialogo-memoria").close();
+    await recarregar();
+    voltarALista();
+    avisoRapido("Memória apagada.");
+  } catch (falha) {
+    avisarFalha(falha);
+  }
+}
+
+function configurarEdicao() {
+  const form = formMemoria();
+  form.addEventListener("submit", enviarMemoria);
+  form.tipo.addEventListener("change", trocarClassificacao);
+  $("#memoria-cancelar").addEventListener("click", () => $("#dialogo-memoria").close());
+  $("#memoria-apagar").addEventListener("click", apagarMemoria);
+  $("#botao-mais-capitulo").addEventListener("click", adicionarCapitulo);
+  $("#citar-texto").addEventListener("click", () => abrirCitar(form.texto));
+}
+
+/* =================================================================
+   Citar: uma busca pelos acontecimentos e personagens
+   -----------------------------------------------------------------
+   Escolher um põe [[evento:<id>|título]] ou [[personagem:<id>|nome]]
+   onde estava o cursor. O "o que aparece" pode ser mudado depois,
+   no próprio texto.
+   ================================================================= */
+
+const citacao = { area: null }; // a área de texto que recebe o link
+
+// Um colchete no título fecharia o link antes da hora: vira parêntese
+const semColchetes = (texto) => texto.replace(/\[/g, "(").replace(/\]/g, ")");
+
+function abrirCitar(area) {
+  citacao.area = area;
+  const busca = $("#citar-busca");
+  busca.value = "";
+  renderizarCitaveis();
+  $("#dialogo-citar").showModal();
+  $("#citar-resultados").scrollTop = 0;
+  busca.focus();
+}
+
+function itemCitavel(nome, extra, trecho) {
+  const item = criar("button", "citar__item");
+  item.type = "button";
+  item.append(criar("span", "citar__nome", nome));
+  if (extra) item.append(criar("span", "citar__extra", extra));
+  item.addEventListener("click", () => inserirCitacao(trecho));
+  const linha = criar("li");
+  linha.append(item);
+  return linha;
+}
+
+function grupoCitavel(titulo, itens) {
+  if (!itens.length) return [];
+  const lista = criar("ul", "citar__lista");
+  lista.append(...itens);
+  const grupo = criar("section", "citar__grupo");
+  grupo.append(criar("h3", "citar__titulo", titulo), lista);
+  return [grupo];
+}
+
+// Sem acentos e sem diferença de maiúsculas
+function renderizarCitaveis() {
+  const termo = normalizar($("#citar-busca").value.trim());
+  const achou = (texto) => !termo || normalizar(texto).includes(termo);
+  const { acontecimentos, personagens } = estado.citaveis;
+  const eventos = acontecimentos
+    .filter((ev) => achou(ev.titulo))
+    .map((ev) => itemCitavel(ev.titulo, `${ev.ano} ED`, `[[evento:${ev.id}|${semColchetes(ev.titulo)}]]`));
+  const pessoas = personagens
+    .filter((p) => achou(p.nome))
+    .map((p) => itemCitavel(p.nome, "", `[[personagem:${p.id}|${semColchetes(p.nome)}]]`));
+  const resultados = $("#citar-resultados");
+  if (!eventos.length && !pessoas.length) {
+    const nada = acontecimentos.length || personagens.length ? "Nada encontrado." : "Nenhum acontecimento ou personagem para citar ainda.";
+    resultados.replaceChildren(criar("p", "citar__vazio", nada));
+    return;
+  }
+  resultados.replaceChildren(...grupoCitavel("Acontecimentos", eventos), ...grupoCitavel("Personagens", pessoas));
+}
+
+// O link entra onde estava o cursor (ou no lugar do que estava selecionado), e o cursor fica depois dele
+function inserirCitacao(trecho) {
+  const area = citacao.area;
+  $("#dialogo-citar").close();
+  if (!area?.isConnected) return;
+  area.focus();
+  area.setRangeText(trecho, area.selectionStart, area.selectionEnd, "end");
+}
+
+function configurarCitar() {
+  const busca = $("#citar-busca");
+  const itens = () => [...document.querySelectorAll("#citar-resultados .citar__item")];
+  busca.addEventListener("input", renderizarCitaveis);
+  // Enter escolhe o primeiro achado; a seta para baixo desce para a lista
+  busca.addEventListener("keydown", (evento) => {
+    const primeiro = itens()[0];
+    if (!primeiro || (evento.key !== "Enter" && evento.key !== "ArrowDown")) return;
+    evento.preventDefault();
+    if (evento.key === "Enter") primeiro.click();
+    else primeiro.focus();
+  });
+  // Na lista, as setas andam de um achado para o outro; acima do primeiro, volta para a busca
+  $("#citar-resultados").addEventListener("keydown", (evento) => {
+    if (evento.key !== "ArrowDown" && evento.key !== "ArrowUp") return;
+    const lista = itens();
+    const i = lista.indexOf(document.activeElement);
+    if (i < 0) return;
+    evento.preventDefault();
+    const proximo = lista[evento.key === "ArrowDown" ? i + 1 : i - 1];
+    if (proximo) proximo.focus();
+    else if (evento.key === "ArrowUp") busca.focus();
+  });
+  $("#citar-cancelar").addEventListener("click", () => $("#dialogo-citar").close());
+  fecharAoClicarFora($("#dialogo-citar"));
+}
+
+/* =================================================================
+   Revelar (só o administrador)
+   -----------------------------------------------------------------
+   Ninguém (escondida de novo), todos ou só algumas contas. As contas
+   para marcar são todas, menos as de administrador, que já veem tudo.
+   ================================================================= */
+
+const revelar = { memoria: null };
+
+const formRevelar = () => $("#form-revelar");
+
+function caixaDaConta(conta, marcada) {
+  const entrada = criar("input");
+  entrada.type = "checkbox";
+  entrada.name = "contas";
+  entrada.value = conta.usuario;
+  entrada.checked = marcada;
+  const marca = criar("span", "caixa__marca");
+  marca.setAttribute("aria-hidden", "true");
+  const caixa = criar("label", "caixa");
+  caixa.append(entrada, marca, criar("span", null, conta.nome));
+  return caixa;
+}
+
+// As contas só aparecem na terceira escolha
+function mostrarContas() {
+  $("#grupo-contas").hidden = formRevelar().para.value !== "contas";
+}
+
+function abrirRevelacao(memoria) {
+  if (!ehAdmin() || !memoria.revelacao) return;
+  revelar.memoria = memoria;
+  const form = formRevelar();
+  form.reset();
+  $("#erro-revelar").hidden = true;
+  $("#revelar-memoria").textContent = memoria.titulo;
+  form.para.value = memoria.revelacao.para;
+  const marcadas = new Set(memoria.revelacao.contas);
+  $("#escolha-contas").replaceChildren(
+    ...(estado.contas.length
+      ? estado.contas.map((c) => caixaDaConta(c, marcadas.has(c.usuario)))
+      : [criar("p", "escolhas__vazio", "Nenhuma conta além da do administrador.")]),
+  );
+  mostrarContas();
+  $("#dialogo-revelar").showModal();
+  form.querySelector('input[name="para"]:checked')?.focus();
+}
+
+function avisoDaRevelacao(escolha) {
+  if (escolha.para === "ninguem") return "A memória está escondida.";
+  if (escolha.para === "todos") return "Memória revelada para todos.";
+  return `Memória revelada só para ${listaDeNomes(escolha.contas)}.`;
+}
+
+// Salvar chama a rota de revelação e recarrega a lista e a leitura
+async function enviarRevelacao(evento) {
+  evento.preventDefault();
+  const form = formRevelar();
+  const dialogo = $("#dialogo-revelar");
+  const erro = $("#erro-revelar");
+  const enviar = $("#revelar-enviar");
+  erro.hidden = true;
+  const para = form.para.value;
+  const contas = [...form.querySelectorAll('input[name="contas"]:checked')].map((caixa) => caixa.value);
+  if (para === "contas" && !contas.length) {
+    return mostrarFalha(dialogo, erro, new Error('Marque pelo menos uma conta, ou escolha "Ninguém".'));
+  }
+  const escolha = para === "contas" ? { para, contas } : { para };
+  enviar.disabled = true;
+  try {
+    await api.revelar(revelar.memoria.id, escolha);
+    dialogo.close();
+    avisoRapido(avisoDaRevelacao(escolha));
+    await recarregar();
+    if (navegacao.rota) await mostrarRota(navegacao.rota, { forcar: true });
+  } catch (falha) {
+    mostrarFalha(dialogo, erro, falha);
+  } finally {
+    enviar.disabled = false;
+  }
+}
+
+function configurarRevelacao() {
+  const form = formRevelar();
+  form.addEventListener("submit", enviarRevelacao);
+  form.addEventListener("change", (evento) => {
+    if (evento.target.name === "para") mostrarContas();
+  });
+  $("#revelar-cancelar").addEventListener("click", () => $("#dialogo-revelar").close());
+}
+
+/* =================================================================
    Carregar
    ================================================================= */
 
 async function recarregar() {
   const dados = await api.memorias();
-  Object.assign(estado, { conta: dados.conta, memorias: dados.memorias, contas: dados.contas ?? [] });
+  Object.assign(estado, {
+    conta: dados.conta,
+    memorias: dados.memorias,
+    contas: dados.contas ?? [],
+    citaveis: dados.citaveis ?? { acontecimentos: [], personagens: [] },
+  });
   atualizarTopo();
   renderizarLista();
 }
@@ -882,6 +1539,9 @@ function configurarSimulacao() {
 async function iniciar() {
   medirAlturas();
   configurarEventos();
+  configurarEdicao();
+  configurarCitar();
+  configurarRevelacao();
   iniciarCinzas(30);
   if (MODO_PREVIA) configurarSimulacao();
 
