@@ -16,6 +16,7 @@
      regras.js    Regras da casa
      personagens.js  Personagens (a galeria)
      mapas.js     Mapas
+     memorias.js  Memórias de Draevor
 
    Comandos:
      node servidor.js                     inicia o portal
@@ -67,6 +68,7 @@ const PAGINAS = [
   require("./servidor/regras"),
   require("./servidor/personagens"),
   require("./servidor/mapas"),
+  require("./servidor/memorias"),
 ];
 
 /* =================================================================
