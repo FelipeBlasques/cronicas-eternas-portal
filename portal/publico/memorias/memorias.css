@@ -2,10 +2,12 @@
    Memórias de Draevor: a lista e a leitura
    -----------------------------------------------------------------
    A lista é uma coluna só, com o nome de cada memória. A leitura
-   troca a lista: o texto numa folha de pergaminho clara, com tinta
-   escura. Por enquanto, a mesma folha para todas as
-   classificações (a folha leva a classificação em data-tipo).
-   A brasa fica para a barra lateral e o "+ Memória".
+   troca a lista: cada classificação tem a própria cara, feita só
+   com CSS e com as fontes da lista FONTES do comum.js (o
+   memorias.js baixa as de cada tipo). As folhas são claras, com
+   tinta escura; a pedra da Inscrição é a exceção. O lacre é cera
+   vermelho-escura: a brasa fica para a barra lateral e o
+   "+ Memória".
    ================================================================= */
 
 .topo__cargo {
@@ -222,18 +224,45 @@
   color: var(--pergaminho-apagado);
 }
 
-/* A folha: pergaminho claro, tinta escura */
+/* Acima da folha, no fundo escuro: a classificação e, na Carta, no Diário e na
+   Inscrição, o título */
+.memoria__classificacao {
+  margin: 1.6rem 0 0;
+  font-size: 0.95rem;
+  font-style: italic;
+  color: var(--pergaminho-apagado);
+}
+
+.memoria__titulo {
+  margin: 0.15rem 0 0;
+  overflow-wrap: anywhere;
+  font-family: var(--fonte-gotica);
+  font-weight: 500;
+  font-size: clamp(1.9rem, 4.4vw, 2.6rem);
+  line-height: 1.12;
+  color: var(--pergaminho);
+  text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.7), 0 6px 26px rgba(0, 0, 0, 0.85);
+}
+
+/* =================================================================
+   A folha: papel claro, tinta escura
+   -----------------------------------------------------------------
+   O papel padrão é o pergaminho (Poema e índice do Livro); cada
+   classificação troca o papel logo abaixo.
+   ================================================================= */
+
 .folha {
+  --papel-pergaminho:
+    radial-gradient(ellipse 80% 70% at 50% 42%, rgba(255, 250, 236, 0.5), transparent 75%),
+    linear-gradient(180deg, #eadfc6 0%, #dfcfac 100%);
   position: relative;
-  margin-top: 1.2rem;
+  margin-top: 1rem;
   padding: clamp(1.8rem, 5vw, 3.4rem) clamp(1.3rem, 6vw, 4rem) clamp(2rem, 5vw, 3.6rem);
   overflow-wrap: anywhere;
   font-size: 1.12rem;
   line-height: 1.7;
   color: #2f251b;
-  background:
-    radial-gradient(ellipse 80% 70% at 50% 42%, rgba(255, 250, 236, 0.5), transparent 75%),
-    linear-gradient(180deg, #eadfc6 0%, #dfcfac 100%);
+  background: var(--papel-pergaminho);
   border-radius: 2px;
   box-shadow:
     0 0 0 1px rgba(0, 0, 0, 0.45),
@@ -257,15 +286,8 @@
   position: relative;
 }
 
-.folha__meta {
-  margin: 0;
-  font-size: 0.92rem;
-  font-style: italic;
-  color: #6f5b41;
-}
-
 .folha__titulo {
-  margin: 0.35rem 0 1.3rem;
+  margin: 0 0 1.3rem;
   font-family: var(--fonte-gotica);
   font-weight: 500;
   font-size: clamp(1.9rem, 4.4vw, 2.6rem);
@@ -314,24 +336,439 @@
   outline-offset: 2px;
 }
 
-/* =================================================================
-   O livro: capa, índice e capítulos
-   ================================================================= */
+/* O lacre de cera: vermelho-escuro, nunca a brasa. Na Carta fica no canto de baixo,
+   metade para fora da folha; no Documento, centralizado no fim (lacre--selo). */
+.lacre {
+  position: absolute;
+  left: clamp(1rem, 5vw, 2.6rem);
+  bottom: -1.2rem;
+  width: 3.4rem;
+  height: 3.3rem;
+  background:
+    radial-gradient(circle at 36% 30%, rgba(255, 196, 176, 0.32), transparent 34%),
+    radial-gradient(circle at 50% 55%, #7c231b 0%, #65180f 55%, #4a0f0a 100%);
+  border-radius: 53% 47% 56% 44% / 46% 55% 45% 54%;
+  box-shadow:
+    inset 0 -3px 5px rgba(30, 4, 2, 0.5),
+    inset 0 2px 3px rgba(255, 170, 150, 0.2),
+    0 3px 7px rgba(0, 0, 0, 0.45);
+}
+
+/* O anel e o losango que o sinete deixou na cera */
+.lacre::before {
+  content: "";
+  position: absolute;
+  inset: 22%;
+  border: 1px solid rgba(35, 5, 3, 0.55);
+  border-radius: 50%;
+  box-shadow: 0 1px 0 rgba(255, 170, 150, 0.18), inset 0 1px 2px rgba(35, 5, 3, 0.4);
+}
+
+.lacre::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 22%;
+  height: 22%;
+  transform: translate(-50%, -50%) rotate(45deg);
+  border: 1px solid rgba(35, 5, 3, 0.6);
+  box-shadow: 0 1px 0 rgba(255, 170, 150, 0.16);
+}
+
+.lacre--selo {
+  position: relative;
+  left: auto;
+  bottom: auto;
+  display: block;
+  width: 4.4rem;
+  height: 4.3rem;
+  margin: 1.2rem auto 0;
+}
+
+/* -----------------------------------------------------------------
+   Carta: papel creme dobrado em três, levemente inclinado, letra de
+   caligrafia em sépia e a assinatura na pena
+   ----------------------------------------------------------------- */
+
+.folha--carta {
+  padding-bottom: clamp(3.4rem, 7vw, 4.2rem);
+  font-family: "Fondamento", var(--fonte-texto);
+  font-size: 1.16rem;
+  line-height: 1.75;
+  color: #4b3220;
+  background:
+    /* as dobras, a 1/3 e a 2/3 da altura: o vinco escuro e a luz logo embaixo */
+    linear-gradient(
+      180deg,
+      transparent calc(100% / 3 - 1px),
+      rgba(92, 64, 34, 0.24) calc(100% / 3 - 1px),
+      rgba(92, 64, 34, 0.24) calc(100% / 3),
+      rgba(255, 252, 240, 0.55) calc(100% / 3),
+      rgba(255, 252, 240, 0.55) calc(100% / 3 + 1px),
+      transparent calc(100% / 3 + 1px),
+      transparent calc(200% / 3 - 1px),
+      rgba(92, 64, 34, 0.24) calc(200% / 3 - 1px),
+      rgba(92, 64, 34, 0.24) calc(200% / 3),
+      rgba(255, 252, 240, 0.55) calc(200% / 3),
+      rgba(255, 252, 240, 0.55) calc(200% / 3 + 1px),
+      transparent calc(200% / 3 + 1px)
+    ),
+    /* cada parte da folha um pouco mais escura perto do vinco de baixo e mais clara logo depois dele */
+    linear-gradient(
+      180deg,
+      transparent 22%,
+      rgba(92, 64, 34, 0.07) calc(100% / 3),
+      rgba(255, 250, 235, 0.2) calc(100% / 3),
+      transparent calc(100% / 3 + 9%),
+      transparent 55%,
+      rgba(92, 64, 34, 0.07) calc(200% / 3),
+      rgba(255, 250, 235, 0.2) calc(200% / 3),
+      transparent calc(200% / 3 + 9%)
+    ),
+    radial-gradient(ellipse 85% 75% at 50% 45%, rgba(255, 251, 238, 0.55), transparent 78%),
+    linear-gradient(180deg, #f1e6cc 0%, #e8d9b6 100%);
+  border-radius: 1px;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.4),
+    inset 0 0 40px rgba(140, 100, 50, 0.22),
+    0 22px 50px -24px rgba(0, 0, 0, 0.95);
+  transform: rotate(-0.6deg);
+}
+
+.carta__data {
+  margin: 0 0 1.4rem;
+  text-align: right;
+  font-size: 1rem;
+}
+
+.carta__assinatura {
+  margin: 1.2rem 0 0;
+  text-align: right;
+  font-family: "Great Vibes", "Fondamento", var(--fonte-texto);
+  font-size: clamp(1.9rem, 4.6vw, 2.5rem);
+  line-height: 1.2;
+  color: #3f2716;
+}
+
+/* -----------------------------------------------------------------
+   Conto e os capítulos do Livro: uma página de livro limpa, com
+   capitular
+   ----------------------------------------------------------------- */
+
+.folha--pagina {
+  color: #2b221a;
+  background:
+    radial-gradient(ellipse 90% 80% at 50% 45%, rgba(255, 253, 246, 0.6), transparent 80%),
+    linear-gradient(90deg, rgba(120, 95, 60, 0.1), transparent 6%, transparent 94%, rgba(120, 95, 60, 0.1)),
+    linear-gradient(180deg, #f3ecdc 0%, #ebe1cb 100%);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.4),
+    inset 0 0 30px rgba(140, 110, 70, 0.14),
+    0 26px 60px -26px rgba(0, 0, 0, 0.95);
+}
+
+.folha--pagina::before {
+  opacity: 0.12;
+}
+
+.folha--pagina .folha__titulo {
+  margin-bottom: 1.6rem;
+  text-align: center;
+}
+
+.folha--pagina .folha__texto {
+  text-align: justify;
+  hyphens: auto;
+}
+
+/* A capitular: a primeira letra em Grenze Gotisch, da altura de três linhas */
+.folha--pagina .folha__texto > p:first-child::first-letter {
+  float: left;
+  margin: 0.04em 0.1em 0 0;
+  font-family: var(--fonte-gotica);
+  font-weight: 500;
+  font-size: 4.4em;
+  line-height: 0.85;
+  color: #3b2a1c;
+}
+
+@supports (initial-letter: 3) or (-webkit-initial-letter: 3) {
+  .folha--pagina .folha__texto > p:first-child::first-letter {
+    float: none;
+    margin: 0 0.12em 0 0;
+    font-size: inherit;
+    line-height: inherit;
+    -webkit-initial-letter: 3;
+    initial-letter: 3;
+  }
+}
+
+/* O ornamento no fim do conto: três losangos (os dos lados vêm da sombra do quadrado girado) */
+.folha--conto .folha__texto::after {
+  content: "";
+  display: block;
+  width: 6px;
+  height: 6px;
+  margin: 2.2rem auto 0.3rem;
+  background: #7a6448;
+  transform: rotate(45deg);
+  box-shadow: -10px 10px 0 -1px #7a6448, 10px -10px 0 -1px #7a6448;
+}
+
+/* -----------------------------------------------------------------
+   Diário: caderno pautado, com a margem vermelha apagada e os cantos
+   gastos. Altura da linha, margens e o padding de cima são múltiplos
+   da pauta, para as linhas acompanharem o texto.
+   ----------------------------------------------------------------- */
+
+.folha--diario {
+  --pauta: 2rem;
+  --margem: 3.1rem; /* onde fica a linha vermelha */
+  padding: calc(var(--pauta) * 2) clamp(1.3rem, 5vw, 3rem) calc(var(--pauta) * 2) calc(var(--margem) + clamp(1rem, 3vw, 1.6rem));
+  font-family: "Fondamento", var(--fonte-texto);
+  font-size: 1.1rem;
+  line-height: var(--pauta);
+  color: #3a2c22;
+  background:
+    /* os cantos gastos, mais escuros */
+    radial-gradient(circle at 0 0, rgba(110, 80, 45, 0.32), transparent 2.6rem),
+    radial-gradient(circle at 100% 0, rgba(110, 80, 45, 0.26), transparent 2.2rem),
+    radial-gradient(circle at 100% 100%, rgba(110, 80, 45, 0.34), transparent 3rem),
+    radial-gradient(circle at 0 100%, rgba(110, 80, 45, 0.26), transparent 2.4rem),
+    /* a margem vermelha apagada */
+    linear-gradient(
+      90deg,
+      transparent var(--margem),
+      rgba(178, 74, 62, 0.34) var(--margem),
+      rgba(178, 74, 62, 0.34) calc(var(--margem) + 1px),
+      transparent calc(var(--margem) + 1px)
+    ),
+    /* as pautas: uma no pé de cada linha, um pouco acima para a letra assentar nela */
+    repeating-linear-gradient(
+      180deg,
+      transparent 0,
+      transparent calc(var(--pauta) - 1px),
+      rgba(92, 116, 146, 0.3) calc(var(--pauta) - 1px),
+      rgba(92, 116, 146, 0.3) var(--pauta)
+    ) 0 -0.4rem,
+    linear-gradient(180deg, #efe7d3 0%, #e6dbc2 100%);
+  border-radius: 3px 12px 5px 16px / 3px 9px 7px 13px;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.4),
+    inset 0 0 30px rgba(120, 90, 50, 0.16),
+    0 24px 54px -26px rgba(0, 0, 0, 0.95);
+}
+
+.diario__data {
+  margin: 0 0 var(--pauta);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+}
+
+.folha--diario .folha__texto p,
+.folha--diario .folha__texto ul,
+.folha--diario .folha__texto ol {
+  margin: 0 0 var(--pauta);
+}
+
+.folha--diario .folha__texto > :last-child {
+  margin-bottom: 0;
+}
+
+/* -----------------------------------------------------------------
+   Recorte: papel de jornal com as bordas de um recorte, levemente
+   torto. O papel fica no ::after, cortado pelo clip-path; a sombra
+   vem do filter da folha, para seguir o recorte.
+   ----------------------------------------------------------------- */
+
+.folha--recorte {
+  --recorte: polygon(
+    0 3px, 6% 0, 11% 2px, 17% 0, 24% 3px, 31% 1px, 38% 4px, 45% 0, 52% 2px, 60% 0, 67% 3px, 74% 1px, 81% 4px, 88% 0, 94% 2px, 100% 0,
+    calc(100% - 3px) 7%, 100% 14%, calc(100% - 2px) 22%, calc(100% - 4px) 30%, 100% 38%, calc(100% - 2px) 47%,
+    calc(100% - 4px) 55%, 100% 63%, calc(100% - 3px) 71%, 100% 79%, calc(100% - 2px) 87%, calc(100% - 4px) 94%,
+    100% 100%, 94% calc(100% - 3px), 87% 100%, 80% calc(100% - 2px), 73% calc(100% - 4px), 66% 100%, 58% calc(100% - 3px),
+    51% calc(100% - 1px), 44% calc(100% - 4px), 37% 100%, 29% calc(100% - 2px), 22% calc(100% - 4px), 15% 100%, 8% calc(100% - 3px), 0 100%,
+    3px 93%, 0 86%, 2px 78%, 4px 70%, 0 62%, 3px 54%, 1px 46%, 4px 38%, 0 30%, 2px 22%, 4px 14%, 1px 7%
+  );
+  padding: clamp(1.6rem, 4.5vw, 2.6rem) clamp(1.2rem, 5vw, 2.8rem) clamp(1.8rem, 5vw, 2.8rem);
+  color: #2b2925;
+  background: none;
+  box-shadow: none;
+  filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.6)) drop-shadow(0 18px 20px rgba(0, 0, 0, 0.6));
+  transform: rotate(0.8deg);
+}
+
+.folha--recorte::before,
+.folha--recorte::after {
+  clip-path: var(--recorte);
+}
+
+.folha--recorte::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(ellipse 85% 70% at 50% 40%, rgba(246, 240, 218, 0.5), transparent 80%),
+    radial-gradient(circle at 86% 88%, rgba(150, 120, 60, 0.18), transparent 30%),
+    linear-gradient(180deg, #dcd3b9 0%, #cfc4a5 100%);
+}
+
+/* O nome do jornal, em letra gótica de jornal, com o fio duplo embaixo */
+.recorte__jornal {
+  margin: 0 0 1rem;
+  padding-bottom: 0.45rem;
+  text-align: center;
+  font-family: "UnifrakturMaguntia", var(--fonte-gotica);
+  font-size: clamp(1.7rem, 4.6vw, 2.4rem);
+  line-height: 1.1;
+  color: #1f1d1a;
+  border-bottom: 3px double rgba(31, 29, 26, 0.75);
+}
+
+.folha--recorte .folha__titulo {
+  margin-bottom: 1rem;
+  text-align: center;
+  font-family: "IM Fell English SC", var(--fonte-texto);
+  font-weight: 400;
+  font-size: clamp(1.45rem, 3.6vw, 1.9rem);
+  line-height: 1.2;
+  color: #1f1d1a;
+}
+
+.folha--recorte .folha__texto {
+  column-count: 2;
+  column-gap: 1.8rem;
+  column-rule: 1px solid rgba(31, 29, 26, 0.28);
+  text-align: justify;
+  hyphens: auto;
+  font-size: 1.02rem;
+  line-height: 1.55;
+}
+
+/* -----------------------------------------------------------------
+   Trecho de livro: página amarelada de livro velho, com o nome da
+   obra no cabeçalho, "…" antes e depois do texto e o número da página
+   ----------------------------------------------------------------- */
+
+.folha--trecho {
+  color: #3a2c1c;
+  background:
+    /* as manchas do tempo */
+    radial-gradient(circle at 18% 22%, rgba(150, 105, 45, 0.14), transparent 9%),
+    radial-gradient(circle at 82% 68%, rgba(150, 105, 45, 0.12), transparent 7%),
+    radial-gradient(circle at 64% 12%, rgba(150, 105, 45, 0.09), transparent 5%),
+    radial-gradient(circle at 30% 85%, rgba(150, 105, 45, 0.1), transparent 6%),
+    /* o papel amarela das bordas para dentro */
+    radial-gradient(ellipse 75% 70% at 50% 48%, transparent 55%, rgba(132, 92, 38, 0.35) 100%),
+    linear-gradient(180deg, #e6d3a6 0%, #dcc592 100%);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.45),
+    inset 0 0 50px rgba(122, 80, 30, 0.3),
+    0 26px 60px -26px rgba(0, 0, 0, 0.95);
+}
+
+/* O cabeçalho corrido: o nome da obra em versalete pequeno */
+.trecho__cabeca {
+  margin: 0 0 1.6rem;
+  padding-bottom: 0.4rem;
+  text-align: center;
+  font-family: "IM Fell English SC", var(--fonte-texto);
+  font-size: 0.92rem;
+  letter-spacing: 0.12em;
+  color: #6b5434;
+  border-bottom: 1px solid rgba(107, 84, 52, 0.4);
+}
+
+.folha--trecho .folha__titulo {
+  margin-bottom: 1rem;
+  font-size: clamp(1.5rem, 3.4vw, 1.9rem);
+}
+
+.folha--trecho .folha__texto {
+  text-align: justify;
+  hyphens: auto;
+}
+
+.folha--trecho .folha__texto > :first-child::before {
+  content: "… ";
+}
+
+.folha--trecho .folha__texto > :last-child::after {
+  content: " …";
+}
+
+.trecho__pagina {
+  display: block;
+  margin-top: 1.8rem;
+  text-align: center;
+  font-size: 0.92rem;
+  font-variant-numeric: oldstyle-nums;
+  color: #6b5434;
+}
+
+/* -----------------------------------------------------------------
+   Livro: a capa de couro com os cantos de ferro dos cards e, abaixo,
+   o índice num pergaminho
+   ----------------------------------------------------------------- */
 
 .capa {
-  margin: 0.8rem 0 2rem;
-  padding: clamp(2rem, 6vw, 3.2rem) 1.2rem;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: min(22rem, 100%);
+  aspect-ratio: 3 / 4;
+  margin: 1rem auto 0;
+  padding: 3rem 2.4rem 3rem 2.8rem;
+  overflow-wrap: anywhere;
   text-align: center;
-  border: 3px double rgba(84, 60, 32, 0.5);
+  background:
+    var(--grao),
+    radial-gradient(ellipse 70% 55% at 55% 35%, rgba(150, 100, 60, 0.22), transparent 70%),
+    /* a lombada: o couro dobra à esquerda */
+    linear-gradient(
+      90deg,
+      rgba(0, 0, 0, 0.55) 0,
+      rgba(0, 0, 0, 0.25) 0.9rem,
+      rgba(255, 220, 180, 0.07) 1.1rem,
+      rgba(0, 0, 0, 0.3) 1.4rem,
+      transparent 2.4rem
+    ),
+    linear-gradient(160deg, #3a2618 0%, #2a1a10 55%, #1d120b 100%);
+  background-blend-mode: overlay, normal, normal, normal;
+  border-radius: 3px 6px 6px 3px;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.7),
+    inset 0 0 40px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 220, 180, 0.08),
+    0 30px 60px -24px rgba(0, 0, 0, 0.95);
+}
+
+/* Os cantos de ferro: a mesma moldura dos cards */
+.capa::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--moldura-card) center / 100% 100% no-repeat;
+  pointer-events: none;
 }
 
 .capa__titulo {
+  position: relative;
   margin: 0;
   font-family: var(--fonte-gotica);
   font-weight: 500;
-  font-size: clamp(2.1rem, 5.4vw, 3rem);
-  line-height: 1.1;
-  color: #2a1f15;
+  font-size: clamp(2.2rem, 6vw, 3.1rem);
+  line-height: 1.08;
+  color: var(--pergaminho);
+  text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.8), 0 1px 0 rgba(255, 230, 190, 0.12), 0 4px 18px rgba(0, 0, 0, 0.7);
+}
+
+.folha--indice {
+  margin-top: 1.8rem;
 }
 
 .indice__titulo {
@@ -372,10 +809,11 @@
 }
 
 .folha__capitulo {
-  margin: 1rem 0 0;
+  margin: 0;
   font-size: 0.86rem;
   letter-spacing: 0.16em;
   text-transform: uppercase;
+  text-align: center;
   color: #6f5b41;
 }
 
@@ -419,6 +857,180 @@
   text-align: right;
 }
 
+/* -----------------------------------------------------------------
+   Poema ou canção: um rolo de pergaminho, com os versos centralizados
+   e um losango entre as estrofes
+   ----------------------------------------------------------------- */
+
+.folha--poema {
+  padding-top: clamp(2.6rem, 6vw, 4rem);
+  padding-bottom: clamp(2.8rem, 6vw, 4.2rem);
+  text-align: center;
+  background:
+    /* as bordas enroladas do rolo, no alto e embaixo */
+    linear-gradient(180deg, #a98a5c 0, #d9c7a0 0.35rem, #efe4c9 0.7rem, #c9b083 1.1rem, rgba(201, 176, 131, 0) 1.6rem),
+    linear-gradient(0deg, #a98a5c 0, #d9c7a0 0.35rem, #efe4c9 0.7rem, #c9b083 1.1rem, rgba(201, 176, 131, 0) 1.6rem),
+    var(--papel-pergaminho);
+}
+
+.folha--poema .folha__texto {
+  font-style: italic;
+}
+
+.folha--poema .folha__texto > * {
+  margin: 0;
+}
+
+.folha--poema .folha__texto ul,
+.folha--poema .folha__texto ol {
+  padding-left: 0;
+  list-style-position: inside;
+}
+
+.folha--poema .folha__texto > * + *::before {
+  content: "";
+  display: block;
+  width: 6px;
+  height: 6px;
+  margin: 1.1rem auto 1.2rem;
+  background: rgba(106, 82, 52, 0.65);
+  transform: rotate(45deg);
+}
+
+/* -----------------------------------------------------------------
+   Documento: papel oficial claro com borda dupla, o título em caixa
+   alta, o "Emitido por" e um selo de cera no fim
+   ----------------------------------------------------------------- */
+
+.folha--documento {
+  padding: clamp(2.6rem, 6vw, 4rem) clamp(1.8rem, 7vw, 4.4rem) clamp(2.4rem, 6vw, 3.6rem);
+  color: #26221d;
+  background:
+    radial-gradient(ellipse 85% 75% at 50% 45%, rgba(255, 255, 250, 0.6), transparent 80%),
+    linear-gradient(180deg, #f2eee3 0%, #e7e1d2 100%);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.4),
+    inset 0 0 40px rgba(110, 100, 80, 0.18),
+    0 26px 60px -26px rgba(0, 0, 0, 0.95);
+}
+
+.folha--documento::before {
+  opacity: 0.14;
+}
+
+/* A borda dupla, por dentro da folha */
+.folha--documento::after {
+  content: "";
+  position: absolute;
+  inset: clamp(0.5rem, 1.6vw, 0.8rem);
+  border: 3px double rgba(60, 52, 40, 0.55);
+  pointer-events: none;
+}
+
+.folha--documento .folha__titulo {
+  margin-bottom: 1.6rem;
+  text-align: center;
+  font-family: "Cinzel Decorative", var(--fonte-texto);
+  font-weight: 400;
+  font-size: clamp(1.3rem, 3.4vw, 1.75rem);
+  line-height: 1.3;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #26221d;
+}
+
+.documento__data {
+  margin: -1.1rem 0 1.6rem;
+  text-align: center;
+  font-size: 0.98rem;
+  font-style: italic;
+  color: #5a5045;
+}
+
+.folha--documento .folha__texto {
+  text-align: justify;
+  hyphens: auto;
+}
+
+.documento__emissor {
+  margin: 2rem 0 0;
+  text-align: center;
+  letter-spacing: 0.04em;
+}
+
+/* -----------------------------------------------------------------
+   Inscrição: uma pedra cinza-escura de bordas lascadas, com o texto
+   gravado. Como no Recorte, a pedra fica no ::after e a sombra vem
+   do filter. O "Onde está gravada" fica abaixo, fora da pedra.
+   ----------------------------------------------------------------- */
+
+.folha--inscricao {
+  --recorte: polygon(
+    0 9px, 9px 0, 22% 0, 25% 5px, 29% 0, 71% 0, 76% 3px, calc(100% - 14px) 0, 100% 11px,
+    100% 38%, calc(100% - 6px) 43%, 100% 49%, 100% calc(100% - 16px), calc(100% - 9px) 100%,
+    64% 100%, 60% calc(100% - 6px), 55% 100%, 12px 100%, 0 calc(100% - 10px),
+    0 68%, 5px 63%, 0 58%
+  );
+  margin-top: 1.2rem;
+  padding: clamp(2.2rem, 6vw, 3.6rem) clamp(1.4rem, 6vw, 3.4rem);
+  text-align: center;
+  font-family: "Cinzel Decorative", var(--fonte-texto);
+  font-size: clamp(1.02rem, 2.6vw, 1.22rem);
+  line-height: 1.8;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #cfc8bc;
+  /* letra gravada: a luz pega embaixo do sulco e a sombra fica em cima */
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.16), 0 -1px 0 rgba(0, 0, 0, 0.75);
+  background: none;
+  box-shadow: none;
+  filter: drop-shadow(0 20px 24px rgba(0, 0, 0, 0.7));
+}
+
+.folha--inscricao::before,
+.folha--inscricao::after {
+  clip-path: var(--recorte);
+}
+
+/* O grão, mais forte, vira a textura da pedra */
+.folha--inscricao::before {
+  opacity: 0.55;
+  mix-blend-mode: soft-light;
+}
+
+.folha--inscricao::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(circle at 22% 30%, rgba(255, 255, 255, 0.05), transparent 25%),
+    radial-gradient(circle at 75% 70%, rgba(0, 0, 0, 0.25), transparent 30%),
+    radial-gradient(circle at 60% 20%, rgba(0, 0, 0, 0.18), transparent 22%),
+    radial-gradient(ellipse 80% 70% at 45% 40%, rgba(120, 118, 112, 0.35), transparent 80%),
+    linear-gradient(160deg, #4b4945 0%, #3a3835 50%, #2e2c2a 100%);
+}
+
+.folha--inscricao .mencao {
+  color: #ebe4d7;
+  text-decoration-color: rgba(235, 228, 215, 0.45);
+}
+
+.folha--inscricao .mencao:hover {
+  color: #fff8ec;
+}
+
+.folha--inscricao .mencao:focus-visible {
+  outline-color: var(--pergaminho);
+}
+
+.inscricao__lugar {
+  margin: 1rem 0 0;
+  text-align: center;
+  font-style: italic;
+  color: var(--pergaminho-apagado);
+}
+
 /* =================================================================
    Celular
    ================================================================= */
@@ -435,6 +1047,30 @@
 
   .folha {
     font-size: 1.06rem;
+  }
+
+  /* Sem inclinação e sem colunas; as margens diminuem */
+  .folha--carta,
+  .folha--recorte {
+    transform: none;
+  }
+
+  .folha--recorte .folha__texto {
+    column-count: 1;
+  }
+
+  .folha--diario {
+    --margem: 1.9rem;
+    padding-right: 1rem;
+    padding-left: calc(var(--margem) + 0.9rem);
+  }
+
+  .folha--documento::after {
+    inset: 0.45rem;
+  }
+
+  .capa {
+    padding: 2.6rem 1.6rem 2.6rem 2.2rem;
   }
 
   /* As setas lado a lado e o "Índice" embaixo, no meio */
