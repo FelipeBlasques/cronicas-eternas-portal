@@ -525,7 +525,6 @@ function criarSecao(campanha, personagens, ehAdmin) {
     const acoes = criar("div", "campanha__acoes");
     acoes.append(
       botao("Tirar da página", "botao--leve", () => tirarDaPagina(campanha)),
-      botao("Entrar no mundo", "botao--leve", () => entrarNoMundo(campanha, null)),
       botao("Entrar como Mestre", "botao--principal botao--pequeno", () => entrarComoMestre(campanha)),
     );
     topo.append(acoes);
