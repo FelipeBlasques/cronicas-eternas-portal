@@ -321,7 +321,7 @@ function criarApiDePrevia() {
 
   // As mesmas conferências e mensagens do servidor/memorias.js
   const ANO_ATUAL = 366; // o ano atual da prévia da Linha do Tempo
-  const LIMITES = { memorias: 500, capitulos: 80, texto: 40000, livro: 400000, link: 120 };
+  const LIMITES = { memorias: 500, capitulos: 80, texto: 100000, livro: 1000000, link: 120 };
 
   function exigirAdmin() {
     if (!contaEhAdmin()) throw erroComCodigo("Só o administrador pode fazer isso.", "proibido");
@@ -990,7 +990,7 @@ function opcoesDeDia(seletor, valor) {
 }
 
 // Um capítulo no formulário: o número, as setas e o "Remover" no alto; depois o título e o texto,
-// com o "Citar" acima dele
+// com o "Importar .md" e o "Citar" acima dele
 function campoDoCapitulo({ titulo = "", texto = "" } = {}) {
   const item = criar("li", "capitulo-form");
   const subir = botao("↑", "botao--leve capitulo-form__seta", () => moverCapitulo(item, -1));
@@ -1017,7 +1017,14 @@ function campoDoCapitulo({ titulo = "", texto = "" } = {}) {
   const rotulo = criar("label", "campo__rotulo", "Texto");
   rotulo.htmlFor = area.id;
   const cabecaDoTexto = criar("div", "campo__cabeca");
-  cabecaDoTexto.append(rotulo, botao("Citar", "botao--leve botao--pequeno botao-citar", () => abrirCitar(area)));
+  const botoes = criar("div", "campo__botoes");
+  botoes.append(
+    botao("Importar .md", "botao--leve botao--pequeno botao-importar", () =>
+      escolherArquivos(false, (arquivos) => importarNoCapitulo(item, arquivos)),
+    ),
+    botao("Citar", "botao--leve botao--pequeno botao-citar", () => abrirCitar(area)),
+  );
+  cabecaDoTexto.append(rotulo, botoes);
   const campoTexto = criar("div", "campo");
   campoTexto.append(cabecaDoTexto, area);
 
@@ -1040,8 +1047,10 @@ function numerarCapitulos() {
     descer.setAttribute("aria-label", `Descer o capítulo ${n}`);
     remover.setAttribute("aria-label", `Remover o capítulo ${n}`);
     item.querySelector(".botao-citar").setAttribute("aria-label", `Citar no capítulo ${n}`);
+    item.querySelector(".botao-importar").setAttribute("aria-label", `Importar .md no capítulo ${n}`);
   });
   $("#botao-mais-capitulo").disabled = itens.length >= LIMITE_DE_CAPITULOS;
+  $("#importar-capitulos").disabled = itens.length >= LIMITE_DE_CAPITULOS;
 }
 
 function mostrarCapitulos(capitulos) {
@@ -1257,6 +1266,359 @@ function configurarEdicao() {
   $("#memoria-apagar").addEventListener("click", apagarMemoria);
   $("#botao-mais-capitulo").addEventListener("click", adicionarCapitulo);
   $("#citar-texto").addEventListener("click", () => abrirCitar(form.texto));
+  $("#importar-texto").addEventListener("click", () => escolherArquivos(false, importarNoTexto));
+  $("#importar-capitulos").addEventListener("click", () => escolherArquivos(true, importarCapitulos));
+  const escolha = $("#arquivo-md");
+  escolha.addEventListener("change", () => {
+    const arquivos = [...escolha.files];
+    if (arquivos.length) importacao.aoEscolher?.(arquivos);
+  });
+}
+
+/* =================================================================
+   Importar .md
+   -----------------------------------------------------------------
+   O texto de um arquivo .md (exportado do Word ou do Google Docs)
+   vai para o formulário: na memória, no capítulo, ou em capítulos
+   novos, um por arquivo. Tudo acontece aqui no navegador; nada vai
+   para o servidor até "Escrever" ou "Salvar".
+   ================================================================= */
+
+const LIMITE_DO_ARQUIVO = 5 * 1024 * 1024; // 5 MB
+const LIMITE_DO_TEXTO = 100000; // cada texto e cada capítulo, como no servidor
+const LIMITE_DO_LIVRO = 1000000; // o livro inteiro, como no servidor
+const TITULO_AUTOMATICO = "Capítulo 1"; // o que a troca para Livro põe no primeiro capítulo
+
+const milhar = (n) => n.toLocaleString("pt-BR");
+
+// O Markdown no texto do portal, que só conhece **negrito**, *itálico*, parágrafos, listas com
+// "- " ou "1. " e os links [[evento:...|...]] e [[personagem:...|...]]. Nenhuma palavra se perde:
+// o resto das marcas sai e o texto fica. No Poema (versos), cada linha fica como está.
+// Se o arquivo começa com "# Título" ou "## Título", ele sai do texto e volta como "titulo".
+function textoDoMarkdown(md, { versos = false } = {}) {
+  // O que não pode ser mexido no caminho (os links do portal, o código, os caracteres
+  // escapados) fica guardado num sinal n e volta no fim
+  const guardados = [];
+  const guardar = (texto) => `${guardados.push(texto) - 1}`;
+  const devolver = (texto) => texto.replace(/(\d+)/g, (_, i) => devolver(guardados[i]));
+  const semEscapes = (texto) => texto.replace(/\\([!-\/:-@\[-`{-~])/g, "$1");
+
+  // Negrito e itálico nas marcas do portal, que não põe um dentro do outro: o de dentro sai.
+  // ***x*** vira negrito. Sem ênfase (nos títulos), as marcas saem todas.
+  function enfase(texto, semEnfase) {
+    const [N, n, I, i] = ["", "", "", ""];
+    const marcado = texto
+      .replace(/\*\*\*(?=\S)(.*?\S)\*\*\*/g, `${N}$1${n}`)
+      .replace(/(?<![\p{L}\p{N}_])___(?=\S)(.*?\S)___(?![\p{L}\p{N}_])/gu, `${N}$1${n}`)
+      .replace(/\*\*(?=\S)(.*?\S)\*\*/g, `${N}$1${n}`)
+      .replace(/(?<![\p{L}\p{N}_])__(?=\S)(.*?\S)__(?![\p{L}\p{N}_])/gu, `${N}$1${n}`)
+      .replace(/\*(?=\S)(.*?\S)\*/g, `${I}$1${i}`)
+      .replace(/(?<![\p{L}\p{N}_])_(?=\S)(.*?\S)_(?![\p{L}\p{N}_])/gu, `${I}$1${i}`);
+    let saida = "";
+    let aberta = null; // a marca de fora, a única que fica
+    let dentro = 0; // quantas iguais a ela abriram lá dentro
+    for (const c of marcado) {
+      if (c === N || c === I) {
+        if (!aberta) {
+          aberta = c;
+          if (!semEnfase) saida += c === N ? "**" : "*";
+        } else if (c === aberta) dentro++;
+      } else if (c === n || c === i) {
+        if ((c === n ? N : I) !== aberta) continue;
+        if (dentro) dentro--;
+        else {
+          aberta = null;
+          if (!semEnfase) saida += c === n ? "**" : "*";
+        }
+      } else saida += c;
+    }
+    return saida;
+  }
+
+  // Uma linha (ou um parágrafo já numa linha só) com as marcas de dentro do texto
+  function emLinha(texto, semEnfase = false) {
+    const limpo = texto
+      .replace(/\\([!-\/:-@\[-`{-~])/g, (_, c) => guardar(c)) // \* \_ \# ...: o caractere sem a barra
+      .replace(/(?<!`)(`+)(?!`)(.*?[^`])\1(?!`)/g, (_, __, codigo) => guardar(codigo.trim())) // `código`
+      .replace(/!\[[^\]]*\](?:\((?:[^()]|\([^()]*\))*\)|\[[^\]]*\])?/g, "") // imagens
+      .replace(/\[([^\]]*)\](?:\((?:[^()]|\([^()]*\))*\)|\[[^\]]*\])/g, "$1") // [texto](endereço) e [texto][ref]
+      .replace(/<([a-z][a-z\d+.-]{1,31}:[^<>\s]*)>/gi, (_, endereco) => guardar(endereco)) // <http://...>
+      .replace(/<!--.*?-->/g, "")
+      .replace(/<br\s*\/?>/gi, " ")
+      .replace(/<\/?[a-z][a-z\d-]*(?:\s[^<>]*)?\/?>/gi, "") // outras marcas HTML
+      .replace(/~~(?=\S)(.*?\S)~~/g, "$1"); // riscado
+    return devolver(enfase(limpo, semEnfase)).replace(/[ \t]+/g, " ").trim();
+  }
+
+  // Os links do portal ficam como estão: sem as barras que o Google Docs põe nos colchetes e,
+  // se o texto quebrou no meio de um, numa linha só
+  const fonte = String(md)
+    .replace(/^﻿/, "")
+    .replace(/\r\n?/g, "\n")
+    .replace(/\t/g, "    ")
+    .replace(
+      /\\?\[\\?\[(evento|personagem):((?:\\.|[^\s|\]\\])+)\\?\|((?:(?!\n[ \t]*\n)[^\]])*?)\\?\]\\?\]/g,
+      (_, alvo, id, aparece) => guardar(`[[${alvo}:${semEscapes(id)}|${semEscapes(aparece).replace(/\s*\n\s*/g, " ")}]]`),
+    );
+  // As linhas de referência ([image1]: <data:...>, [ref]: endereço) saem
+  const linhas = fonte
+    .split("\n")
+    .filter((linha) => !/^ {0,3}\[[^\]\n]+\]:[ \t]*(?:<[^>\n]*>|\S+)(?:[ \t]+(?:"[^"\n]*"|'[^'\n]*'|\([^)\n]*\)))?[ \t]*$/.test(linha));
+  const tirarCitacao = (linha) => linha.replace(/^(?: {0,3}> ?)+/, "");
+  const temBarra = (linha) => /(^|[^\\])\|/.test(linha);
+  const ehDivisa = (linha) => /^ *\|?(?: *:?-+:? *\|)+(?: *:?-+:? *)?$/.test(linha);
+  const celulas = (linha) =>
+    linha
+      .replace(/^\|/, "")
+      .replace(/(^|[^\\])\|$/, "$1")
+      .split(/(?<!\\)\|/);
+
+  // Os blocos: parágrafo (com as linhas que ficam), lista, tabela, título, separador e código.
+  // Uma citação ("> ") só separa o que vem antes e depois dela.
+  const blocos = [];
+  let bloco = null; // o bloco aberto, que ainda recebe linhas
+  let cerca = ""; // dentro de um bloco de código, a cerca que o fecha
+  const novo = (tipo, citacao = false) => blocos.push((bloco = { tipo, citacao, partes: [] }));
+
+  for (let l = 0; l < linhas.length; l++) {
+    if (cerca) {
+      const fim = linhas[l].trim();
+      if (fim.length >= cerca.length && fim === cerca[0].repeat(fim.length)) {
+        cerca = "";
+        bloco = null;
+      } else bloco.partes.push(linhas[l]);
+      continue;
+    }
+    const linha = tirarCitacao(linhas[l]);
+    const citacao = linha.length < linhas[l].length;
+    const conteudo = linha.trim();
+    if (!conteudo) {
+      // Na lista, a linha em branco não fecha: um item do mesmo tipo logo depois continua nela
+      if (bloco?.tipo === "lista") bloco.pausa = true;
+      else bloco = null;
+      continue;
+    }
+    if (bloco && bloco.citacao !== citacao) bloco = null;
+
+    const abertura = conteudo.match(/^(`{3,})[^`]*$|^(~{3,})/);
+    if (abertura) {
+      cerca = abertura[1] || abertura[2];
+      novo("codigo");
+      continue;
+    }
+    if (/^([-*_])(?:[ \t]*\1){2,}$/.test(conteudo)) {
+      bloco = null;
+      blocos.push({ tipo: "separador" });
+      continue;
+    }
+    const titulo = conteudo.match(/^(#{1,6})(?:[ \t]+(.*?))?(?:[ \t]+#+)?$/);
+    if (titulo) {
+      bloco = null;
+      blocos.push({ tipo: "titulo", nivel: titulo[1].length, partes: [titulo[2] ?? ""] });
+      continue;
+    }
+    if (bloco?.tipo === "tabela" && temBarra(conteudo)) {
+      if (!ehDivisa(conteudo)) bloco.partes.push(celulas(conteudo));
+      continue;
+    }
+    if (temBarra(conteudo) && l + 1 < linhas.length && ehDivisa(tirarCitacao(linhas[l + 1]).trim())) {
+      novo("tabela", citacao);
+      bloco.partes.push(celulas(conteudo));
+      l++;
+      continue;
+    }
+
+    // A quebra forçada no fim da linha: dois espaços, "\" ou <br>
+    const forcada = / {2}$/.test(linha) || /(^|[^\\])(\\\\)*\\$/.test(conteudo) || /<br\s*\/?>$/i.test(conteudo);
+    const texto = conteudo.replace(/(^|[^\\])((?:\\\\)*)\\$/, "$1$2").replace(/<br\s*\/?>$/i, "");
+    const item = texto.match(/^(?:([-*+])|(\d{1,9})[.)])[ \t]+(.*)$/);
+    if (item) {
+      const numerada = Boolean(item[2]);
+      if (bloco?.tipo !== "lista" || bloco.numerada !== numerada) {
+        novo("lista", citacao);
+        bloco.numerada = numerada;
+      }
+      bloco.pausa = false;
+      bloco.partes.push({ marca: numerada ? `${Number(item[2])}. ` : "- ", texto: item[3] });
+      continue;
+    }
+    // Uma linha que continua o item de cima junta-se a ele: o item não tem quebra de linha
+    if (bloco?.tipo === "lista" && !bloco.pausa) {
+      bloco.partes.at(-1).texto += ` ${texto}`;
+      continue;
+    }
+    if (bloco?.tipo !== "paragrafo") {
+      novo("paragrafo", citacao);
+      bloco.quebrar = true;
+    }
+    // As linhas se juntam com um espaço; ficam separadas na quebra forçada e no Poema
+    texto.split(/<br\s*\/?>/i).forEach((pedaco, p) => {
+      if (p === 0 && !bloco.quebrar && !versos) bloco.partes[bloco.partes.length - 1] += ` ${pedaco}`;
+      else bloco.partes.push(pedaco);
+    });
+    bloco.quebrar = forcada;
+  }
+
+  // Cada bloco no texto do portal; o que ficou vazio (uma imagem, por exemplo) sai
+  const pedacos = [];
+  for (const b of blocos) {
+    let texto = "";
+    let simples = null; // o título sem marcas, para o caso de ser o título do arquivo
+    if (b.tipo === "paragrafo") texto = b.partes.map((p) => emLinha(p)).filter(Boolean).join("\n");
+    else if (b.tipo === "lista") {
+      texto = b.partes
+        .map(({ marca, texto: item }) => {
+          const convertido = emLinha(item);
+          return convertido && marca + convertido;
+        })
+        .filter(Boolean)
+        .join("\n");
+    } else if (b.tipo === "tabela") {
+      texto = b.partes
+        .map((linha) => linha.map((c) => emLinha(c)).filter(Boolean).join(" · "))
+        .filter(Boolean)
+        .join("\n");
+    } else if (b.tipo === "titulo") {
+      simples = emLinha(b.partes[0], true);
+      texto = simples && `**${simples}**`;
+    } else if (b.tipo === "separador") texto = "⁂";
+    else if (b.tipo === "codigo") {
+      texto = b.partes
+        .map((linha) => devolver(linha).replace(/[ \t]+/g, " ").trim())
+        .join("\n")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim();
+    }
+    if (texto) pedacos.push({ texto, titulo: b.tipo === "titulo" && b.nivel <= 2 ? simples : null });
+  }
+
+  // Um título comprido demais para o campo não é o título do arquivo: fica no texto
+  const titulo = pedacos[0]?.titulo && pedacos[0].titulo.length <= 120 ? pedacos.shift().titulo : "";
+  return { titulo, texto: pedacos.map((p) => p.texto).join("\n\n") };
+}
+
+// Lê como UTF-8 (o TextDecoder já tira o BOM do começo). Com algum caractere que não deu
+// para ler, lê de novo como windows-1252, como o Word às vezes salva.
+async function lerArquivoDeTexto(arquivo) {
+  const bytes = await arquivo.arrayBuffer();
+  const texto = new TextDecoder("utf-8").decode(bytes);
+  return texto.includes("�") ? new TextDecoder("windows-1252").decode(bytes) : texto;
+}
+
+// "03 - O cerco.md" vira "O cerco": sem a extensão e sem a numeração do começo
+const tituloDoNome = (nome) =>
+  nome
+    .replace(/\.[^.]*$/, "")
+    .replace(/^\s*\d+\s*[-_.)]\s*/, "")
+    .trim()
+    .slice(0, 120)
+    .trim();
+
+// Lê e converte um arquivo. Todo motivo para não importar vira um erro com a mensagem.
+async function converterArquivo(arquivo, versos) {
+  const nome = arquivo.name;
+  if (arquivo.size > LIMITE_DO_ARQUIVO) throw new Error(`O arquivo ${nome} passa de 5 MB.`);
+  const { titulo, texto } = textoDoMarkdown(await lerArquivoDeTexto(arquivo), { versos });
+  if (!texto) throw new Error(`O arquivo ${nome} não tem texto para importar.`);
+  if (texto.length > LIMITE_DO_TEXTO) {
+    throw new Error(`O arquivo ${nome} tem ${milhar(texto.length)} caracteres; o limite é ${milhar(LIMITE_DO_TEXTO)}.`);
+  }
+  return { nome, titulo, texto };
+}
+
+function conferirLivro(capitulos, caracteres) {
+  if (capitulos > LIMITE_DE_CAPITULOS) {
+    throw new Error(`O livro pode ter no máximo ${LIMITE_DE_CAPITULOS} capítulos, e ficaria com ${capitulos}.`);
+  }
+  if (caracteres > LIMITE_DO_LIVRO) {
+    throw new Error(`O livro inteiro pode ter no máximo ${milhar(LIMITE_DO_LIVRO)} caracteres, e ficaria com ${milhar(caracteres)}.`);
+  }
+}
+
+const textoDoItem = (item) => item.querySelector(".capitulo-form__texto").value.trim();
+const caracteresDe = (itens) => itens.reduce((soma, item) => soma + textoDoItem(item).length, 0);
+
+// O título do capítulo conta como vazio quando está em branco, ou quando é o "Capítulo 1"
+// automático de um capítulo ainda sem texto
+function tituloLivre(item) {
+  const titulo = item.querySelector(".capitulo-form__titulo").value.trim();
+  return !titulo || (titulo === TITULO_AUTOMATICO && !textoDoItem(item));
+}
+
+// Com texto na área, pergunta antes de trocar
+async function podeTrocar(area) {
+  if (!area.value.trim()) return true;
+  return perguntar({
+    titulo: "Trocar o texto atual pelo do arquivo?",
+    texto: "O texto que está no formulário dá lugar ao do arquivo. Nada muda até você salvar a memória.",
+    confirmar: "Trocar",
+    cancelar: "Não",
+    perigo: true,
+  });
+}
+
+// Os botões "Importar" usam a mesma escolha de arquivo, escondida no formulário;
+// cada um diz o que fazer com o que for escolhido
+const importacao = { aoEscolher: null };
+
+function escolherArquivos(varios, aoEscolher) {
+  const escolha = $("#arquivo-md");
+  escolha.multiple = varios;
+  escolha.value = "";
+  importacao.aoEscolher = aoEscolher;
+  escolha.click();
+}
+
+// Nas memórias que não são Livro: o texto e, se estiver vazio, o título
+async function importarNoTexto([arquivo]) {
+  const form = formMemoria();
+  try {
+    const { nome, titulo, texto } = await converterArquivo(arquivo, form.tipo.value === "poema");
+    if (!(await podeTrocar(form.texto))) return;
+    form.texto.value = texto;
+    if (titulo && !form.titulo.value.trim()) form.titulo.value = titulo;
+    avisoRapido(`Texto importado de ${nome}.`);
+  } catch (falha) {
+    avisarFalha(falha);
+  }
+}
+
+// Num capítulo: o texto e, se o título estiver vazio, o do arquivo ou o nome dele
+async function importarNoCapitulo(item, [arquivo]) {
+  const area = item.querySelector(".capitulo-form__texto");
+  try {
+    const { nome, titulo, texto } = await converterArquivo(arquivo, false);
+    const outros = [...$("#lista-capitulos").children].filter((outro) => outro !== item);
+    conferirLivro(outros.length + 1, caracteresDe(outros) + texto.length);
+    const livre = tituloLivre(item);
+    if (!(await podeTrocar(area))) return;
+    area.value = texto;
+    if (livre) item.querySelector(".capitulo-form__titulo").value = titulo || tituloDoNome(nome);
+    avisoRapido(`Texto importado de ${nome}.`);
+  } catch (falha) {
+    avisarFalha(falha);
+  }
+}
+
+// Vários arquivos, um capítulo novo para cada, no fim e na ordem dos nomes ("2" antes de "10").
+// Entram todos ou nenhum. Um livro só com um capítulo vazio dá lugar aos importados.
+async function importarCapitulos(arquivos) {
+  const lista = $("#lista-capitulos");
+  try {
+    const ordenados = [...arquivos].sort((a, b) => a.name.localeCompare(b.name, "pt-BR", { numeric: true }));
+    const novos = [];
+    for (const arquivo of ordenados) novos.push(await converterArquivo(arquivo, false));
+    const itens = [...lista.children];
+    const trocarOVazio = itens.length === 1 && !textoDoItem(itens[0]) && tituloLivre(itens[0]);
+    const ficam = trocarOVazio ? [] : itens;
+    conferirLivro(ficam.length + novos.length, caracteresDe(ficam) + novos.reduce((soma, c) => soma + c.texto.length, 0));
+    if (trocarOVazio) itens[0].remove();
+    lista.append(...novos.map(({ nome, titulo, texto }) => campoDoCapitulo({ titulo: titulo || tituloDoNome(nome), texto })));
+    numerarCapitulos();
+    avisoRapido(novos.length === 1 ? "1 capítulo importado." : `${novos.length} capítulos importados.`);
+  } catch (falha) {
+    avisarFalha(falha);
+  }
 }
 
 /* =================================================================

@@ -27,7 +27,7 @@ const TIPOS = new Map([
   ["inscricao", "Onde está gravada"],
 ]);
 const LIMITES = { memorias: 500, capitulos: 80, texto: 100000, livro: 1000000, link: 120 };
-const LIMITE_JSON = 1024 * 1024; // o padrão de 64 KB não cabe um livro inteiro
+const LIMITE_JSON = 4 * 1024 * 1024; // um livro inteiro, com acentos, passa de 1 MB
 
 // Uma menção no texto: [[evento:<id>|o que aparece]] ou [[personagem:<id>|o que aparece]]
 const REGEX_LINK = /\[\[(evento|personagem):([^\]|\n]+)\|([^\]\n]*)\]\]/g;

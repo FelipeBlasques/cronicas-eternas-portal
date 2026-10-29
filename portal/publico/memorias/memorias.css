@@ -1127,7 +1127,15 @@
   gap: 0.2rem 1rem;
 }
 
-.botao-citar {
+/* O "Importar .md" e o "Citar", juntos à direita do rótulo */
+.campo__botoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem 1rem;
+}
+
+.botao-citar,
+.botao-importar {
   padding-top: 0.15rem;
   padding-bottom: 0.15rem;
 }
@@ -1192,8 +1200,11 @@
   cursor: default;
 }
 
-.capitulos-form__mais {
-  justify-self: start;
+/* O "+ Capítulo" e o "Importar capítulos (.md)" */
+.capitulos-form__botoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem 1.5rem;
 }
 
 /* Apagar fica à esquerda, longe de Salvar */

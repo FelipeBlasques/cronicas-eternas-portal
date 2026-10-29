@@ -127,7 +127,10 @@
         <div id="grupo-texto" class="campo">
           <div class="campo__cabeca">
             <label class="campo__rotulo" for="campo-texto">Texto</label>
-            <button id="citar-texto" class="botao botao--leve botao--pequeno botao-citar" type="button">Citar</button>
+            <div class="campo__botoes">
+              <button id="importar-texto" class="botao botao--leve botao--pequeno botao-importar" type="button">Importar .md</button>
+              <button id="citar-texto" class="botao botao--leve botao--pequeno botao-citar" type="button">Citar</button>
+            </div>
           </div>
           <textarea id="campo-texto" name="texto" rows="14" maxlength="100000"></textarea>
         </div>
@@ -136,8 +139,14 @@
         <fieldset id="grupo-capitulos" class="grupo" hidden>
           <legend class="campo__rotulo">Capítulos</legend>
           <ol id="lista-capitulos" class="capitulos-form"></ol>
-          <button id="botao-mais-capitulo" class="botao botao--leve capitulos-form__mais" type="button">+ Capítulo</button>
+          <div class="capitulos-form__botoes">
+            <button id="botao-mais-capitulo" class="botao botao--leve capitulos-form__mais" type="button">+ Capítulo</button>
+            <button id="importar-capitulos" class="botao botao--leve capitulos-form__mais" type="button">Importar capítulos (.md)</button>
+          </div>
         </fieldset>
+
+        <!-- A escolha de arquivo que os botões "Importar" abrem -->
+        <input id="arquivo-md" type="file" accept=".md,.markdown,.txt,text/markdown,text/plain" hidden>
 
         <div class="memoria-form__ajuda">
           <p class="campo__ajuda">Use **negrito** e *itálico*. Uma linha em branco separa parágrafos; linhas que começam com "- " ou "1. " viram lista. No Poema, cada linha é um verso e a linha em branco separa as estrofes.</p>
