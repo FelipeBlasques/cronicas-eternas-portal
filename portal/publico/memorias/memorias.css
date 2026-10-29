@@ -249,13 +249,16 @@
    A folha: papel claro, tinta escura
    -----------------------------------------------------------------
    O papel padrão é o pergaminho (Poema e índice do Livro); cada
-   classificação troca o papel logo abaixo.
+   classificação troca o papel (--papel) logo abaixo. Na tela, ele é
+   o fundo da folha; no PDF, cobre cada página (veja o @media print
+   no fim).
    ================================================================= */
 
 .folha {
   --papel-pergaminho:
     radial-gradient(ellipse 80% 70% at 50% 42%, rgba(255, 250, 236, 0.5), transparent 75%),
     linear-gradient(180deg, #eadfc6 0%, #dfcfac 100%);
+  --papel: var(--papel-pergaminho);
   position: relative;
   margin-top: 1rem;
   padding: clamp(1.8rem, 5vw, 3.4rem) clamp(1.3rem, 6vw, 4rem) clamp(2rem, 5vw, 3.6rem);
@@ -263,7 +266,7 @@
   font-size: 1.12rem;
   line-height: 1.7;
   color: #2f251b;
-  background: var(--papel-pergaminho);
+  background: var(--papel);
   border-radius: 2px;
   box-shadow:
     0 0 0 1px rgba(0, 0, 0, 0.45),
@@ -313,6 +316,12 @@
 
 .folha__texto strong {
   font-weight: 700;
+}
+
+/* O que só aparece no PDF: na Carta e no Diário, o título dentro da folha; no capítulo, o
+   nome do livro no pé */
+.so-no-pdf {
+  display: none;
 }
 
 /* As menções: links para a Linha do Tempo e os Personagens, em tinta mais escura */
@@ -398,8 +407,9 @@
   font-size: 1.16rem;
   line-height: 1.75;
   color: #4b3220;
-  background:
-    /* as dobras, a 1/3 e a 2/3 da altura: o vinco escuro e a luz logo embaixo */
+  /* as dobras ficam à parte: no PDF, elas não se repetem em cada página */
+  --dobras:
+    /* a 1/3 e a 2/3 da altura: o vinco escuro e a luz logo embaixo */
     linear-gradient(
       180deg,
       transparent calc(100% / 3 - 1px),
@@ -426,9 +436,11 @@
       rgba(92, 64, 34, 0.07) calc(200% / 3),
       rgba(255, 250, 235, 0.2) calc(200% / 3),
       transparent calc(200% / 3 + 9%)
-    ),
+    );
+  --papel:
     radial-gradient(ellipse 85% 75% at 50% 45%, rgba(255, 251, 238, 0.55), transparent 78%),
     linear-gradient(180deg, #f1e6cc 0%, #e8d9b6 100%);
+  background: var(--dobras), var(--papel);
   border-radius: 1px;
   box-shadow:
     0 0 0 1px rgba(0, 0, 0, 0.4),
@@ -459,7 +471,7 @@
 
 .folha--pagina {
   color: #2b221a;
-  background:
+  --papel:
     radial-gradient(ellipse 90% 80% at 50% 45%, rgba(255, 253, 246, 0.6), transparent 80%),
     linear-gradient(90deg, rgba(120, 95, 60, 0.1), transparent 6%, transparent 94%, rgba(120, 95, 60, 0.1)),
     linear-gradient(180deg, #f3ecdc 0%, #ebe1cb 100%);
@@ -531,7 +543,17 @@
   font-size: 1.1rem;
   line-height: var(--pauta);
   color: #3a2c22;
-  background:
+  /* as pautas: uma no pé de cada linha, um pouco acima para a letra assentar nela. Ficam à
+     parte: no PDF, elas acompanham o texto */
+  --pautas:
+    repeating-linear-gradient(
+      180deg,
+      transparent 0,
+      transparent calc(var(--pauta) - 1px),
+      rgba(92, 116, 146, 0.3) calc(var(--pauta) - 1px),
+      rgba(92, 116, 146, 0.3) var(--pauta)
+    ) 0 -0.4rem;
+  --papel:
     /* os cantos gastos, mais escuros */
     radial-gradient(circle at 0 0, rgba(110, 80, 45, 0.32), transparent 2.6rem),
     radial-gradient(circle at 100% 0, rgba(110, 80, 45, 0.26), transparent 2.2rem),
@@ -545,15 +567,8 @@
       rgba(178, 74, 62, 0.34) calc(var(--margem) + 1px),
       transparent calc(var(--margem) + 1px)
     ),
-    /* as pautas: uma no pé de cada linha, um pouco acima para a letra assentar nela */
-    repeating-linear-gradient(
-      180deg,
-      transparent 0,
-      transparent calc(var(--pauta) - 1px),
-      rgba(92, 116, 146, 0.3) calc(var(--pauta) - 1px),
-      rgba(92, 116, 146, 0.3) var(--pauta)
-    ) 0 -0.4rem,
     linear-gradient(180deg, #efe7d3 0%, #e6dbc2 100%);
+  background: var(--pautas), var(--papel);
   border-radius: 3px 12px 5px 16px / 3px 9px 7px 13px;
   box-shadow:
     0 0 0 1px rgba(0, 0, 0, 0.4),
@@ -593,6 +608,10 @@
     51% calc(100% - 1px), 44% calc(100% - 4px), 37% 100%, 29% calc(100% - 2px), 22% calc(100% - 4px), 15% 100%, 8% calc(100% - 3px), 0 100%,
     3px 93%, 0 86%, 2px 78%, 4px 70%, 0 62%, 3px 54%, 1px 46%, 4px 38%, 0 30%, 2px 22%, 4px 14%, 1px 7%
   );
+  --papel:
+    radial-gradient(ellipse 85% 70% at 50% 40%, rgba(246, 240, 218, 0.5), transparent 80%),
+    radial-gradient(circle at 86% 88%, rgba(150, 120, 60, 0.18), transparent 30%),
+    linear-gradient(180deg, #dcd3b9 0%, #cfc4a5 100%);
   padding: clamp(1.6rem, 4.5vw, 2.6rem) clamp(1.2rem, 5vw, 2.8rem) clamp(1.8rem, 5vw, 2.8rem);
   color: #2b2925;
   background: none;
@@ -611,10 +630,7 @@
   position: absolute;
   inset: 0;
   z-index: -1;
-  background:
-    radial-gradient(ellipse 85% 70% at 50% 40%, rgba(246, 240, 218, 0.5), transparent 80%),
-    radial-gradient(circle at 86% 88%, rgba(150, 120, 60, 0.18), transparent 30%),
-    linear-gradient(180deg, #dcd3b9 0%, #cfc4a5 100%);
+  background: var(--papel);
 }
 
 /* O nome do jornal, em letra gótica de jornal, com o fio duplo embaixo */
@@ -656,7 +672,7 @@
 
 .folha--trecho {
   color: #3a2c1c;
-  background:
+  --papel:
     /* as manchas do tempo */
     radial-gradient(circle at 18% 22%, rgba(150, 105, 45, 0.14), transparent 9%),
     radial-gradient(circle at 82% 68%, rgba(150, 105, 45, 0.12), transparent 7%),
@@ -867,7 +883,7 @@
   padding-top: clamp(2.6rem, 6vw, 4rem);
   padding-bottom: clamp(2.8rem, 6vw, 4.2rem);
   text-align: center;
-  background:
+  --papel:
     /* as bordas enroladas do rolo, no alto e embaixo */
     linear-gradient(180deg, #a98a5c 0, #d9c7a0 0.35rem, #efe4c9 0.7rem, #c9b083 1.1rem, rgba(201, 176, 131, 0) 1.6rem),
     linear-gradient(0deg, #a98a5c 0, #d9c7a0 0.35rem, #efe4c9 0.7rem, #c9b083 1.1rem, rgba(201, 176, 131, 0) 1.6rem),
@@ -906,7 +922,7 @@
 .folha--documento {
   padding: clamp(2.6rem, 6vw, 4rem) clamp(1.8rem, 7vw, 4.4rem) clamp(2.4rem, 6vw, 3.6rem);
   color: #26221d;
-  background:
+  --papel:
     radial-gradient(ellipse 85% 75% at 50% 45%, rgba(255, 255, 250, 0.6), transparent 80%),
     linear-gradient(180deg, #f2eee3 0%, #e7e1d2 100%);
   box-shadow:
@@ -1421,5 +1437,298 @@
   .indice__link,
   .entre-capitulos a {
     transition: none;
+  }
+}
+
+/* =================================================================
+   O PDF: a impressão do navegador ("Baixar PDF" ou Ctrl+P)
+   -----------------------------------------------------------------
+   Na folha A4 sai só a memória aberta, com a cara da leitura. O
+   papel é a página: o --papel de cada classificação vai para o
+   ::before da folha, fixo, e o navegador repete os elementos fixos
+   em todas as páginas impressas. A folha fica transparente, sem
+   sombra e sem inclinação, com as margens por dentro, repetidas em
+   cada página (clone). Ela tem pelo menos a altura de uma página:
+   numa memória curta, o que depende da altura (as dobras e o lacre
+   da carta, o número da página do trecho, o nome do livro) fica no
+   pé da página; numa longa, no fim do texto, na última página. O
+   grão fica de fora.
+   ================================================================= */
+
+@media print {
+  @page {
+    size: A4;
+    margin: 0;
+  }
+
+  html {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    color-scheme: light;
+    font-size: 15px; /* o texto da folha perto de 12,6 pt; tudo é em rem, então as proporções ficam */
+    background: #fff;
+  }
+
+  body,
+  body.com-barra {
+    min-height: 0;
+    padding: 0;
+  }
+
+  /* Some tudo o que não é a memória */
+  .cenario,
+  .topo,
+  .barra-lateral,
+  .leitura__barra,
+  .entre-capitulos,
+  .simulacao,
+  .aviso-rapido,
+  dialog {
+    display: none !important;
+  }
+
+  .pagina-memorias,
+  .leitura {
+    width: auto;
+    max-width: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .memoria {
+    --margem-topo: 2.2cm;
+    --margem-lado: 2.2cm;
+    --margem-pe: 2.2cm;
+    position: relative;
+  }
+
+  /* A classificação e a data, no alto do papel, em letra pequena, sem empurrar o texto */
+  .memoria__classificacao {
+    position: absolute;
+    top: 1.1cm;
+    left: var(--margem-lado);
+    right: var(--margem-lado);
+    z-index: 1;
+    margin: 0;
+    text-align: center;
+    font-size: 0.8rem;
+    color: #6f5b41;
+  }
+
+  /* Na Carta e no Diário, o título vai para dentro da folha (a cópia .so-no-pdf) */
+  .memoria[data-tipo="carta"] .memoria__titulo,
+  .memoria[data-tipo="diario"] .memoria__titulo {
+    display: none;
+  }
+
+  .so-no-pdf {
+    display: block;
+  }
+
+  /* -----------------------------------------------------------------
+     A folha é a página
+     ----------------------------------------------------------------- */
+
+  .folha {
+    box-shadow: none;
+    transform: none;
+    filter: none; /* com filtro, o navegador transformaria o texto em imagem */
+  }
+
+  .folha:not(.folha--inscricao) {
+    min-height: calc(min(100vh, 297mm) - 1px); /* o 1px de folga evita uma página em branco */
+    margin: 0;
+    padding: var(--margem-topo) var(--margem-lado) var(--margem-pe);
+    background: none;
+    border-radius: 0;
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
+  }
+
+  /* O papel de cada página inteira, com a sombra de dentro da folha (no lugar do grão) */
+  .folha:not(.folha--inscricao)::before {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    background: var(--papel);
+    box-shadow: inset 0 0 70px rgba(122, 86, 42, 0.3), inset 0 0 14px rgba(122, 86, 42, 0.22);
+    opacity: 1;
+    mix-blend-mode: normal;
+    clip-path: none;
+  }
+
+  .folha.folha--carta::before {
+    box-shadow: inset 0 0 40px rgba(140, 100, 50, 0.22);
+  }
+
+  .folha.folha--pagina::before {
+    box-shadow: inset 0 0 30px rgba(140, 110, 70, 0.14);
+  }
+
+  .folha.folha--diario::before {
+    box-shadow: inset 0 0 30px rgba(120, 90, 50, 0.16);
+  }
+
+  .folha.folha--recorte::before {
+    box-shadow: none;
+  }
+
+  .folha.folha--trecho::before {
+    box-shadow: inset 0 0 50px rgba(122, 80, 30, 0.3);
+  }
+
+  .folha.folha--documento::before {
+    box-shadow: inset 0 0 40px rgba(110, 100, 80, 0.18);
+  }
+
+  /* Os links viram texto comum */
+  .folha .mencao {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  /* Nada corta mal: título nunca sozinho no fim da página, estrofe e item de lista inteiros,
+     pelo menos 2 linhas de um parágrafo de cada lado da quebra */
+  .folha__titulo,
+  .memoria__titulo,
+  .folha__capitulo,
+  .recorte__jornal,
+  .trecho__cabeca,
+  .carta__data,
+  .diario__data,
+  .documento__data {
+    break-after: avoid;
+  }
+
+  .folha__texto {
+    orphans: 2;
+    widows: 2;
+  }
+
+  .folha__texto li,
+  .folha--poema .folha__texto > p {
+    break-inside: avoid;
+  }
+
+  /* -----------------------------------------------------------------
+     Carta: as dobras e o lacre só no fim
+     ----------------------------------------------------------------- */
+
+  .folha.folha--carta {
+    padding-bottom: 2.6cm;
+  }
+
+  /* Numa carta de uma página, as dobras ficam a 1/3 e 2/3 da página; numa longa, na última
+     altura de página do texto */
+  .folha--carta::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: -1;
+    height: min(100%, 100vh, 297mm);
+    background: var(--dobras);
+    pointer-events: none;
+  }
+
+  .folha--carta .lacre {
+    left: var(--margem-lado);
+    bottom: 0.8cm;
+  }
+
+  /* -----------------------------------------------------------------
+     Diário: a linha vermelha e os cantos vêm do papel de cada página;
+     as pautas ficam na folha e recomeçam em cada página (clone),
+     alinhadas com o texto. Tudo em múltiplos da pauta.
+     ----------------------------------------------------------------- */
+
+  .folha.folha--diario {
+    padding: calc(var(--pauta) * 3) var(--margem-lado) calc(var(--pauta) * 2) calc(var(--margem) + 1.6rem);
+    background: var(--pautas);
+  }
+
+  .folha--diario .folha__titulo {
+    margin-bottom: var(--pauta);
+    font-size: 1.9rem;
+    line-height: var(--pauta);
+  }
+
+  /* A classificação assenta na segunda linha do caderno (2rem é a pauta) */
+  .memoria[data-tipo="diario"] .memoria__classificacao {
+    top: 2rem;
+    line-height: 2rem;
+  }
+
+  /* -----------------------------------------------------------------
+     Recorte: o jornal em todas as páginas; as bordas irregulares só
+     nas laterais da primeira. Por cima do papel, o branco de fora do
+     recorte: o retângulo da página menos o recorte, com as laterais
+     da tela e o alto e o pé retos.
+     ----------------------------------------------------------------- */
+
+  .folha--recorte::after {
+    top: 0;
+    bottom: auto;
+    height: min(100%, 100vh, 297mm);
+    background: #fff;
+    clip-path: polygon(
+      evenodd,
+      0 0, 100% 0, 100% 100%, 0 100%, 0 0,
+      100% 0, calc(100% - 3px) 7%, 100% 14%, calc(100% - 2px) 22%, calc(100% - 4px) 30%, 100% 38%, calc(100% - 2px) 47%,
+      calc(100% - 4px) 55%, 100% 63%, calc(100% - 3px) 71%, 100% 79%, calc(100% - 2px) 87%, calc(100% - 4px) 94%, 100% 100%,
+      0 100%, 3px 93%, 0 86%, 2px 78%, 4px 70%, 0 62%, 3px 54%, 1px 46%, 4px 38%, 0 30%, 2px 22%, 4px 14%, 1px 7%
+    );
+  }
+
+  /* -----------------------------------------------------------------
+     Trecho e capítulo: o número da página e o nome do livro no pé
+     ----------------------------------------------------------------- */
+
+  .folha .trecho__pagina {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 1cm;
+    margin: 0;
+  }
+
+  .folha .folha__livro {
+    position: absolute;
+    left: var(--margem-lado);
+    right: var(--margem-lado);
+    bottom: 1cm;
+    text-align: center;
+    font-size: 0.86rem;
+    font-variant-caps: small-caps;
+    letter-spacing: 0.1em;
+    color: #6f5b41;
+  }
+
+  /* Documento: a borda dupla em cada página */
+  .folha--documento::after {
+    position: fixed;
+    inset: 0.7cm;
+  }
+
+  /* -----------------------------------------------------------------
+     Inscrição: a página cinza-escura, com o título, a pedra no alto e
+     o "Onde está gravada" abaixo dela, como na tela
+     ----------------------------------------------------------------- */
+
+  .memoria[data-tipo="inscricao"] {
+    padding: var(--margem-topo) var(--margem-lado) 0;
+  }
+
+  .memoria[data-tipo="inscricao"]::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    background: #22211f;
+  }
+
+  .memoria[data-tipo="inscricao"] .memoria__classificacao {
+    color: var(--pergaminho-apagado);
   }
 }

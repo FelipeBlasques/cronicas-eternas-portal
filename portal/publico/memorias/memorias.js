@@ -751,11 +751,54 @@ async function copiarLink(rota) {
   }
 }
 
-// No alto: "← Memórias" e "Copiar link"; para o administrador, também "Alterar" e "Revelar…",
-// com o estado atual ao lado
+/* -----------------------------------------------------------------
+   Baixar PDF: sai da impressão do navegador. O título da aba vira o
+   nome do arquivo, e o @media print do memorias.css deixa na folha
+   só a memória aberta, com a cara dela.
+   ----------------------------------------------------------------- */
+
+const AVISO_DO_PDF = "memorias-aviso-do-pdf"; // no localStorage: o aviso da primeira vez já foi mostrado
+
+// "Carta ao ferreiro" ou, num capítulo, "Crônica dos Sete Invernos - Capítulo 2 - O cerco"
+function nomeDoPdf(memoria, rota) {
+  if (!rota.capitulo) return memoria.titulo;
+  return `${memoria.titulo} - Capítulo ${rota.capitulo} - ${memoria.capitulos[rota.capitulo - 1].titulo}`;
+}
+
+// Devolve true só na primeira vez (ou sempre, se o navegador não deixar guardar)
+function primeiroPdf() {
+  try {
+    if (localStorage.getItem(AVISO_DO_PDF)) return false;
+    localStorage.setItem(AVISO_DO_PDF, "sim");
+  } catch {
+    // sem o localStorage (navegação privada, alguns arquivos abertos no PC), o aviso aparece sempre
+  }
+  return true;
+}
+
+async function baixarPdf(memoria, rota) {
+  if (primeiroPdf()) {
+    avisoRapido("Na janela que abrir, escolha Salvar como PDF.");
+    await new Promise((pronto) => setTimeout(pronto, 1000)); // o tempo de ler o aviso antes da janela
+  }
+  const titulo = document.title;
+  const nome = nomeDoPdf(memoria, rota);
+  document.title = nome;
+  const devolverTitulo = () => {
+    // Se a pessoa já foi para outra memória, o título é o dela e fica como está
+    if (document.title === nome) document.title = titulo;
+  };
+  window.addEventListener("afterprint", devolverTitulo, { once: true });
+  await document.fonts.ready;
+  window.print();
+}
+
+// No alto: "← Memórias", "Copiar link" e "Baixar PDF" (no Livro, só nos capítulos); para o
+// administrador, também "Alterar" e "Revelar…", com o estado atual ao lado
 function barraDaLeitura(memoria, rota) {
   const barra = criar("div", "leitura__barra");
   barra.append(botao("← Memórias", "botao--leve", voltarALista), botao("Copiar link", "botao--leve", () => copiarLink(rota)));
+  if (memoria.tipo !== "livro" || rota.capitulo) barra.append(botao("Baixar PDF", "botao--leve", () => baixarPdf(memoria, rota)));
   if (ehAdmin() && memoria.revelacao) {
     const admin = criar("div", "leitura__admin");
     admin.append(
@@ -841,6 +884,8 @@ function folhaDaMemoria(memoria, links) {
   const folha = criar("div", `folha folha--${tipo}`);
   const tituloNaFolha = () => criar("h1", "folha__titulo", titulo);
   const tituloFora = () => criar("h1", "memoria__titulo", titulo);
+  // No PDF a folha é a página: o título que fica fora dela na tela vai para dentro
+  const tituloNoPdf = () => enfeite("folha__titulo so-no-pdf", titulo);
   // A data e o detalhe são opcionais: sem eles, nada de elemento vazio
   const se = (valor, classe) => (valor ? [criar("p", classe, valor)] : []);
   const data = memoria.data ? textoDaData(memoria.data) : "";
@@ -848,10 +893,10 @@ function folhaDaMemoria(memoria, links) {
 
   switch (tipo) {
     case "carta":
-      folha.append(...se(data, "carta__data"), texto, ...se(detalhe, "carta__assinatura"), enfeite("lacre"));
+      folha.append(tituloNoPdf(), ...se(data, "carta__data"), texto, ...se(detalhe, "carta__assinatura"), enfeite("lacre"));
       return [tituloFora(), folha];
     case "diario":
-      folha.append(...se(data, "diario__data"), texto);
+      folha.append(tituloNoPdf(), ...se(data, "diario__data"), texto);
       return [tituloFora(), folha];
     case "recorte":
       folha.append(...se(detalhe, "recorte__jornal"), tituloNaFolha(), texto);
@@ -912,7 +957,7 @@ function passosEntreCapitulos(memoria, n) {
   return nav;
 }
 
-// Cada capítulo numa página como a do Conto, com capitular
+// Cada capítulo numa página como a do Conto, com capitular. No PDF, o nome do livro vai no pé.
 function capituloDoLivro(memoria, n, links) {
   const capitulo = memoria.capitulos[n - 1];
   const folha = criar("div", "folha folha--pagina");
@@ -921,6 +966,7 @@ function capituloDoLivro(memoria, n, links) {
     criar("h1", "folha__titulo", capitulo.titulo),
     textoDaFolha(capitulo.texto, links),
     passosEntreCapitulos(memoria, n),
+    enfeite("folha__livro so-no-pdf", memoria.titulo),
   );
   return [folha];
 }
