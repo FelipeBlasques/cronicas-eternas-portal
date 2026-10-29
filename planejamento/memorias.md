@@ -2,6 +2,8 @@
 
 Uma página com os textos do cenário: cartas, contos, recortes, trechos de livros, livros inteiros e outros escritos que os personagens encontram em Draevor. Só o administrador escreve. Toda memória nasce **escondida** e só aparece para quem o administrador revelar. Sem login, a página manda para a entrada. Decisões fechadas em 24/10/2026.
 
+> **Depois:** importar .md, baixar PDF e os limites de hoje (100.000 por texto, 1.000.000 no livro) estão em `memorias-arquivos.md`.
+
 Sessões: 7.1 servidor · 7.2 lista e leitura · 7.3 a cara de cada classificação · 7.4 edição, revelar e acender o botão (veja "Sessões" no fim).
 
 ## Na barra lateral
