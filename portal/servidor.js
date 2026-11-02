@@ -95,6 +95,16 @@ async function tratarApi(req, res, url) {
     return enviarJson(res, 200, status, cors);
   }
 
+  // As rotas públicas (a leitura pública de uma nota do Caderno) abrem sem login, só para GET.
+  // Quem está logado vê também os links que a conta dele vê.
+  if (metodo === "GET") {
+    const publica = PAGINAS.find((p) => p.prefixoPublico && rota.startsWith(`${p.prefixoPublico}/`));
+    if (publica) {
+      const logada = sessaoDoToken(lerCookies(req).sessao)?.conta ?? null;
+      return publica.tratarPublico(req, res, rota, metodo, logada);
+    }
+  }
+
   if (metodo !== "GET" && !origemValida(req)) throw new ErroHttp(403, "Pedido de outro site recusado.");
 
   if (rota === "/api/entrar" && metodo === "POST") return entrar(req, res);

@@ -50,7 +50,8 @@ Sem login, nenhuma página abre.
 
 ```
 portal/
-  servidor.js       núcleo: liga o servidor, serve publico/ e distribui /api (lista PAGINAS)
+  servidor.js       núcleo: liga o servidor, serve publico/ e distribui /api (lista PAGINAS); as rotas
+                    públicas (prefixoPublico/tratarPublico de uma página) vêm antes da sessão
   servidor/
     base.js         CONFIG, dados (objeto único) e salvarDados(), sessões, senhas, cifra,
                     ErroHttp, enviarJson, lerJson, lerFormulario, texto(), imagens,
@@ -63,10 +64,13 @@ portal/
     regras.js       /api/regras/... (Regras da casa)
     personagens.js  /api/galeria/... (Personagens: fichas e outros personagens; a arte da galeria
                     fica em `retrato`, separada da capa e da arte do card das Mesas)
-    mapas.js        /api/mapas/... (Mapas e lugares)
-    memorias.js     /api/memorias/... (Memórias de Draevor: textos que só o administrador escreve e revela)
+    mapas.js        /api/mapas/... (Mapas e lugares; exporta podeVerLugar)
+    memorias.js     /api/memorias/... (Memórias de Draevor: textos que só o administrador escreve e revela;
+                    exporta podeLer)
     caderno.js      /api/caderno/... (Caderno: notas e pastas de cada conta, em cadernos/<usuario>/caderno.json,
-                    fora do dados.json; os ganchos de conta renomeiam e apagam essas pastas)
+                    fora do dados.json, e as imagens em cadernos/<usuario>/imagens/; os ganchos de conta
+                    renomeiam e apagam essas pastas. Links, embutidas, etiquetas, busca, citáveis, imagens
+                    protegidas e órfãs; /api/caderno/publico/... é o link público, sem login)
   publico/
     comum.js        lista PAGINAS e barra lateral, pedir(), $, criar(), botao(), imagem(),
                     simbolo(), perguntar(), avisoRapido(), avisarFalha(), fecharAoClicarFora(),

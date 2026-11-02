@@ -388,5 +388,6 @@ ganchos.renomearConta.push(renomearNasMemorias);
 ganchos.excluirConta.push(desligarContaDasMemorias);
 
 // Os endereços /api/memorias/... são desta página. "iniciar" confere os dados ao ligar o portal
-// e devolve true quando precisou mudar alguma coisa. Os links servem também à página Personagens.
-module.exports = { prefixo: "/api/memorias", tratar: tratarMemorias, iniciar: garantirMemorias, linksPara, conferirLinks };
+// e devolve true quando precisou mudar alguma coisa. Os links servem também à página Personagens;
+// "podeLer" serve aos links do Caderno.
+module.exports = { prefixo: "/api/memorias", tratar: tratarMemorias, iniciar: garantirMemorias, linksPara, conferirLinks, podeLer };
