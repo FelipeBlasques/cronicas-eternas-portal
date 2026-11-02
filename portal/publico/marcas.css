@@ -1,0 +1,291 @@
+/* =================================================================
+   As marcas do texto das notas (marcas.js)
+   -----------------------------------------------------------------
+   Vale dentro de um elemento com a classe "marcas": na página do
+   Caderno e na leitura pública. O texto em Alegreya; o título de
+   nível 1 em Grenze Gotisch, os de nível 2 e 3 em versalete. O
+   ferro fica nas linhas, nas plaquinhas das etiquetas e na moldura
+   da nota embutida. Sem brasa: ela é da nota marcada na árvore e
+   do botão principal.
+   ================================================================= */
+
+.marcas {
+  font-family: var(--fonte-texto);
+  line-height: 1.65;
+  overflow-wrap: break-word;
+}
+
+.marcas > * {
+  margin: 0;
+}
+
+.marcas > * + * {
+  margin-top: 0.85rem;
+}
+
+.marcas strong {
+  font-weight: 700;
+}
+
+/* ---------- Títulos ---------- */
+
+.marcas__titulo {
+  font-weight: 500;
+  line-height: 1.15;
+}
+
+.marcas > .marcas__titulo:not(:first-child) {
+  margin-top: 1.7rem;
+}
+
+.marcas > .marcas__titulo + * {
+  margin-top: 0.55rem;
+}
+
+.marcas__titulo--1 {
+  font-family: var(--fonte-gotica);
+  font-size: 1.95rem;
+  line-height: 1.05;
+}
+
+.marcas__titulo--2 {
+  font-size: 1.3rem;
+  font-variant: small-caps;
+  letter-spacing: 0.04em;
+}
+
+.marcas__titulo--3 {
+  font-size: 1.1rem;
+  font-variant: small-caps;
+  letter-spacing: 0.05em;
+  color: var(--pergaminho-apagado);
+}
+
+/* ---------- Links ---------- */
+
+.marcas__link {
+  color: var(--pergaminho);
+  text-decoration: underline;
+  text-decoration-color: var(--ferro-forte);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.18em;
+  transition: text-decoration-color 0.2s;
+}
+
+.marcas__link:hover {
+  text-decoration-color: currentColor;
+}
+
+.marcas__link:focus-visible {
+  outline: 1px solid var(--ferro-forte);
+  outline-offset: 2px;
+}
+
+/* ---------- Listas e tarefas ---------- */
+
+.marcas__lista {
+  padding-left: 1.55rem;
+}
+
+.marcas__lista .marcas__lista {
+  margin: 0.15rem 0 0;
+}
+
+.marcas__lista li + li {
+  margin-top: 0.18rem;
+}
+
+.marcas__lista li::marker {
+  color: var(--pergaminho-apagado);
+}
+
+/* A caixinha fica no lugar do marcador */
+.marcas__tarefa {
+  position: relative;
+  list-style: none;
+}
+
+.marcas__caixa {
+  position: absolute;
+  left: -1.55rem;
+  top: 0.32em;
+}
+
+.marcas__caixa .caixa__marca::after {
+  border-color: var(--pergaminho);
+}
+
+.marcas__caixa:hover .caixa__marca {
+  border-color: var(--pergaminho-apagado);
+}
+
+/* Só para ver: sem a mãozinha e sem acender */
+.marcas__caixa:has(input:disabled),
+.marcas__caixa input:disabled {
+  cursor: default;
+}
+
+.marcas__caixa:has(input:disabled):hover .caixa__marca {
+  border-color: var(--ferro-forte);
+}
+
+.marcas__tarefa--feita > .marcas__tarefa-texto {
+  color: var(--pergaminho-apagado);
+}
+
+/* ---------- Citação e separador ---------- */
+
+.marcas__citacao {
+  padding: 0.1rem 0 0.1rem 1.1rem;
+  font-style: italic;
+  color: var(--pergaminho-apagado);
+  border-left: 2px solid var(--ferro);
+}
+
+.marcas__citacao > * {
+  margin: 0;
+}
+
+.marcas__citacao > * + * {
+  margin-top: 0.6rem;
+}
+
+.marcas__separador {
+  height: 1px;
+  border: 0;
+  background: linear-gradient(90deg, transparent, var(--ferro) 18%, var(--ferro) 82%, transparent);
+}
+
+.marcas > .marcas__separador {
+  margin-block: 1.5rem;
+}
+
+/* ---------- Tabela ---------- */
+
+/* Uma tabela larga rola de lado dentro da caixa dela, sem empurrar a página */
+.marcas__tabela {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.marcas__tabela table {
+  border-collapse: collapse;
+  font-size: 0.97rem;
+}
+
+.marcas__tabela :is(th, td) {
+  padding: 0.35rem 0.8rem;
+  text-align: left;
+  vertical-align: top;
+  border: 1px solid var(--ferro-fraco);
+}
+
+.marcas__tabela th {
+  font-weight: 500;
+  background: rgba(181, 154, 118, 0.06);
+  border-bottom-color: var(--ferro);
+}
+
+.marcas__tabela .marcas__celula--centro {
+  text-align: center;
+}
+
+.marcas__tabela .marcas__celula--direita {
+  text-align: right;
+}
+
+/* ---------- Etiquetas ---------- */
+
+.marcas__etiqueta {
+  display: inline-block;
+  padding: 0 0.42rem;
+  font: inherit;
+  font-size: 0.86em;
+  font-style: normal;
+  line-height: 1.45;
+  color: var(--pergaminho-apagado);
+  background: rgba(181, 154, 118, 0.08);
+  border: 1px solid var(--ferro);
+  border-radius: var(--raio);
+}
+
+button.marcas__etiqueta {
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s;
+}
+
+button.marcas__etiqueta:hover {
+  color: var(--pergaminho);
+  border-color: var(--ferro-forte);
+}
+
+button.marcas__etiqueta:focus-visible {
+  outline: 2px solid var(--brasa);
+  outline-offset: 2px;
+}
+
+/* ---------- Imagens ---------- */
+
+/* A largura da nota, sem passar do próprio tamanho */
+.marcas__imagem {
+  display: block;
+  margin: 0.4rem 0;
+}
+
+.marcas__imagem-link {
+  display: inline-block;
+  max-width: 100%;
+  vertical-align: top;
+}
+
+.marcas__imagem-link:focus-visible {
+  outline: 1px solid var(--ferro-forte);
+  outline-offset: 3px;
+}
+
+.marcas__foto {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  background: rgba(14, 12, 11, 0.5);
+  border: 1px solid var(--ferro-fraco);
+  border-radius: var(--raio);
+}
+
+.marcas__legenda {
+  display: block;
+  margin-top: 0.35rem;
+  font-size: 0.86rem;
+  font-style: italic;
+  line-height: 1.4;
+  color: var(--pergaminho-apagado);
+}
+
+.marcas__imagem--ausente .marcas__legenda {
+  margin-top: 0;
+}
+
+.marcas__imagem--ausente:empty {
+  display: none;
+}
+
+/* ---------- Nota embutida ---------- */
+
+.marcas__embutida {
+  padding: 1rem 1.25rem 1.1rem;
+  background: rgba(232, 221, 200, 0.03);
+  border: 1px solid var(--ferro-forte);
+  border-radius: var(--raio);
+}
+
+.marcas__embutida-titulo {
+  margin: 0 0 0.6rem;
+  font-family: var(--fonte-gotica);
+  font-size: 1.35rem;
+  font-weight: 500;
+  line-height: 1.1;
+}
+
+.marcas__embutida-titulo .marcas__link {
+  text-decoration-color: var(--ferro);
+}

@@ -78,6 +78,10 @@ portal/
                     corVisivel(), FONTES e aplicarFonte(), montarCardComMoldura(),
                     iniciarCinzas(), irParaEntrada(), marcarNaBarra()
     calendario.js   o Ciclo de Sylara: MESES, textoDaData(), textoDoPeriodo(), faseDaLua()...
+    marcas.js       as marcas do texto das notas do Caderno (tipo Markdown, com os links, as embutidas e as
+                    imagens do portal): declara só desenharMarcas(texto, { links, embutidas, imagens }, opcoes),
+                    que devolve os elementos. Usado pelo Caderno e pela leitura pública
+    marcas.css      o estilo das marcas, dentro de um elemento com a classe "marcas"
     style.css       estilos comuns: variáveis, topo, barra lateral, botões, campos, diálogos, cards
     index.html, script.js        página Mesas, tela de entrada e administração
     linha-do-tempo/              index.html, linha.js, linha.css
@@ -85,6 +89,7 @@ portal/
     personagens/                 index.html, personagens.js, personagens.css
     mapas/                       index.html, visor.js, mapas.js, mapas.css
     memorias/                    index.html, memorias.js, memorias.css
+    caderno/                     index.html, caderno.js, caderno.css (carrega também ../marcas.js e ../marcas.css)
 planejamento/       especificações e roteiro das sessões; referencias/ com o Atlas de Tyrenar
 ```
 

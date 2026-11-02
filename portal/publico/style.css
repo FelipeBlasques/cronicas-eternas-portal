@@ -1991,19 +1991,21 @@ body.com-barra .topo {
     width: auto;
     flex-direction: row;
     justify-content: space-around;
-    gap: 0.2rem;
-    padding: 0.4rem 0.4rem calc(0.4rem + env(safe-area-inset-bottom));
+    gap: 0.1rem;
+    padding: 0.4rem 0.2rem calc(0.4rem + env(safe-area-inset-bottom));
     background: rgba(14, 12, 11, 0.96);
     border-right: 0;
     border-top: 1px solid var(--ferro-fraco);
   }
 
+  /* Os botões dividem a largura: os sete cabem num celular de 360 px */
   .barra-lateral__botao {
+    flex: 1 1 0;
     width: auto;
-    min-width: 3.7rem;
+    min-width: 0;
     height: auto;
     gap: 0.12rem;
-    padding: 0.35rem 0.3rem 0.25rem;
+    padding: 0.35rem 0.05rem 0.25rem;
     background: none;
     border-color: transparent;
     box-shadow: none;
@@ -2011,9 +2013,13 @@ body.com-barra .topo {
 
   .barra-lateral__botao::after {
     content: attr(data-curto);
-    font-size: 0.74rem;
+    max-width: 100%;
+    overflow: hidden;
+    font-size: 0.65rem;
     font-style: italic;
     line-height: 1.1;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .barra-lateral__botao[aria-current="page"] {

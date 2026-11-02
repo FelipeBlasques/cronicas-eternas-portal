@@ -85,6 +85,14 @@ const PAGINAS = [
     pronta: true,
     icone: "M6.5 2.5h11a1.5 1.5 0 0 1 1.5 1.5v15.5H6.5a2 2 0 0 0 0 4H19M6.5 2.5A2 2 0 0 0 4.5 4.5v17M9.5 7h6M9.5 10.5h4", // livro fechado
   },
+  {
+    id: "caderno",
+    nome: "Caderno",
+    curto: "Caderno",
+    caminho: "caderno/",
+    pronta: false, // true só na sessão 10.5
+    icone: "M5 2.5h12a1.5 1.5 0 0 1 1.5 1.5v16a1.5 1.5 0 0 1-1.5 1.5H5ZM8.5 2.5v19M14.5 2.5v6l-1.5-1.2-1.5 1.2v-6M18.5 11h2.5v3h-2.5", // caderno com fita e fecho
+  },
 ];
 
 // O endereço de uma página do grupo, visto da página atual
