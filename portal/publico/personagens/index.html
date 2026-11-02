@@ -94,7 +94,7 @@
 
           <label class="filtro-campo filtro-campo--busca">
             <svg aria-hidden="true"><use href="#icone-lupa"/></svg>
-            <span class="sr">Buscar pelo nome ou pelo resumo</span>
+            <span class="sr">Buscar pelo nome, pelos apelidos ou pelo título</span>
             <input id="filtro-busca" type="search" placeholder="Buscar" autocomplete="off" spellcheck="false">
           </label>
 
@@ -107,8 +107,8 @@
     <div id="galeria" class="galeria" aria-label="Personagens"></div>
   </main>
 
-  <!-- ============ A ficha aberta (montada pelo personagens.js) ============ -->
-  <dialog id="dialogo-ficha" class="dialogo dialogo--ficha" aria-labelledby="ficha-nome">
+  <!-- ============ A ficha aberta, com as abas (montada pelo personagens.js, que põe o nome no rótulo) ============ -->
+  <dialog id="dialogo-ficha" class="dialogo dialogo--ficha">
     <div id="ficha-conteudo" class="ficha"></div>
   </dialog>
 

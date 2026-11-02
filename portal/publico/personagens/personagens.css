@@ -355,7 +355,7 @@
   text-align: center;
 }
 
-.personagem__resumo {
+.personagem__destaque {
   max-width: 17rem;
   margin: 0;
   font-style: italic;
@@ -531,26 +531,37 @@ button.card--desaparecido:is(:hover, :focus-visible) .card__nevoa {
 }
 
 /* =================================================================
-   A ficha aberta: o retrato à esquerda, o texto à direita
+   A ficha aberta: o retrato à esquerda, o texto à direita e as abas
+   presas à borda direita do quadro, como marcadores de livro
    ================================================================= */
 
+/* Altura fixa: trocar de aba não muda o tamanho do quadro, e só a coluna do texto rola.
+   As abas saem do quadro: o diálogo deixa passar o que sai da borda e fica meia aba
+   para a esquerda, para o quadro e as abas ficarem juntos no centro. */
 .dialogo.dialogo--ficha {
-  width: min(52rem, calc(100vw - 2rem));
+  --largura-abas: 6.6rem;
+  width: min(52rem, calc(100vw - 2rem - var(--largura-abas)));
+  height: min(42rem, calc(100dvh - 2rem));
   max-height: calc(100dvh - 2rem);
   padding: 0;
-  overflow: auto;
+  overflow: visible;
+  translate: calc(var(--largura-abas) / -2) 0;
 }
 
+/* Sem position: as abas se posicionam pelo diálogo, e o corte daqui não as alcança */
 .ficha {
   display: grid;
   grid-template-columns: 16.5rem minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  height: 100%;
+  overflow: hidden;
 }
 
 .ficha--sem-retrato {
   grid-template-columns: minmax(0, 1fr);
 }
 
-/* O retrato preenchendo a coluna, preso ao alto enquanto o texto rola */
+/* O retrato no alto da coluna, parado em todas as abas */
 .ficha__retrato {
   position: sticky;
   top: 0;
@@ -581,11 +592,86 @@ button.card--desaparecido:is(:hover, :focus-visible) .card__nevoa {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  min-height: 0;
 }
 
+/* O conteúdo da aba: só ele rola; o pé fica embaixo */
 .ficha__corpo {
-  padding: 1.8rem 2.1rem 0.6rem;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 1.8rem 2.1rem 1rem;
 }
+
+.ficha__corpo:focus-visible {
+  outline: 1px solid var(--ferro-forte);
+  outline-offset: -5px;
+}
+
+/* ---------- As abas ---------- */
+
+/* Uma embaixo da outra a partir do alto, logo depois da borda do quadro */
+.ficha__abas {
+  position: absolute;
+  top: 1.6rem;
+  left: calc(100% + 1px);
+  display: grid;
+  gap: 0.3rem;
+  width: var(--largura-abas);
+}
+
+/* As outras abas ficam mais escuras, em fuligem e ferro, como páginas de baixo */
+.ficha__aba {
+  margin: 0;
+  padding: 0.55rem 0.8rem 0.6rem 0.75rem;
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  line-height: 1.2;
+  text-align: left;
+  color: var(--cinza);
+  background: linear-gradient(90deg, #0a0807, var(--fuligem) 70%);
+  border: 1px solid var(--ferro-fraco);
+  border-left: 0;
+  border-radius: 0 var(--raio) var(--raio) 0;
+  box-shadow: 6px 8px 14px -8px rgba(0, 0, 0, 0.9);
+  cursor: pointer;
+  transition:
+    color 0.2s,
+    background-color 0.2s;
+}
+
+.ficha__aba:not([aria-selected="true"], [aria-disabled="true"]):hover {
+  color: var(--pergaminho);
+  background: linear-gradient(90deg, #12100d, #1a1613 70%);
+}
+
+/* A ativa tem o fundo do quadro, como se continuasse a página, cobre a borda
+   e tem um filete de brasa na ponta */
+.ficha__aba[aria-selected="true"] {
+  margin-left: -1px;
+  color: var(--pergaminho);
+  background: #201b17;
+  border-color: var(--ferro);
+  box-shadow:
+    inset -2px 0 0 var(--brasa),
+    6px 8px 14px -8px rgba(0, 0, 0, 0.9);
+  cursor: default;
+}
+
+/* Enquanto a ficha completa não chega */
+.ficha__aba[aria-disabled="true"] {
+  opacity: 0.4;
+  cursor: progress;
+}
+
+.ficha__aba:focus-visible {
+  outline: 1px solid var(--ferro-forte);
+  outline-offset: 2px;
+}
+
+/* ---------- Geral ---------- */
 
 .ficha__cabeca {
   display: flex;
@@ -643,9 +729,16 @@ button.card--desaparecido:is(:hover, :focus-visible) .card__nevoa {
   text-wrap: balance;
 }
 
+/* O foco vem para o nome quando a ficha troca por um link e fica sem abas */
+.ficha__nome:focus {
+  outline: none;
+}
+
+/* O rótulo pequeno em versalete à esquerda e o valor à direita (Geral e Detalhes).
+   Rótulos longos, como "Nível de Desafio / Nível", quebram em duas linhas. */
 .ficha__dados {
   display: grid;
-  grid-template-columns: max-content minmax(0, 1fr);
+  grid-template-columns: fit-content(11rem) minmax(0, 1fr);
   align-items: baseline;
   gap: 0.45rem 1.1rem;
   margin: 0;
@@ -668,56 +761,39 @@ button.card--desaparecido:is(:hover, :focus-visible) .card__nevoa {
   gap: 0.35rem;
 }
 
-.ficha__resumo {
+/* Nos caídos, embaixo da situação */
+.ficha__epitafio {
+  display: block;
+  margin-top: 0.2rem;
+  font-style: italic;
+  color: var(--pergaminho-apagado);
+}
+
+/* O Título ou Frase escolhido */
+.ficha__destaque {
   margin: 1.4rem 0 0;
   font-style: italic;
   font-size: 1.08rem;
   color: var(--pergaminho-apagado);
 }
 
-.ficha__secao {
-  margin-top: 1.4rem;
+/* ---------- Detalhes ---------- */
+
+/* Cada item de uma lista numa linha */
+.ficha__item {
+  display: block;
 }
 
-.ficha__secao h3 {
-  margin: 0 0 0.5rem;
-  font-size: 0.78rem;
-  font-weight: 500;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--cinza);
+.ficha__item + .ficha__item {
+  margin-top: 0.15rem;
 }
 
-.ficha__historia > :first-child {
-  margin-top: 0;
-}
-
-.ficha__historia :is(p, ul, ol) {
-  margin: 0.75rem 0 0;
-}
-
-.ficha__queda-data {
-  margin: 0;
+.ficha__frase {
   font-style: italic;
-  color: var(--pergaminho-apagado);
 }
 
-.ficha__epitafio {
-  margin: 0.6rem 0 0;
-  padding: 0.1rem 0 0.1rem 1rem;
-  font-style: italic;
-  font-size: 1.08rem;
-  border-left: 2px solid var(--ferro-forte);
-}
+/* ---------- Jornada: um fio com um ponto em cada acontecimento ---------- */
 
-.ficha__nota {
-  margin: 0;
-  font-size: 0.95rem;
-  font-style: italic;
-  color: var(--cinza);
-}
-
-/* Na Linha do Tempo: um fio com um ponto em cada acontecimento */
 .jornada {
   margin: 0 0 0 0.3rem;
   padding: 0 0 0 1.1rem;
@@ -772,6 +848,50 @@ button.card--desaparecido:is(:hover, :focus-visible) .card__nevoa {
   text-decoration-color: var(--ferro-forte);
   text-underline-offset: 3px;
 }
+
+/* ---------- Textos: as caixas, cada uma com o título em versalete ---------- */
+
+.ficha__caixa + .ficha__caixa {
+  margin-top: 1.6rem;
+}
+
+.ficha__caixa h3 {
+  margin: 0 0 0.5rem;
+  font-size: 0.78rem;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--cinza);
+}
+
+.ficha__caixa-texto > :first-child {
+  margin-top: 0;
+}
+
+.ficha__caixa-texto :is(p, ul, ol) {
+  margin: 0.75rem 0 0;
+}
+
+/* Os links dos textos: para outra ficha ou para a Linha do Tempo */
+.ficha__link {
+  color: var(--pergaminho);
+  text-decoration: underline;
+  text-decoration-color: var(--ferro-forte);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.18em;
+  transition: text-decoration-color 0.2s;
+}
+
+.ficha__link:hover {
+  text-decoration-color: currentColor;
+}
+
+.ficha__link:focus-visible {
+  outline: 1px solid var(--ferro-forte);
+  outline-offset: 2px;
+}
+
+/* ---------- O pé: igual em todas as abas ---------- */
 
 .ficha__acoes {
   display: flex;
@@ -1086,16 +1206,25 @@ button.card--desaparecido:is(:hover, :focus-visible) .card__nevoa {
     gap: 0.6rem;
   }
 
-  .personagem__resumo {
+  .personagem__destaque {
     font-size: 0.9rem;
   }
 
-  /* A ficha numa coluna só, com o retrato no alto */
+  /* A ficha numa coluna só, com o retrato no alto. Aqui a ficha inteira rola, e as abas
+     viram uma fileira no alto da coluna de texto, presa no alto ao rolar. */
+  .dialogo.dialogo--ficha {
+    width: min(52rem, calc(100vw - 2rem));
+    translate: none;
+  }
+
   .ficha {
-    grid-template-columns: minmax(0, 1fr);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
   }
 
   .ficha__retrato {
+    flex: none;
     position: relative;
     aspect-ratio: auto;
     height: min(22rem, 52dvh);
@@ -1103,7 +1232,45 @@ button.card--desaparecido:is(:hover, :focus-visible) .card__nevoa {
     border-bottom: 1px solid var(--ferro);
   }
 
+  .ficha__abas {
+    position: sticky;
+    top: 0;
+    left: auto;
+    z-index: 1;
+    flex: none;
+    display: flex;
+    gap: 0.3rem;
+    width: auto;
+    padding: 0.6rem 1.3rem 0;
+    background: #1c1814;
+    border-bottom: 1px solid var(--ferro-fraco);
+  }
+
+  .ficha__aba {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 0.5rem 0.3rem;
+    text-align: center;
+    border: 1px solid var(--ferro-fraco);
+    border-bottom: 0;
+    border-radius: var(--raio) var(--raio) 0 0;
+    box-shadow: none;
+  }
+
+  /* A ativa cobre o filete de baixo da fileira, para continuar na página, e tem a brasa na ponta de cima */
+  .ficha__aba[aria-selected="true"] {
+    margin: 0 0 -1px;
+    border-color: var(--ferro);
+    box-shadow: inset 0 2px 0 var(--brasa);
+  }
+
+  .ficha__texto {
+    flex: 1 0 auto;
+  }
+
   .ficha__corpo {
+    flex: 1 0 auto;
+    overflow: visible;
     padding: 1.4rem 1.3rem 0.4rem;
   }
 

@@ -8,6 +8,10 @@
    escolher quem vê ficam com o administrador. Os caídos continuam
    na galeria, como lápides.
 
+   A ficha aberta tem quatro abas, presas ao lado do quadro: Geral,
+   Detalhes, Jornada e Textos. A Geral sai na hora, com os dados da
+   lista; as outras chegam com a ficha completa, pedida ao abrir.
+
    No servidor, conversa com o servidor/personagens.js. Aberta fora
    dele (arquivo no PC ou prévia), usa personagens de exemplo e um
    painel para ver a página como administrador, editor ou jogador.
@@ -28,6 +32,47 @@ const CONFIG = {
 // A arte da galeria, separada da capa e da arte do card das Mesas
 const CAMPOS_IMAGEM = ["retrato"];
 
+// A ficha completa da aba Detalhes, na ordem em que aparece: chave, rótulo e tipo, como no
+// servidor/personagens.js. O Nome, que vem primeiro, é o "nome" de sempre.
+const CAMPOS_DOS_DETALHES = [
+  ["titulos", "Títulos", "lista"],
+  ["apelidos", "Apelidos", "lista"],
+  ["nomeReal", "Nome Real", "texto"],
+  ["lar", "Lar", "texto"],
+  ["laresAnteriores", "Lares Anteriores", "lista"],
+  ["genero", "Gênero", "texto"],
+  ["especie", "Espécie", "texto"],
+  ["ocupacao", "Ocupação", "texto"],
+  ["idade", "Idade", "texto"],
+  ["religiao", "Religião", "texto"],
+  ["linguagens", "Linguagem", "lista"],
+  ["nascimento", "Nascimento", "marco"],
+  ["transformado", "Transformado", "marco"],
+  ["morte", "Morte", "marco"],
+  ["destruido", "Destruído", "marco"],
+  ["pais", "Pais", "lista"],
+  ["irmaos", "Irmãos", "lista"],
+  ["filhos", "Filhos", "lista"],
+  ["parentes", "Parentes", "lista"],
+  ["regenciaInicio", "Começo da Regência", "data"],
+  ["regenciaFim", "Término da Regência", "data"],
+  ["predecessor", "Predecessor", "texto"],
+  ["sucessor", "Sucessor", "texto"],
+  ["alinhamento", "Alinhamento", "texto"],
+  ["nivel", "Nível de Desafio / Nível", "texto"],
+  ["classe", "Classe", "texto"],
+  ["frases", "Frases", "lista"],
+];
+
+// O destaque aponta um item de uma destas listas dos Detalhes
+const LISTA_DO_DESTAQUE = { titulo: "titulos", frase: "frases" };
+
+// Um link no texto, como nas Memórias: [[evento:<id>|o que aparece]] ou [[personagem:<id>|o que aparece]]
+const REGEX_LINK = /\[\[(evento|personagem):([^\]|\n]+)\|([^\]\n]*)\]\]/g;
+
+// Só o que aparece de cada link, para o card e a busca, que não sabem quais alvos a conta vê
+const semLinks = (texto) => String(texto || "").replace(REGEX_LINK, (_, alvo, id, aparece) => aparece);
+
 // Os dados vão como JSON; a arte, se houver, vai junto como arquivo (ou como pedido para remover)
 function formularioDe(dados) {
   const { imagens, ...resto } = dados;
@@ -42,6 +87,8 @@ function formularioDe(dados) {
 
 const apiDoServidor = {
   galeria: () => pedir("GET", "/api/galeria"),
+  // Os Detalhes, a Jornada, os Textos e os links de um personagem
+  ficha: (id) => pedir("GET", caminhoDe("/api/galeria/ficha", id)),
   estado: () => pedir("GET", "/api/estado", undefined, { silencioso: true }),
   sair: () => pedir("POST", "/api/sair"),
   salvarFicha: (id, dados) => pedir("PUT", caminhoDe("/api/galeria/ficha", id), formularioDe(dados)),
@@ -63,7 +110,13 @@ const CONTAS_DA_PREVIA = {
   jogador: { usuario: "neia", nome: "Neia", cargo: "jogador" },
 };
 
-// Guardado como no dados.json do servidor; a galeria() monta o que a página recebe
+// Os Detalhes com tudo vazio, como o servidor cria: texto "", lista [], data e marco null
+function detalhesVazios() {
+  const vazio = { texto: () => "", lista: () => [], data: () => null, marco: () => null };
+  return Object.fromEntries(CAMPOS_DOS_DETALHES.map(([chave, , tipo]) => [chave, vazio[tipo]()]));
+}
+
+// Guardado como no dados.json do servidor; a galeria() e a ficha() montam o que a página recebe
 function exemplosDaPrevia() {
   // Um busto desenhado aqui mesmo, para a prévia mostrar retratos sem depender de arquivos
   const retratoDeExemplo = (fundo, cor) =>
@@ -73,34 +126,32 @@ function exemplosDaPrevia() {
         `<rect width="200" height="300" fill="url(#f)"/><circle cx="100" cy="112" r="34" fill="${cor}"/>` +
         `<path d="M28 300c4-74 36-118 72-118s68 44 72 118z" fill="${cor}"/></svg>`,
     )}`;
-  const doPortal = (campos) => ({
-    fonte: "gotica",
-    retrato: null,
+  // Os Detalhes, a queda, o destaque e os textos no formato do servidor/personagens.js;
+  // cada exemplo diz só os campos dos Detalhes que tem
+  const fichaDe = ({ detalhes = {}, ...campos }) => ({
     situacao: "vivo",
     queda: null,
-    origem: "",
-    resumo: "",
-    historia: "",
+    destaque: null,
+    textos: [],
     ...campos,
+    detalhes: { ...detalhesVazios(), ...detalhes },
   });
-  const outro = (campos) => ({
-    fonte: "gotica",
-    retrato: null,
-    papel: "npc",
-    jogador: "",
-    mesas: [],
-    situacao: "vivo",
-    queda: null,
-    origem: "",
-    resumo: "",
-    historia: "",
-    visibilidade: "todos",
-    registradoPor: "mestre",
-    registradoNome: "Mestre",
-    criadoEm: "2026-10-19T21:00:00.000Z",
-    alteradoEm: "2026-10-19T21:00:00.000Z",
-    ...campos,
-  });
+  const doPortal = (campos) => fichaDe({ fonte: "gotica", retrato: null, ...campos });
+  const outro = (campos) =>
+    fichaDe({
+      fonte: "gotica",
+      retrato: null,
+      papel: "npc",
+      jogador: "",
+      mesas: [],
+      visibilidade: "todos",
+      registradoPor: "mestre",
+      registradoNome: "Mestre",
+      criadoEm: "2026-10-19T21:00:00.000Z",
+      alteradoEm: "2026-10-19T21:00:00.000Z",
+      ...campos,
+    });
+  const data = (ano, mes = null, dia = null, aprox = false) => ({ ano, mes, dia, aprox });
   const ev = (campos) => ({ ate: null, visibilidade: "todos", revelado: false, personagens: [], ...campos });
 
   return {
@@ -120,6 +171,7 @@ function exemplosDaPrevia() {
     ],
     // Os mesmos das campanhas de exemplo da página Mesas
     personagens: [
+      // Um título como destaque e um link para a ficha da Dona Hilda num dos títulos
       doPortal({
         id: "p1",
         nome: "Venti",
@@ -127,9 +179,24 @@ function exemplosDaPrevia() {
         campanha: "ode-to-sleep",
         fonte: "elfica",
         retrato: retratoDeExemplo("#3a4670", "#9fb0c8"),
-        origem: "Meio-elfo, bardo 7",
-        resumo: "Bardo errante que toca a noite inteira para a cidade não dormir.",
-        historia: "Chegou à cidade com um alaúde rachado e **nenhuma** lembrança de onde veio.\n\nDesde a noite da canção, *não dorme mais*.",
+        detalhes: {
+          titulos: ["O Bardo Insone", "Voz da [[personagem:npc-2c3d4e5f|Lanterna Torta]]"],
+          apelidos: ["Vento"],
+          especie: "Meio-elfo",
+          ocupacao: "Músico errante",
+          idade: "27 anos",
+          linguagens: ["Comum", "Élfico"],
+          classe: "Bardo 7",
+          frases: ["Enquanto eu tocar, a cidade não dorme."],
+        },
+        destaque: { tipo: "titulo", indice: 0 },
+        textos: [
+          {
+            titulo: "História",
+            texto:
+              "Chegou à cidade com um alaúde rachado e **nenhuma** lembrança de onde veio.\n\nDesde [[evento:e11|a noite da canção]], *não dorme mais*.",
+          },
+        ],
       }),
       doPortal({
         id: "p2",
@@ -138,9 +205,18 @@ function exemplosDaPrevia() {
         campanha: "ode-to-sleep",
         fonte: "romana",
         retrato: retratoDeExemplo("#6e332d", "#d8b98a"),
-        origem: "Elfa, maga 7",
-        resumo: "Estudiosa do Ciclo de Sylara, desconfia de toda melodia antiga.",
-        historia: "Viu o guardião da ponte cair e jurou descobrir quem canta na torre.",
+        detalhes: {
+          titulos: ["Estudiosa do Ciclo de Sylara, desconfia de toda melodia antiga."],
+          especie: "Elfa",
+          classe: "Maga 7",
+        },
+        destaque: { tipo: "titulo", indice: 0 },
+        textos: [
+          {
+            titulo: "História",
+            texto: "Viu [[personagem:npc-1b2c3d4e|o guardião da ponte]] cair e jurou descobrir quem canta na torre.",
+          },
+        ],
       }),
       doPortal({
         id: "p3",
@@ -148,18 +224,25 @@ function exemplosDaPrevia() {
         dono: "frati",
         campanha: "ode-to-sleep",
         situacao: "aposentado",
-        origem: "Anão, guerreiro 6",
-        resumo: "Pendurou o machado depois da canção e abriu uma forja perto do porto.",
+        detalhes: {
+          titulos: ["Pendurou o machado depois da canção e abriu uma forja perto do porto."],
+          especie: "Anão",
+          ocupacao: "Ferreiro",
+          classe: "Guerreiro 6",
+        },
+        destaque: { tipo: "titulo", indice: 0 },
       }),
+      // Só a Geral e a Jornada
       doPortal({ id: "p4", nome: "Personagem de Neia", dono: "neia", campanha: "ode-to-sleep" }),
+      // Um caído sem a data da Morte, só com o epitáfio
       doPortal({
         id: "p5",
         nome: "Personagem de Comuna",
         dono: "comuna",
         campanha: "remissao",
         situacao: "caido",
-        origem: "Humano, ladino 5",
-        resumo: "Ninguém anotou o dia em que caiu.",
+        queda: { epitafio: "Ninguém anotou o dia em que caiu." },
+        detalhes: { especie: "Humano", classe: "Ladino 5" },
       }),
       doPortal({
         id: "p6",
@@ -167,12 +250,18 @@ function exemplosDaPrevia() {
         dono: "neia",
         campanha: "remissao",
         retrato: retratoDeExemplo("#34503a", "#b9c9a4"),
-        origem: "Humana, clériga 5",
-        resumo: "Atravessou o Passo Negro carregando os feridos nas costas.",
+        detalhes: {
+          titulos: ["Atravessou o Passo Negro carregando os feridos nas costas."],
+          especie: "Humana",
+          classe: "Clériga 5",
+        },
+        destaque: { tipo: "titulo", indice: 0 },
       }),
     ],
     // NPCs cadastrados aqui na galeria
     outrosPersonagens: [
+      // A ficha bem completa: uma frase como destaque, a família com links (a filha é a Voz na Torre,
+      // que só o administrador vê: para os outros, o nome fica sem link) e duas caixas de texto
       outro({
         id: "npc-0a1b2c3d",
         nome: "Ysolde, a Guardiã",
@@ -180,9 +269,45 @@ function exemplosDaPrevia() {
         retrato: retratoDeExemplo("#4a5560", "#c8cdd0"),
         mesas: ["primeira-mesa"],
         situacao: "desaparecido",
-        origem: "Humana, paladina",
-        resumo: "Desceu às ruínas sob o gelo e nunca mais foi vista.",
+        detalhes: {
+          titulos: ["Guardiã do Gelo", "Senhora de Westna"],
+          apelidos: ["A Guardiã", "Sol"],
+          nomeReal: "Ysolde Varn",
+          lar: "As ruínas sob o gelo",
+          laresAnteriores: ["Westna", "O Passo Negro"],
+          genero: "Feminino",
+          especie: "Humana",
+          ocupacao: "Paladina da Ordem do Gelo",
+          idade: "35 anos quando sumiu",
+          religiao: "A Chama Quieta",
+          linguagens: ["Comum", "Anão", "Primordial"],
+          nascimento: { data: data(296, 4, 12), onde: "Westna" },
+          pais: ["Aldren Varn", "[[personagem:npc-2c3d4e5f|Dona Hilda]], mãe de criação"],
+          irmaos: ["[[personagem:npc-1b2c3d4e|Bram]], irmão de juramento"],
+          filhos: ["[[personagem:npc-3d4e5f60|Lianne]]"],
+          regenciaInicio: data(324, null, null, true),
+          regenciaFim: data(331, 9),
+          predecessor: "Aldren Varn, o Velho",
+          alinhamento: "Leal e Bom",
+          nivel: "ND 9",
+          classe: "Paladina",
+          frases: ["O gelo guarda o que a gente esquece.", "Quem desce comigo volta comigo."],
+        },
+        destaque: { tipo: "frase", indice: 0 },
+        textos: [
+          {
+            titulo: "Descrição",
+            texto:
+              "Alta, de cabelo cor de cinza e uma cicatriz que atravessa a sobrancelha. Usa a armadura da ordem até fora de serviço.\n\nCarrega sempre:\n- o escudo com o brasão de Westna;\n- uma lanterna que *nunca* apaga.",
+          },
+          {
+            titulo: "História",
+            texto:
+              "Governou Westna até [[evento:e7|encontrar as ruínas sob o gelo]] e descer sozinha.\n\nDizem que ainda ouve **a voz da filha**, e que é por isso que [[evento:e12|o culto]] a procura.",
+          },
+        ],
       }),
+      // O caído com a Morte e o epitáfio
       outro({
         id: "npc-1b2c3d4e",
         nome: "Bram, o guardião da ponte",
@@ -190,20 +315,24 @@ function exemplosDaPrevia() {
         retrato: retratoDeExemplo("#6b4a2e", "#c9a37a"),
         mesas: ["ode-to-sleep"],
         situacao: "caido",
-        queda: {
-          data: { ano: 365, mes: 4, dia: 22, aprox: false },
-          epitafio: "Ninguém passou pela ponte enquanto ele esteve de pé.",
+        queda: { epitafio: "Ninguém passou pela ponte enquanto ele esteve de pé." },
+        detalhes: {
+          titulos: ["Guardou a ponte velha por trinta invernos."],
+          especie: "Meio-orc",
+          ocupacao: "Guardião da ponte velha",
+          idade: "c. 50 anos",
+          morte: { data: data(365, 4, 22), onde: "A ponte velha" },
+          irmaos: ["[[personagem:npc-0a1b2c3d|Ysolde]], irmã de juramento"],
+          classe: "Guerreiro",
         },
-        origem: "Meio-orc, guerreiro",
-        resumo: "Guardou a ponte velha por trinta invernos.",
+        destaque: { tipo: "titulo", indice: 0 },
       }),
+      // Sem Detalhes, Textos nem acontecimentos: a ficha fica sem abas
       outro({
         id: "npc-2c3d4e5f",
         nome: "Dona Hilda",
         fonte: "caligrafia",
         mesas: ["remissao", "ode-to-sleep"],
-        origem: "Halfling, estalajadeira",
-        resumo: "Dona da Lanterna Torta; sabe de tudo antes de todo mundo.",
         registradoPor: "takezo",
         registradoNome: "Takezo",
       }),
@@ -212,8 +341,14 @@ function exemplosDaPrevia() {
         nome: "A Voz na Torre",
         fonte: "tinta",
         mesas: ["ode-to-sleep"],
-        origem: "Desconhecida",
-        resumo: "Canta da torre todas as noites. O grupo ainda não a encontrou.",
+        detalhes: {
+          nomeReal: "Lianne Varn",
+          especie: "Desconhecida",
+          pais: ["[[personagem:npc-0a1b2c3d|Ysolde]]"],
+          frases: ["Durmam, durmam: a torre vigia."],
+        },
+        destaque: { tipo: "frase", indice: 0 },
+        textos: [{ titulo: "Notas do mestre", texto: "Canta da torre todas as noites. O grupo ainda não a encontrou." }],
         visibilidade: "admin",
       }),
     ],
@@ -347,12 +482,95 @@ function criarApiDePrevia() {
 
   /* ---------- O formato enviado à página ---------- */
 
-  function fichaPublica(p) {
-    const queda =
-      p.situacao === "caido" && p.queda
-        ? { data: p.queda.data ? dataPublica(p.queda.data, true) : null, epitafio: p.queda.epitafio || "" }
-        : null;
-    return { situacao: p.situacao, queda, origem: p.origem, resumo: p.resumo, historia: p.historia };
+  const dataOuNada = (data) => (data ? dataPublica(data, true) : null);
+
+  // O item que o destaque aponta, se ele ainda existir
+  function destaqueValido(p) {
+    const d = p.destaque;
+    const lista = d && Object.hasOwn(LISTA_DO_DESTAQUE, d.tipo) ? p.detalhes[LISTA_DO_DESTAQUE[d.tipo]] : null;
+    return lista && Number.isInteger(d.indice) && lista[d.indice] ? { tipo: d.tipo, indice: d.indice } : null;
+  }
+
+  function destaqueResolvido(p) {
+    const d = destaqueValido(p);
+    return d ? { tipo: d.tipo, texto: p.detalhes[LISTA_DO_DESTAQUE[d.tipo]][d.indice] } : null;
+  }
+
+  // O que o card precisa. Nos caídos, "Caiu em …" usa a data da Morte.
+  function cardPublico(p) {
+    const data = p.detalhes.morte?.data || null;
+    const epitafio = p.queda?.epitafio || "";
+    const queda = p.situacao === "caido" && (data || epitafio) ? { data: dataOuNada(data), epitafio } : null;
+    return { situacao: p.situacao, queda, destaque: destaqueResolvido(p), apelidos: [...p.detalhes.apelidos] };
+  }
+
+  function detalhesPublicos(d) {
+    const publicos = {};
+    for (const [chave, , tipo] of CAMPOS_DOS_DETALHES) {
+      const valor = d[chave];
+      if (tipo === "texto") publicos[chave] = valor || "";
+      else if (tipo === "lista") publicos[chave] = [...(valor || [])];
+      else if (tipo === "data") publicos[chave] = dataOuNada(valor);
+      else publicos[chave] = valor ? { data: dataOuNada(valor.data), onde: valor.onde || "" } : null;
+    }
+    return publicos;
+  }
+
+  /* ---------- Links nos textos, como no servidor/memorias.js ---------- */
+
+  // Os personagens que a conta vê: os do portal sempre; os outros, se não forem só do administrador
+  const personagensVisiveis = () => [...banco.personagens, ...banco.outrosPersonagens.filter(podeVerOutro)];
+
+  // Os textos que podem ter links: os campos de texto e os itens das listas dos Detalhes e o texto das caixas
+  function textosComLinks(p) {
+    const textos = [];
+    for (const [chave, , tipo] of CAMPOS_DOS_DETALHES) {
+      if (tipo === "texto") textos.push(p.detalhes[chave]);
+      else if (tipo === "lista") textos.push(...p.detalhes[chave]);
+    }
+    for (const caixa of p.textos) textos.push(caixa.texto);
+    return textos.filter((t) => typeof t === "string" && t);
+  }
+
+  // Só os alvos que a conta pode ver. Os outros, e os que foram apagados, ficam só como texto na página.
+  function linksPara(textos) {
+    const acontecimentos = new Map(banco.acontecimentos.map((ev) => [ev.id, ev]));
+    const personagens = new Map(personagensVisiveis().map((p) => [p.id, p]));
+    const links = {};
+    for (const texto of textos) {
+      for (const [, alvo, id] of texto.matchAll(REGEX_LINK)) {
+        const chave = `${alvo}:${id}`;
+        if (chave in links) continue;
+        if (alvo === "evento") {
+          const ev = acontecimentos.get(id);
+          if (ev && podeVer(ev)) links[chave] = { titulo: ev.titulo };
+        } else {
+          const personagem = personagens.get(id);
+          if (personagem) links[chave] = { nome: personagem.nome };
+        }
+      }
+    }
+    return links;
+  }
+
+  // O que o "Citar" do formulário oferece: só o que a conta vê
+  function citaveis() {
+    const acontecimentos = banco.acontecimentos
+      .filter(podeVer)
+      .sort((a, b) => chaveDaData(a.data) - chaveDaData(b.data))
+      .map((ev) => ({ id: ev.id, titulo: ev.titulo, ano: ev.data.ano }));
+    const personagens = personagensVisiveis()
+      .map((p) => ({ id: p.id, nome: p.nome }))
+      .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+    return { acontecimentos, personagens };
+  }
+
+  // Os acontecimentos que a conta pode ver e que citam o personagem, do mais antigo ao mais recente
+  function jornadaDe(id) {
+    return banco.acontecimentos
+      .filter((ev) => podeVer(ev) && ev.personagens.includes(id))
+      .sort((a, b) => chaveDaData(a.data) - chaveDaData(b.data))
+      .map((ev) => ({ id: ev.id, titulo: ev.titulo, data: dataPublica(ev.data, true), ate: ev.ate ? dataPublica(ev.ate, false) : null }));
   }
 
   function personagemDoPortal(p) {
@@ -368,7 +586,7 @@ function criarApiDePrevia() {
       dono: p.dono,
       nomeDono,
       mesas: [p.campanha],
-      ...fichaPublica(p),
+      ...cardPublico(p),
       visibilidade: "todos",
       podeEditar: podeEditarFicha(p),
     };
@@ -384,7 +602,7 @@ function criarApiDePrevia() {
       papel: p.papel,
       jogador: p.jogador,
       mesas: [...p.mesas],
-      ...fichaPublica(p),
+      ...cardPublico(p),
       visibilidade: p.visibilidade,
       podeEditar: podeEditarOutro(),
     };
@@ -397,25 +615,37 @@ function criarApiDePrevia() {
     restaurar() {
       banco = exemplosDaPrevia();
     },
+    // A lista vai leve: os Detalhes, os Textos e a Jornada vêm com a ficha de cada um
     async galeria() {
       await esperar(120);
       const personagens = [
         ...banco.personagens.map(personagemDoPortal),
         ...banco.outrosPersonagens.filter(podeVerOutro).map(outroPublico),
       ];
-      // Para cada personagem, os acontecimentos que a conta pode ver e que o citam, do mais antigo ao mais recente
-      const jornada = Object.fromEntries(personagens.map((p) => [p.id, []]));
-      const acontecimentos = banco.acontecimentos.filter(podeVer).sort((a, b) => chaveDaData(a.data) - chaveDaData(b.data));
-      for (const ev of acontecimentos) {
-        const passo = { id: ev.id, titulo: ev.titulo, data: dataPublica(ev.data, true), ate: ev.ate ? dataPublica(ev.ate, false) : null };
-        for (const id of new Set(ev.personagens)) jornada[id]?.push(passo);
-      }
       return structuredClone({
         conta: { ...conta },
         mesas: banco.campanhas,
         personagens,
-        jornada,
       });
+    },
+    // A ficha de um personagem, do portal ou outro, com os links que a conta pode seguir.
+    // Quem pode editar o personagem recebe também o que pode citar.
+    async ficha(id) {
+      await esperar(350);
+      const doPortal = banco.personagens.find((x) => x.id === id);
+      const p = doPortal || acharOutro(id);
+      const resposta = {
+        personagem: {
+          id: p.id,
+          detalhes: detalhesPublicos(p.detalhes),
+          destaque: destaqueValido(p),
+          textos: p.textos.map((caixa) => ({ titulo: caixa.titulo, texto: caixa.texto })),
+        },
+        jornada: jornadaDe(p.id),
+        links: linksPara(textosComLinks(p)),
+      };
+      if (doPortal ? podeEditarFicha(doPortal) : podeEditarOutro()) resposta.citaveis = citaveis();
+      return structuredClone(resposta);
     },
     async estado() {
       return { online: true, mundoAtivo: "ode-to-sleep", conectados: 0, trocandoPara: null };
@@ -446,9 +676,13 @@ function criarApiDePrevia() {
       do id = `npc-${idAleatorio()}`;
       while (ocupados.has(id));
       const quando = new Date().toISOString();
+      // Os Detalhes, o Título ou Frase e os Textos chegam com o formulário novo (sessão 9.3)
       const p = {
         id,
         ...valores,
+        detalhes: detalhesVazios(),
+        destaque: null,
+        textos: [],
         retrato: null,
         registradoPor: conta.usuario,
         registradoNome: conta.nome,
@@ -524,7 +758,6 @@ const estado = {
   conta: null,
   mesas: [],
   personagens: [],
-  jornada: {},
   filtros: { mesas: new Set(), papel: "", situacao: "", busca: "" },
 };
 
@@ -593,8 +826,10 @@ function passaNosFiltros(personagem) {
   if (f.mesas.size && !personagem.mesas.some((id) => f.mesas.has(id))) return false;
   if (f.papel && personagem.papel !== f.papel) return false;
   if (f.situacao && personagem.situacao !== f.situacao) return false;
+  // No nome, nos apelidos e no Título ou Frase
   const termo = normalizar(f.busca.trim());
-  return !termo || normalizar(`${personagem.nome} ${personagem.resumo}`).includes(termo);
+  const onde = [personagem.nome, ...(personagem.apelidos ?? []), personagem.destaque?.texto].map(semLinks).join(" ");
+  return !termo || normalizar(onde).includes(termo);
 }
 
 // Pela situação e, dentro de cada grupo, pelo nome
@@ -693,8 +928,15 @@ function rotuloDoCard(personagem) {
   return partes.join(", ");
 }
 
+// O Título ou Frase escolhido, sem os links: o título como está, a frase entre aspas curvas
+function destaqueSemLinks(destaque) {
+  if (!destaque) return "";
+  const texto = semLinks(destaque.texto);
+  return destaque.tipo === "frase" ? `“${texto}”` : texto;
+}
+
 // O card das Mesas, na cor da primeira mesa, com o retrato como capa e sem arte recortada;
-// abaixo dele, o resumo e as mesas
+// abaixo dele, o Título ou Frase e as mesas
 function montarItem(personagem) {
   const mesas = personagem.mesas.map(mesaPorId).filter(Boolean);
   const item = criar("article", "personagem");
@@ -718,7 +960,8 @@ function montarItem(personagem) {
   card.addEventListener("click", () => abrirFicha(personagem.id));
   item.append(card);
 
-  if (personagem.resumo) item.append(criar("p", "personagem__resumo", personagem.resumo));
+  const destaque = destaqueSemLinks(personagem.destaque);
+  if (destaque) item.append(criar("p", "personagem__destaque", destaque));
   const etiquetas = criar("div", "personagem__mesas");
   etiquetas.append(...mesas.map((mesa) => etiquetaMesa(mesa, { curta: true })));
   if (personagem.visibilidade === "admin") etiquetas.append(seloOculto());
@@ -746,13 +989,88 @@ const ROTULOS_PAPEL = { jogador: "Personagem de jogador", npc: "NPC" };
 
 const comMaiuscula = (texto) => texto.charAt(0).toUpperCase() + texto.slice(1);
 
-function secaoDaFicha(titulo, ...conteudo) {
-  const caixa = criar("section", "ficha__secao");
-  caixa.append(criar("h3", null, titulo), ...conteudo);
-  return caixa;
+// As abas, na ordem em que aparecem. A Geral sai na hora, com os dados da lista;
+// as outras esperam a ficha completa, pedida ao abrir.
+const ABAS = [
+  { id: "geral", rotulo: "Geral" },
+  { id: "detalhes", rotulo: "Detalhes" },
+  { id: "jornada", rotulo: "Jornada" },
+  { id: "textos", rotulo: "Textos" },
+];
+
+// A ficha aberta e a aba à mostra. "resposta" é a ficha completa, null enquanto não chega (ou se falhou);
+// "pedido" conta os pedidos, para a resposta de uma ficha que já foi trocada ser ignorada.
+const fichaAberta = { id: null, aba: "geral", resposta: null, pedido: 0 };
+
+/* ---------- Links nos textos (os mesmos das Memórias) ---------- */
+
+// Um link vira link só quando a conta vê o alvo; senão, fica só o que aparece, como texto.
+// O endereço é montado aqui, a partir do id; o texto nunca vira HTML.
+// O de personagem abre a ficha dele ali mesmo, no mesmo diálogo, na aba Geral.
+function linkDaMencao({ alvo, id, aparece }, links) {
+  const destino = links[`${alvo}:${id}`];
+  if (!destino) return aparece;
+  const link = criar("a", "ficha__link", aparece);
+  if (alvo === "evento") {
+    link.href = `${enderecoDaPagina("linha")}#evento-${encodeURIComponent(id)}`;
+    link.title = `Na Linha do Tempo: ${destino.titulo}`;
+    return link;
+  }
+  link.href = `#personagem-${encodeURIComponent(id)}`;
+  link.title = `Nos Personagens: ${destino.nome}`;
+  link.addEventListener("click", (evento) => {
+    // Com Ctrl, Shift e afins, o navegador abre o link em outra aba ou janela, como sempre
+    if (evento.button !== 0 || evento.ctrlKey || evento.metaKey || evento.shiftKey || evento.altKey) return;
+    if (!personagemPorId(id)) return;
+    evento.preventDefault();
+    abrirFicha(id);
+    focarFicha();
+  });
+  return link;
 }
 
-// O retrato preenche a coluna da esquerda. Sem ele, a ficha fica numa coluna só.
+// Um texto de uma linha (um campo ou um item dos Detalhes, o Título ou Frase), com os links
+function linhaComLinks(texto, links) {
+  const fonte = String(texto || "");
+  const partes = [];
+  let ultimo = 0;
+  for (const achado of fonte.matchAll(REGEX_LINK)) {
+    if (achado.index > ultimo) partes.push(fonte.slice(ultimo, achado.index));
+    const [, alvo, id, aparece] = achado;
+    partes.push(linkDaMencao({ alvo, id, aparece }, links));
+    ultimo = achado.index + achado[0].length;
+  }
+  if (ultimo < fonte.length) partes.push(fonte.slice(ultimo));
+  return partes.filter((parte) => parte !== "");
+}
+
+// O texto de uma caixa, com **negrito**, *itálico*, parágrafos, listas e os links.
+// Cada link vira um marcador antes da formatação (o paragrafosDe do comum.js) e,
+// depois, o link no lugar dele; assim um link pode ficar dentro de um negrito.
+function textoDaCaixa(texto, links) {
+  const mencoes = [];
+  const marcado = String(texto || "").replace(REGEX_LINK, (_, alvo, id, aparece) => {
+    mencoes.push({ alvo, id, aparece });
+    return `${mencoes.length - 1}`;
+  });
+  const corpo = criar("div", "ficha__caixa-texto");
+  corpo.append(...paragrafosDe(marcado));
+  if (!mencoes.length) return corpo;
+
+  const comMarcador = [];
+  const caminho = document.createTreeWalker(corpo, NodeFilter.SHOW_TEXT);
+  while (caminho.nextNode()) if (caminho.currentNode.data.includes("")) comMarcador.push(caminho.currentNode);
+  for (const no of comMarcador) {
+    // Com o grupo no split, os pedaços ímpares são os números dos links
+    const pedacos = no.data.split(/(\d+)/);
+    no.replaceWith(...pedacos.map((pedaco, i) => (i % 2 ? linkDaMencao(mencoes[Number(pedaco)], links) : pedaco)).filter(Boolean));
+  }
+  return corpo;
+}
+
+/* ---------- O conteúdo de cada aba ---------- */
+
+// O retrato preenche a coluna da esquerda e fica parado em todas as abas. Sem ele, a ficha fica numa coluna só.
 function retratoDaFicha(personagem, cor) {
   if (!personagem.retrato) return null;
   const retrato = criar("div", "ficha__retrato");
@@ -772,65 +1090,32 @@ function retratoDaFicha(personagem, cor) {
   return retrato;
 }
 
-// Jogador, mesas, situação e ancestralidade, um abaixo do outro
-function dadosDaFicha(personagem, mesas) {
-  const lista = criar("dl", "ficha__dados");
-  const linha = (rotulo, ...valor) => {
-    const dd = criar("dd");
-    dd.append(...valor);
-    lista.append(criar("dt", null, rotulo), dd);
-  };
-  if (personagem.jogador) linha("Jogador", personagem.jogador);
-  if (mesas.length) {
-    const etiquetas = criar("span", "ficha__mesas");
-    etiquetas.append(...mesas.map((mesa) => etiquetaMesa(mesa)));
-    linha(mesas.length > 1 ? "Mesas" : "Mesa", etiquetas);
-  }
-  linha("Situação", comMaiuscula(ROTULOS_SITUACAO[personagem.situacao] ?? personagem.situacao));
-  if (personagem.origem) linha("Ancestralidade e classe", personagem.origem);
-  return lista;
+// Um rótulo e o valor, na lista de dados da ficha
+function linhaDaLista(lista, rotulo, ...valor) {
+  const dd = criar("dd");
+  dd.append(...valor);
+  lista.append(criar("dt", null, rotulo), dd);
+  return dd;
 }
 
-// A data por extenso e o epitáfio
-function quedaDaFicha(queda) {
-  if (!queda || (!queda.data && !queda.epitafio)) return null;
-  const partes = [];
-  if (queda.data) partes.push(criar("p", "ficha__queda-data", textoDaData(queda.data, { extenso: true })));
-  if (queda.epitafio) partes.push(criar("blockquote", "ficha__epitafio", `“${queda.epitafio}”`));
-  return secaoDaFicha("A queda", ...partes);
+// O Título ou Frase: o título como está, a frase entre aspas curvas (os dois em itálico, pelo CSS)
+function conteudoDoDestaque(destaque, links) {
+  const partes = linhaComLinks(destaque.texto, links);
+  return destaque.tipo === "frase" ? ["“", ...partes, "”"] : partes;
 }
 
-// Os acontecimentos que citam o personagem, do mais antigo ao mais recente (o servidor já manda nessa ordem)
-function jornadaDaFicha(personagem) {
-  const passos = estado.jornada[personagem.id] ?? [];
-  if (!passos.length) return criar("p", "ficha__nota", "Nenhum acontecimento da Linha do Tempo cita este personagem ainda.");
-  const linha = enderecoDaPagina("linha");
-  const lista = criar("ol", "jornada");
-  for (const passo of passos) {
-    const link = criar("a", "jornada__link");
-    link.href = `${linha}#evento-${encodeURIComponent(passo.id)}`;
-    link.append(criar("span", "jornada__data", textoDoPeriodo(passo)), criar("span", "jornada__titulo", passo.titulo));
-    const item = criar("li", "jornada__passo");
-    item.append(link);
-    lista.append(item);
-  }
-  return lista;
+// O destaque da ficha completa, com o texto do item que ele aponta, como o da lista
+function destaqueDaResposta(resposta) {
+  const { destaque, detalhes } = resposta.personagem;
+  if (!destaque || !Object.hasOwn(LISTA_DO_DESTAQUE, destaque.tipo)) return null;
+  const texto = detalhes[LISTA_DO_DESTAQUE[destaque.tipo]]?.[destaque.indice];
+  return texto ? { tipo: destaque.tipo, texto } : null;
 }
 
-function abrirFicha(id) {
-  const personagem = personagemPorId(id);
-  if (!personagem) return;
-  const dialogo = $("#dialogo-ficha");
-  const conteudo = $("#ficha-conteudo");
+// Geral: o papel, o nome, o jogador, as mesas, a situação (nos caídos, com o epitáfio embaixo)
+// e o Título ou Frase. Sai com os dados da lista; com a ficha completa, o destaque ganha os links.
+function abaGeral(personagem) {
   const mesas = personagem.mesas.map(mesaPorId).filter(Boolean);
-  const partes = [];
-
-  const retrato = retratoDaFicha(personagem, mesas[0]?.cor ?? COR_SEM_MESA);
-  if (retrato) partes.push(retrato);
-  conteudo.classList.toggle("ficha--sem-retrato", !retrato);
-  conteudo.classList.toggle("ficha--caido", personagem.situacao === "caido");
-
-  const corpo = criar("div", "ficha__corpo");
   const cabeca = criar("div", "ficha__cabeca");
   cabeca.append(criar("span", "ficha__papel", ROTULOS_PAPEL[personagem.papel] ?? personagem.papel));
   if (personagem.visibilidade === "admin") cabeca.append(seloOculto());
@@ -843,37 +1128,271 @@ function abrirFicha(id) {
     lapis.addEventListener("click", () => abrirEdicao(personagem));
     cabeca.append(lapis);
   }
+  // O foco vem para o nome quando a ficha fica sem abas
   const nome = criar("h2", "ficha__nome", personagem.nome);
   nome.id = "ficha-nome";
+  nome.tabIndex = -1;
   aplicarFonte(nome, personagem.fonte);
-  corpo.append(cabeca, nome, dadosDaFicha(personagem, mesas));
 
-  if (personagem.resumo) corpo.append(criar("p", "ficha__resumo", personagem.resumo));
-  if (personagem.historia) {
-    const historia = criar("div", "ficha__historia");
-    historia.append(...paragrafosDe(personagem.historia));
-    corpo.append(secaoDaFicha("História", historia));
+  const lista = criar("dl", "ficha__dados");
+  if (personagem.jogador) linhaDaLista(lista, "Jogador", personagem.jogador);
+  if (mesas.length) {
+    const etiquetas = criar("span", "ficha__mesas");
+    etiquetas.append(...mesas.map((mesa) => etiquetaMesa(mesa)));
+    linhaDaLista(lista, mesas.length > 1 ? "Mesas" : "Mesa", etiquetas);
   }
-  if (personagem.situacao === "caido") {
-    const queda = quedaDaFicha(personagem.queda);
-    if (queda) corpo.append(queda);
+  const situacao = linhaDaLista(lista, "Situação", comMaiuscula(ROTULOS_SITUACAO[personagem.situacao] ?? personagem.situacao));
+  if (personagem.situacao === "caido" && personagem.queda?.epitafio) {
+    situacao.append(criar("span", "ficha__epitafio", `“${personagem.queda.epitafio}”`));
   }
-  corpo.append(secaoDaFicha("Na Linha do Tempo", jornadaDaFicha(personagem)));
 
+  const partes = [cabeca, nome, lista];
+  const resposta = fichaAberta.resposta;
+  const destaque = resposta ? destaqueDaResposta(resposta) : personagem.destaque;
+  if (destaque?.texto) {
+    const paragrafo = criar("p", "ficha__destaque");
+    paragrafo.append(...conteudoDoDestaque(destaque, resposta?.links ?? {}));
+    partes.push(paragrafo);
+  }
+  return partes;
+}
+
+const detalhePreenchido = (tipo, valor) => (tipo === "lista" ? Array.isArray(valor) && valor.length > 0 : Boolean(valor));
+
+// Um valor dos Detalhes: o texto com os links; a lista, um item por linha (as frases entre aspas curvas);
+// a data no Ciclo de Sylara; o marco com a data e o onde, ou só o que tiver
+function valorDoDetalhe(chave, tipo, valor, links) {
+  if (tipo === "texto") return linhaComLinks(valor, links);
+  if (tipo === "lista") {
+    const frase = chave === "frases";
+    return valor.map((item) => {
+      const linha = criar("span", frase ? "ficha__item ficha__frase" : "ficha__item");
+      linha.append(...(frase ? ["“", ...linhaComLinks(item, links), "”"] : linhaComLinks(item, links)));
+      return linha;
+    });
+  }
+  if (tipo === "data") return [textoDaData(valor)];
+  return [[valor.data ? textoDaData(valor.data) : "", valor.onde].filter(Boolean).join(" · ")];
+}
+
+// Detalhes: o nome e, na ordem da ficha, só o que estiver preenchido
+function abaDetalhes(personagem, resposta) {
+  const { detalhes } = resposta.personagem;
+  const lista = criar("dl", "ficha__dados");
+  linhaDaLista(lista, "Nome", personagem.nome);
+  for (const [chave, rotulo, tipo] of CAMPOS_DOS_DETALHES) {
+    if (detalhePreenchido(tipo, detalhes[chave])) {
+      linhaDaLista(lista, rotulo, ...valorDoDetalhe(chave, tipo, detalhes[chave], resposta.links));
+    }
+  }
+  return [lista];
+}
+
+// Jornada: os acontecimentos que citam o personagem, do mais antigo ao mais recente (o servidor já manda nessa ordem)
+function abaJornada(resposta) {
+  const linha = enderecoDaPagina("linha");
+  const lista = criar("ol", "jornada");
+  for (const passo of resposta.jornada) {
+    const link = criar("a", "jornada__link");
+    link.href = `${linha}#evento-${encodeURIComponent(passo.id)}`;
+    link.append(criar("span", "jornada__data", textoDoPeriodo(passo)), criar("span", "jornada__titulo", passo.titulo));
+    const item = criar("li", "jornada__passo");
+    item.append(link);
+    lista.append(item);
+  }
+  return [lista];
+}
+
+// Textos: as caixas, cada uma com o título e o texto formatado
+function abaTextos(resposta) {
+  return resposta.personagem.textos.map((caixa) => {
+    const secao = criar("section", "ficha__caixa");
+    secao.append(criar("h3", null, caixa.titulo), textoDaCaixa(caixa.texto, resposta.links));
+    return secao;
+  });
+}
+
+// As abas que têm o que mostrar: a Geral sempre; as outras, só com conteúdo
+function abasComConteudo(resposta) {
+  const { detalhes, textos } = resposta.personagem;
+  const tem = {
+    geral: true,
+    detalhes: CAMPOS_DOS_DETALHES.some(([chave, , tipo]) => detalhePreenchido(tipo, detalhes[chave])),
+    jornada: resposta.jornada.length > 0,
+    textos: textos.length > 0,
+  };
+  return ABAS.filter((aba) => tem[aba.id]);
+}
+
+/* ---------- As abas ---------- */
+
+// Os marcadores presos à borda direita do quadro (no celular, uma fileira no alto da coluna de texto).
+// Enquanto a ficha completa não chega, só a Geral funciona; as outras aparecem apagadas.
+function montarAbas(abas, carregando) {
+  const lista = criar("div", "ficha__abas");
+  lista.setAttribute("role", "tablist");
+  lista.setAttribute("aria-orientation", "vertical");
+  lista.setAttribute("aria-label", "Partes da ficha");
+  for (const aba of abas) {
+    const botaoAba = criar("button", "ficha__aba", aba.rotulo);
+    botaoAba.type = "button";
+    botaoAba.id = `ficha-aba-${aba.id}`;
+    botaoAba.dataset.aba = aba.id;
+    botaoAba.setAttribute("role", "tab");
+    botaoAba.setAttribute("aria-controls", "ficha-painel");
+    if (carregando && aba.id !== "geral") botaoAba.setAttribute("aria-disabled", "true");
+    botaoAba.addEventListener("click", () => mostrarAba(aba.id));
+    lista.append(botaoAba);
+  }
+  lista.addEventListener("keydown", andarPelasAbas);
+  return lista;
+}
+
+// Põe (ou troca) as abas na ficha aberta. Se sobrar só a Geral, não aparece aba nenhuma.
+function colocarAbas(abas, carregando) {
+  const ficha = $("#ficha-conteudo");
+  const painel = $("#ficha-painel");
+  const antigas = ficha.querySelector(".ficha__abas");
+  const focoNasAbas = Boolean(antigas?.contains(document.activeElement));
+  antigas?.remove();
+  if (!abas.some((aba) => aba.id === fichaAberta.aba)) fichaAberta.aba = "geral";
+
+  if (abas.length > 1) {
+    ficha.querySelector(".ficha__texto").before(montarAbas(abas, carregando));
+    painel.setAttribute("role", "tabpanel");
+    painel.tabIndex = 0;
+  } else {
+    for (const atributo of ["role", "aria-labelledby", "tabindex"]) painel.removeAttribute(atributo);
+  }
+  marcarAbaAtiva();
+  if (focoNasAbas) focarFicha();
+}
+
+// A aba ativa: selecionada, a única no Tab (as outras pelas setas) e o rótulo do painel
+function marcarAbaAtiva() {
+  for (const botaoAba of document.querySelectorAll("#ficha-conteudo .ficha__aba")) {
+    const ativa = botaoAba.dataset.aba === fichaAberta.aba;
+    botaoAba.setAttribute("aria-selected", String(ativa));
+    botaoAba.tabIndex = ativa ? 0 : -1;
+  }
+  const painel = $("#ficha-painel");
+  if (painel.getAttribute("role") === "tabpanel") painel.setAttribute("aria-labelledby", `ficha-aba-${fichaAberta.aba}`);
+}
+
+// O conteúdo da aba à mostra
+function desenharAba() {
+  const personagem = personagemPorId(fichaAberta.id);
+  if (!personagem) return;
+  const resposta = fichaAberta.resposta;
+  const conteudo = {
+    geral: () => abaGeral(personagem),
+    detalhes: () => abaDetalhes(personagem, resposta),
+    jornada: () => abaJornada(resposta),
+    textos: () => abaTextos(resposta),
+  }[fichaAberta.aba];
+  $("#ficha-painel").replaceChildren(...conteudo());
+}
+
+function mostrarAba(id, { focar = false } = {}) {
+  // As apagadas esperam a ficha completa
+  if (id !== "geral" && !fichaAberta.resposta) return;
+  if (id !== fichaAberta.aba) {
+    fichaAberta.aba = id;
+    marcarAbaAtiva();
+    desenharAba();
+    voltarAoAlto();
+  }
+  if (focar) $(`#ficha-aba-${id}`)?.focus();
+}
+
+// No teclado: ↓ e ↑ trocam de aba (e → e ←, na fileira do celular), com volta;
+// Home e End vão à primeira e à última. As apagadas ficam de fora.
+function andarPelasAbas(evento) {
+  const teclas = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1, Home: "primeira", End: "ultima" };
+  if (!Object.hasOwn(teclas, evento.key)) return;
+  const abas = [...evento.currentTarget.querySelectorAll('.ficha__aba:not([aria-disabled="true"])')];
+  if (!abas.length) return;
+  evento.preventDefault();
+  const atual = Math.max(0, abas.findIndex((botaoAba) => botaoAba.dataset.aba === fichaAberta.aba));
+  const passo = teclas[evento.key];
+  const indice = passo === "primeira" ? 0 : passo === "ultima" ? abas.length - 1 : (atual + passo + abas.length) % abas.length;
+  mostrarAba(abas[indice].dataset.aba, { focar: true });
+}
+
+// Trocar de aba volta o conteúdo ao alto. No celular a ficha inteira rola e as abas ficam presas no alto:
+// ela volta só até onde as abas grudam, sem trazer o retrato de volta.
+function voltarAoAlto() {
+  const ficha = $("#ficha-conteudo");
+  $("#ficha-painel").scrollTop = 0;
+  const abas = ficha.querySelector(".ficha__abas");
+  if (!abas) return;
+  const texto = ficha.querySelector(".ficha__texto");
+  const ondeGrudam = texto.getBoundingClientRect().top - ficha.getBoundingClientRect().top + ficha.scrollTop - abas.offsetHeight;
+  if (ficha.scrollTop > ondeGrudam) ficha.scrollTop = Math.max(0, ondeGrudam);
+}
+
+// Depois de trocar de ficha por um link: o foco vai para a aba Geral ou, sem abas, para o nome
+function focarFicha() {
+  ($("#ficha-aba-geral") ?? $("#ficha-nome"))?.focus({ preventScroll: true });
+}
+
+// A ficha completa: os Detalhes, a Jornada, os Textos e os links. Quando chega, ficam só as abas com conteúdo
+// e o destaque da Geral ganha os links. Se falhar, a Geral continua e as outras abas saem.
+async function carregarFicha(id) {
+  const pedido = ++fichaAberta.pedido;
+  let resposta = null;
+  let falha = null;
+  try {
+    resposta = await api.ficha(id);
+  } catch (erro) {
+    falha = erro;
+  }
+  if (pedido !== fichaAberta.pedido || fichaAberta.id !== id || !$("#dialogo-ficha").open) return;
+  fichaAberta.resposta = resposta;
+  if (falha) avisoRapido(`As outras abas da ficha não carregaram. ${falha.message}`);
+  colocarAbas(resposta ? abasComConteudo(resposta) : [ABAS[0]], false);
+
+  const destaque = resposta && fichaAberta.aba === "geral" ? $("#ficha-painel .ficha__destaque") : null;
+  const novo = destaque ? destaqueDaResposta(resposta) : null;
+  if (novo) destaque.replaceChildren(...conteudoDoDestaque(novo, resposta.links));
+}
+
+function abrirFicha(id) {
+  const personagem = personagemPorId(id);
+  if (!personagem) return;
+  const dialogo = $("#dialogo-ficha");
+  const conteudo = $("#ficha-conteudo");
+  const mesas = personagem.mesas.map(mesaPorId).filter(Boolean);
+  Object.assign(fichaAberta, { id, aba: "geral", resposta: null });
+  const partes = [];
+
+  const retrato = retratoDaFicha(personagem, mesas[0]?.cor ?? COR_SEM_MESA);
+  if (retrato) partes.push(retrato);
+  conteudo.classList.toggle("ficha--sem-retrato", !retrato);
+  conteudo.classList.toggle("ficha--caido", personagem.situacao === "caido");
+
+  // O conteúdo da aba: só ele rola (no celular, a ficha inteira). O pé fica igual em todas as abas.
+  const painel = criar("div", "ficha__corpo");
+  painel.id = "ficha-painel";
   const acoes = criar("div", "ficha__acoes");
   acoes.append(
     botao("Copiar link", "botao--leve espaco", () => copiarLink(personagem)),
     botao("Fechar", "botao--leve", () => dialogo.close()),
   );
-
   const texto = criar("div", "ficha__texto");
-  texto.append(corpo, acoes);
+  texto.append(painel, acoes);
   partes.push(texto);
-
   conteudo.replaceChildren(...partes);
+
+  colocarAbas(ABAS, true);
+  desenharAba();
+  // O nome só está na aba Geral; o diálogo leva ele no rótulo
+  dialogo.setAttribute("aria-label", personagem.nome);
   trocarEndereco(`#personagem-${personagem.id}`);
   if (!dialogo.open) dialogo.showModal();
-  dialogo.scrollTop = 0;
+  conteudo.scrollTop = 0;
+  painel.scrollTop = 0;
+  carregarFicha(id);
 }
 
 async function copiarLink(personagem) {
@@ -1334,7 +1853,6 @@ async function recarregar() {
     conta: dados.conta,
     mesas: dados.mesas,
     personagens: dados.personagens,
-    jornada: dados.jornada,
   });
   carregarFontes(estado.personagens.map((p) => p.fonte));
   renderizarTudo();
