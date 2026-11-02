@@ -11,6 +11,8 @@
    A ficha aberta tem quatro abas, presas ao lado do quadro: Geral,
    Detalhes, Jornada e Textos. A Geral sai na hora, com os dados da
    lista; as outras chegam com a ficha completa, pedida ao abrir.
+   O formulário de cadastrar e alterar tem três abas no alto: Geral,
+   Detalhes e Textos, com o "Citar" das Memórias.
 
    No servidor, conversa com o servidor/personagens.js. Aberta fora
    dele (arquivo no PC ou prévia), usa personagens de exemplo e um
@@ -63,6 +65,19 @@ const CAMPOS_DOS_DETALHES = [
   ["classe", "Classe", "texto"],
   ["frases", "Frases", "lista"],
 ];
+
+// Os limites da ficha, como no servidor/personagens.js
+const LIMITES_DA_FICHA = {
+  texto: 120, // um campo de texto dos Detalhes
+  itens: 20, // itens de uma lista
+  item: 160, // cada item de uma lista
+  frase: 300, // cada item das Frases
+  onde: 80, // o "onde" de um marco
+  link: 120, // o que aparece num link, como nas Memórias
+  caixas: 20,
+  tituloDaCaixa: 80,
+  textoDaCaixa: 20000,
+};
 
 // O destaque aponta um item de uma destas listas dos Detalhes
 const LISTA_DO_DESTAQUE = { titulo: "titulos", frase: "frases" };
@@ -421,31 +436,111 @@ function criarApiDePrevia() {
     return limpo;
   }
 
-  function textosDe(dados) {
-    return {
-      origem: textoOpcional(dados.origem, "Ancestralidade e classe", 80),
-      resumo: textoOpcional(dados.resumo, "Resumo", 160).replace(/\s*\n\s*/g, " "),
-      historia: textoOpcional(dados.historia, "História", 6000),
-    };
+  const numaLinha = (valor) => valor.replace(/\s*\n\s*/g, " ");
+
+  // Todo link precisa mostrar alguma coisa, e no máximo 120 caracteres
+  function conferirLinks(texto, campo) {
+    for (const [, , , aparece] of texto.matchAll(REGEX_LINK)) {
+      if (!aparece.trim()) {
+        throw erroComCodigo(`Um link no campo ${campo} está sem o que aparece. Escreva depois da barra: [[evento:id|o que aparece]].`);
+      }
+      if (aparece.length > LIMITES_DA_FICHA.link) {
+        throw erroComCodigo(`O que aparece num link pode ter no máximo ${LIMITES_DA_FICHA.link} caracteres (campo ${campo}).`);
+      }
+    }
   }
 
+  // Uma data no Ciclo de Sylara, com as regras da Linha do Tempo. Vazia: null.
+  function dataDoDetalhe(bruta, rotulo) {
+    if (!bruta) return null;
+    const { ano } = bruta;
+    if (!Number.isInteger(ano) || ano < 0 || ano > banco.anoAtual) {
+      throw erroComCodigo(`O ano precisa ser um número inteiro de 0 a ${banco.anoAtual} (campo ${rotulo}).`);
+    }
+    const numero = (valor, max, mensagem) => {
+      if (valor === null || valor === undefined || valor === "" || valor === 0) return null;
+      if (!Number.isInteger(valor) || valor < 1 || valor > max) throw erroComCodigo(`${mensagem} (campo ${rotulo}).`);
+      return valor;
+    };
+    const mes = numero(bruta.mes, 10, "Escolha um mês da lista");
+    const dia = mes ? numero(bruta.dia, 30, "Escolha um dia de 1 a 30") : null;
+    return { ano, mes, dia, aprox: bruta.aprox === true };
+  }
+
+  // A ficha completa, campo a campo. "morteMantida": quando quem envia não muda a Morte (o dono),
+  // ela fica como está e o que veio no envio é ignorado.
+  function detalhesDe(bruto, morteMantida) {
+    const corpo = bruto && typeof bruto === "object" && !Array.isArray(bruto) ? bruto : {};
+    const detalhes = {};
+    for (const [chave, rotulo, tipo] of CAMPOS_DOS_DETALHES) {
+      if (chave === "morte" && morteMantida !== undefined) {
+        detalhes.morte = morteMantida;
+        continue;
+      }
+      const valor = corpo[chave];
+      if (tipo === "texto") {
+        detalhes[chave] = numaLinha(textoOpcional(valor, rotulo, LIMITES_DA_FICHA.texto));
+        conferirLinks(detalhes[chave], rotulo);
+      } else if (tipo === "lista") {
+        const max = chave === "frases" ? LIMITES_DA_FICHA.frase : LIMITES_DA_FICHA.item;
+        const itens = (Array.isArray(valor) ? valor : []).map((item) => (typeof item === "string" ? numaLinha(item.trim()) : "")).filter(Boolean);
+        for (const item of itens) {
+          if (item.length > max) throw erroComCodigo(`Cada item do campo ${rotulo} pode ter no máximo ${max} caracteres.`);
+          conferirLinks(item, rotulo);
+        }
+        if (itens.length > LIMITES_DA_FICHA.itens) {
+          throw erroComCodigo(`O campo ${rotulo} pode ter no máximo ${LIMITES_DA_FICHA.itens} itens.`);
+        }
+        detalhes[chave] = itens;
+      } else if (tipo === "data") {
+        detalhes[chave] = dataDoDetalhe(valor, rotulo);
+      } else if (valor && typeof valor === "object") {
+        const data = dataDoDetalhe(valor.data, rotulo);
+        const onde = numaLinha(textoOpcional(valor.onde, `${rotulo} (onde)`, LIMITES_DA_FICHA.onde));
+        detalhes[chave] = data || onde ? { data, onde } : null;
+      } else {
+        detalhes[chave] = null;
+      }
+    }
+    return detalhes;
+  }
+
+  // As caixas de texto livre. Uma caixa toda vazia sai; com texto, precisa de título.
+  function caixasDe(lista) {
+    const caixas = [];
+    (Array.isArray(lista) ? lista : []).forEach((bruta, i) => {
+      const caixa = bruta && typeof bruta === "object" ? bruta : {};
+      const titulo = numaLinha(textoOpcional(caixa.titulo, `Título da caixa ${i + 1}`, LIMITES_DA_FICHA.tituloDaCaixa));
+      const texto = textoOpcional(caixa.texto, `Texto da caixa ${i + 1}`, LIMITES_DA_FICHA.textoDaCaixa);
+      if (!titulo && !texto) return;
+      if (!titulo) throw erroComCodigo(`Preencha o campo Título da caixa ${i + 1}.`);
+      conferirLinks(texto, `Texto da caixa ${i + 1}`);
+      caixas.push({ titulo, texto });
+    });
+    if (caixas.length > LIMITES_DA_FICHA.caixas) {
+      throw erroComCodigo(`A aba Textos pode ter no máximo ${LIMITES_DA_FICHA.caixas} caixas.`);
+    }
+    return caixas;
+  }
+
+  // Os Detalhes, o Título ou Frase e os Textos. O destaque aponta um item que existe, ou fica null.
+  function conteudoDe(dados, morteMantida) {
+    const detalhes = detalhesDe(dados.detalhes, morteMantida);
+    const bruto = dados.destaque;
+    const lista = bruto && Object.hasOwn(LISTA_DO_DESTAQUE, bruto.tipo) ? detalhes[LISTA_DO_DESTAQUE[bruto.tipo]] : null;
+    const valido = lista && Number.isInteger(bruto.indice) && bruto.indice >= 0 && bruto.indice < lista.length;
+    return { detalhes, destaque: valido ? { tipo: bruto.tipo, indice: bruto.indice } : null, textos: caixasDe(dados.textos) };
+  }
+
+  // O epitáfio só vale para os caídos; a data da queda é a Morte dos Detalhes
   function situacaoDe(dados) {
     const situacao = dados.situacao ?? "vivo";
     if (!Object.hasOwn(ROTULOS_SITUACAO, situacao)) {
       throw erroComCodigo("Escolha a situação: vivo, caído, desaparecido ou aposentado.");
     }
-    const bruta = situacao === "caido" ? dados.queda : null;
-    if (!bruta) return { situacao, queda: null };
-    let data = null;
-    if (bruta.data) {
-      const { ano, mes, dia } = bruta.data;
-      if (!Number.isInteger(ano) || ano < 0 || ano > banco.anoAtual) {
-        throw erroComCodigo(`O ano precisa ser um número inteiro de 0 a ${banco.anoAtual}.`);
-      }
-      data = { ano, mes: mes || null, dia: mes && dia ? dia : null, aprox: false };
-    }
-    const epitafio = textoOpcional(bruta.epitafio, "Epitáfio", 160);
-    return { situacao, queda: data || epitafio ? { data, epitafio } : null };
+    const bruta = situacao === "caido" && dados.queda && typeof dados.queda === "object" ? dados.queda : null;
+    const epitafio = bruta ? textoOpcional(bruta.epitafio, "Epitáfio", 160) : "";
+    return { situacao, queda: epitafio ? { epitafio } : null };
   }
 
   // O editor não escolhe quem vê: o que ele cadastra é para todos, e continua como está quando ele altera
@@ -467,7 +562,7 @@ function criarApiDePrevia() {
       jogador: dados.papel === "jogador" ? textoOpcional(dados.jogador, "Jogador", 40) : "",
       mesas: [...new Set(dados.mesas)].filter((id) => conhecidas.has(id)),
       ...situacaoDe(dados),
-      ...textosDe(dados),
+      ...conteudoDe(dados),
       visibilidade,
     };
   }
@@ -654,15 +749,16 @@ function criarApiDePrevia() {
       await esperar(100);
       return {};
     },
-    // O dono escreve os textos e troca a arte; o administrador e os editores mudam isso em qualquer ficha,
-    // e também a situação e a queda
+    // O dono escreve os Detalhes (menos a Morte), o Título ou Frase e os Textos e troca a arte;
+    // o administrador e os editores mudam isso em qualquer ficha e também a situação, o epitáfio e a Morte
     async salvarFicha(id, dados) {
       await esperar(200);
       const p = banco.personagens.find((x) => x.id === id);
       if (!p) throw semPersonagem();
       if (!podeEditarFicha(p)) throw proibido();
-      const valores = textosDe(dados);
-      if (conta.cargo === "admin" || conta.cargo === "editor") Object.assign(valores, situacaoDe(dados));
+      const cuida = conta.cargo === "admin" || conta.cargo === "editor";
+      const valores = conteudoDe(dados, cuida ? undefined : (p.detalhes.morte ?? null));
+      if (cuida) Object.assign(valores, situacaoDe(dados));
       Object.assign(p, valores);
       aplicarImagens(p, dados.imagens);
       return { ok: true };
@@ -676,13 +772,9 @@ function criarApiDePrevia() {
       do id = `npc-${idAleatorio()}`;
       while (ocupados.has(id));
       const quando = new Date().toISOString();
-      // Os Detalhes, o Título ou Frase e os Textos chegam com o formulário novo (sessão 9.3)
       const p = {
         id,
         ...valores,
-        detalhes: detalhesVazios(),
-        destaque: null,
-        textos: [],
         retrato: null,
         registradoPor: conta.usuario,
         registradoNome: conta.nome,
@@ -1417,19 +1509,59 @@ function trocarEndereco(ancora) {
 /* =================================================================
    Cadastrar e alterar
    -----------------------------------------------------------------
-   Um formulário só, com os campos que a conta pode mudar. Nos
+   Um formulário só, em três abas (Geral, Detalhes e Textos), com
+   os campos que a conta pode mudar. "Salvar" salva tudo. Nos
    personagens do portal, nome e fonte continuam no "Personalizar"
-   das Mesas; o dono escreve os textos e troca a arte, e só o
-   administrador muda a situação e a queda.
+   das Mesas; o dono escreve os Detalhes (menos a Morte), o Título
+   ou Frase e os Textos e troca a arte, e só o administrador e os
+   editores mudam a situação, o epitáfio e a Morte.
    ================================================================= */
 
 const edicao = {
   personagem: null, // o personagem sendo alterado, ou null para um novo
   mesas: new Set(),
   remover: { retrato: false },
+  aba: "geral",
+  cuida: false, // administrador ou editor: muda a situação, o epitáfio e a Morte
+  destaque: null, // o Título ou Frase escolhido: { tipo, indice, texto, quantos }, ou null
+  citaveis: { acontecimentos: [], personagens: [] }, // o que o "Citar" oferece
+  ultimoCampo: { detalhes: null, textos: null }, // onde o "Citar" de cada aba põe o link
+  abrindo: false, // esperando a ficha completa para abrir
+  pedido: 0, // conta os pedidos do "Citar" de um personagem novo, para ignorar os que ficaram para trás
 };
 
 const formEdicao = () => $("#form-edicao");
+
+// As abas do formulário, na ordem em que aparecem
+const ABAS_DA_EDICAO = ["geral", "detalhes", "textos"];
+
+// Os Detalhes no formulário, em grupos com um título pequeno. Os rótulos são os da ficha, que também
+// aparecem nas mensagens de erro; dentro da Regência, o começo e o término ficam com o nome curto.
+const GRUPOS_DOS_DETALHES = [
+  ["Nomes", ["titulos", "apelidos", "nomeReal"]],
+  ["Origem", ["especie", "genero", "idade", "lar", "laresAnteriores", "linguagens", "religiao"]],
+  ["Vida", ["nascimento", "transformado", "morte", "destruido"]],
+  ["Família", ["pais", "irmaos", "filhos", "parentes"]],
+  ["Regência", ["regenciaInicio", "regenciaFim", "predecessor", "sucessor"]],
+  ["Jogo", ["ocupacao", "classe", "nivel", "alinhamento"]],
+  ["Frases", ["frases"]],
+];
+const ROTULOS_CURTOS = { regenciaInicio: "Começo", regenciaFim: "Término" };
+
+// As sugestões do Alinhamento; dá para escrever outro
+const ALINHAMENTOS = [
+  "Leal e Bom",
+  "Neutro e Bom",
+  "Caótico e Bom",
+  "Leal e Neutro",
+  "Neutro",
+  "Caótico e Neutro",
+  "Leal e Mau",
+  "Neutro e Mau",
+  "Caótico e Mau",
+];
+
+const ROTULOS_DO_DESTAQUE = { titulo: "Título", frase: "Frase" };
 
 function opcoesDeMes(seletor, valor) {
   seletor.replaceChildren(new Option("Sem mês", ""), ...MESES.map((mes, i) => new Option(mes, String(i + 1))));
@@ -1441,6 +1573,46 @@ function opcoesDeDia(seletor, valor) {
   for (let dia = 1; dia <= 30; dia++) seletor.append(new Option(String(dia), String(dia)));
   seletor.value = valor ? String(valor) : "";
 }
+
+// Um erro de um campo: o formulário vai para a aba dele e põe o foco nele
+function erroNoCampo(mensagem, campo) {
+  const erro = new Error(mensagem);
+  erro.campo = campo;
+  return erro;
+}
+
+/* ---------- As abas do formulário ---------- */
+
+// A aba à mostra: selecionada e a única no Tab (as outras pelas setas). Trocar volta os campos ao alto.
+// O "Citar" aparece nas abas Detalhes e Textos.
+function mostrarAbaDaEdicao(aba, { focar = false } = {}) {
+  const trocou = aba !== edicao.aba;
+  edicao.aba = aba;
+  for (const id of ABAS_DA_EDICAO) {
+    const ativa = id === aba;
+    const botaoAba = $(`#edicao-aba-${id}`);
+    botaoAba.setAttribute("aria-selected", String(ativa));
+    botaoAba.tabIndex = ativa ? 0 : -1;
+    $(`#edicao-${id}`).hidden = !ativa;
+  }
+  mostrarCitar();
+  if (trocou) $(".edicao__campos").scrollTop = 0;
+  if (focar) $(`#edicao-aba-${aba}`).focus();
+}
+
+// No teclado: → e ← trocam de aba, com volta; Home e End vão à primeira e à última
+function andarPelasAbasDaEdicao(evento) {
+  const teclas = { ArrowRight: 1, ArrowLeft: -1, Home: "primeira", End: "ultima" };
+  if (!Object.hasOwn(teclas, evento.key)) return;
+  evento.preventDefault();
+  const total = ABAS_DA_EDICAO.length;
+  const atual = ABAS_DA_EDICAO.indexOf(edicao.aba);
+  const passo = teclas[evento.key];
+  const indice = passo === "primeira" ? 0 : passo === "ultima" ? total - 1 : (atual + passo + total) % total;
+  mostrarAbaDaEdicao(ABAS_DA_EDICAO[indice], { focar: true });
+}
+
+/* ---------- Geral ---------- */
 
 // As mesas na ordem da lista, como no filtro; no fim, o "+ Mesa" do administrador
 function renderizarEscolhaMesas() {
@@ -1522,11 +1694,11 @@ function mostrarFonte() {
   aplicarFonte(form.nome, form.fonte.value);
 }
 
-// O jogador só vale para personagens de jogador; a data e o epitáfio, só para os caídos
+// O jogador só vale para personagens de jogador; o epitáfio, só para os caídos
 function mostrarCamposDependentes() {
   const form = formEdicao();
   $("#campo-jogador").hidden = form.papel.value !== "jogador";
-  $("#grupo-queda").hidden = $("#grupo-situacao").hidden || form.situacao.value !== "caido";
+  $("#campo-epitafio").hidden = $("#grupo-situacao").hidden || form.situacao.value !== "caido";
 }
 
 function mostrarImagem(campo, src) {
@@ -1535,13 +1707,420 @@ function mostrarImagem(campo, src) {
   if (src) caixa.querySelector("img").src = src;
 }
 
-function abrirEdicao(personagem = null) {
+// A situação e, para os caídos, o epitáfio. A data da queda é a Morte, na aba Detalhes.
+function situacaoDoFormulario() {
+  const form = formEdicao();
+  const situacao = form.situacao.value;
+  const epitafio = situacao === "caido" ? form.epitafio.value.trim() : "";
+  return { situacao, queda: epitafio ? { epitafio } : null };
+}
+
+/* ---------- Geral: o Título ou Frase ---------- */
+
+// Cada linha de uma lista é um item; as vazias saem
+const itensDaLista = (texto) =>
+  texto
+    .split("\n")
+    .map((linha) => linha.trim())
+    .filter(Boolean);
+
+// Uma opção comprida demais encurta, para a lista de escolha caber no formulário
+const encurtar = (texto, max = 90) => (texto.length > max ? `${texto.slice(0, max - 1).trimEnd()}…` : texto);
+
+// Os títulos e as frases escritos agora na aba Detalhes
+function listasDoDestaque() {
+  const form = formEdicao();
+  return {
+    titulo: itensDaLista(form.elements[nomeDoDetalhe("titulos")].value),
+    frase: itensDaLista(form.elements[nomeDoDetalhe("frases")].value),
+  };
+}
+
+// Escolhe um item (ou nenhum) e lembra o texto dele e quantos itens a lista tinha
+function escolherDestaque(destaque, listas) {
+  const itens = destaque ? listas[destaque.tipo] : null;
+  const texto = itens?.[destaque.indice];
+  edicao.destaque = texto ? { tipo: destaque.tipo, indice: destaque.indice, texto, quantos: itens.length } : null;
+  formEdicao().destaque.value = edicao.destaque ? `${destaque.tipo}:${destaque.indice}` : "";
+}
+
+// "Nenhum", cada título ("Título: …") e cada frase ("Frase: …") da aba Detalhes. Muda enquanto se escreve lá,
+// e a escolha segue o item: se ele muda de lugar, vai junto; se é reescrito ali mesmo, continua;
+// se some, volta para "Nenhum".
+function atualizarDestaque() {
+  const listas = listasDoDestaque();
+  const antes = edicao.destaque;
+  let indice = null;
+  if (antes) {
+    const itens = listas[antes.tipo];
+    const iguais = itens.flatMap((item, i) => (item === antes.texto ? [i] : []));
+    if (iguais.length) {
+      indice = iguais.reduce((perto, i) => (Math.abs(i - antes.indice) < Math.abs(perto - antes.indice) ? i : perto));
+    } else if (itens.length === antes.quantos) {
+      indice = antes.indice;
+    }
+  }
+  const opcoes = [new Option("Nenhum", "")];
+  for (const tipo of ["titulo", "frase"]) {
+    listas[tipo].forEach((item, i) => opcoes.push(new Option(`${ROTULOS_DO_DESTAQUE[tipo]}: ${encurtar(semLinks(item))}`, `${tipo}:${i}`)));
+  }
+  formEdicao().destaque.replaceChildren(...opcoes);
+  escolherDestaque(indice === null ? null : { tipo: antes.tipo, indice }, listas);
+}
+
+/* ---------- Detalhes ---------- */
+
+const nomeDoDetalhe = (chave, parte) => (parte ? `detalhe_${chave}_${parte}` : `detalhe_${chave}`);
+
+// Ano, mês e dia em campos simples, mais a "aproximada"
+function camposDaData(chave) {
+  const ano = criar("input");
+  ano.name = nomeDoDetalhe(chave, "ano");
+  ano.type = "number";
+  ano.inputMode = "numeric";
+  ano.min = "0";
+  const campoAno = criar("label", "campo campo--ano");
+  campoAno.append(criar("span", "campo__rotulo", "Ano"), ano);
+
+  const seletor = (parte, rotulo) => {
+    const lista = criar("select");
+    lista.name = nomeDoDetalhe(chave, parte);
+    const campo = criar("label", "campo");
+    campo.append(criar("span", "campo__rotulo", rotulo), lista);
+    return campo;
+  };
+
+  const aprox = criar("input");
+  aprox.type = "checkbox";
+  aprox.name = nomeDoDetalhe(chave, "aprox");
+  const marca = criar("span", "caixa__marca");
+  marca.setAttribute("aria-hidden", "true");
+  const caixa = criar("label", "caixa caixa--aprox");
+  caixa.append(aprox, marca, criar("span", null, "Data aproximada"));
+
+  const linha = criar("div", "data-campos");
+  linha.append(campoAno, seletor("mes", "Mês"), seletor("dia", "Dia"), caixa);
+  return linha;
+}
+
+// Um campo dos Detalhes, conforme o tipo: o texto numa linha; a lista numa área de texto, um item por linha;
+// a data com ano, mês e dia; o marco com a data e o onde. Os textos e as listas aceitam o "Citar".
+// "sozinho": o único campo do grupo, que já tem o nome dele no título.
+function campoDoDetalhe(chave, rotulo, tipo, sozinho) {
+  const visivel = ROTULOS_CURTOS[chave] ?? rotulo;
+  if (tipo === "texto" || tipo === "lista") {
+    const entrada = criar(tipo === "texto" ? "input" : "textarea");
+    entrada.name = nomeDoDetalhe(chave);
+    entrada.dataset.citavel = "";
+    if (tipo === "texto") {
+      entrada.maxLength = LIMITES_DA_FICHA.texto;
+      entrada.autocomplete = "off";
+      if (chave === "alinhamento") entrada.setAttribute("list", "sugestoes-alinhamento");
+    } else {
+      entrada.rows = 3;
+    }
+    const titulo = criar("span", sozinho ? "campo__rotulo sr" : "campo__rotulo", visivel);
+    const campo = criar("label", tipo === "lista" ? "campo campo--largo" : "campo");
+    campo.append(titulo, entrada);
+    if (tipo === "lista") campo.append(criar("span", "campo__ajuda", "Um por linha"));
+    return campo;
+  }
+
+  const campos = criar("div", "marco-form");
+  campos.append(camposDaData(chave));
+  if (tipo === "marco") {
+    const onde = criar("input");
+    onde.name = nomeDoDetalhe(chave, "onde");
+    onde.maxLength = LIMITES_DA_FICHA.onde;
+    onde.autocomplete = "off";
+    const campoOnde = criar("label", "campo");
+    campoOnde.append(criar("span", "campo__rotulo", "Onde"), onde);
+    campos.append(campoOnde);
+  }
+  const grupo = criar("fieldset", "grupo campo--largo");
+  grupo.id = `campo-${chave}`;
+  grupo.append(criar("legend", "campo__rotulo", visivel), campos);
+
+  // A Morte, para o dono: só para ler
+  if (chave === "morte") {
+    const leitura = criar("div", "morte-leitura");
+    leitura.id = "morte-leitura";
+    leitura.hidden = true;
+    leitura.append(criar("p", "morte-leitura__valor"), criar("span", "campo__ajuda", "Só o administrador e os editores mudam a Morte."));
+    grupo.append(leitura);
+  }
+  return grupo;
+}
+
+// Os grupos da aba Detalhes, montados uma vez só
+function montarDetalhes() {
+  const campos = new Map(CAMPOS_DOS_DETALHES.map(([chave, rotulo, tipo]) => [chave, { rotulo, tipo }]));
+  const grupos = GRUPOS_DOS_DETALHES.map(([titulo, chaves]) => {
+    const lista = criar("div", "grupo-detalhes__campos");
+    for (const chave of chaves) {
+      const { rotulo, tipo } = campos.get(chave);
+      lista.append(campoDoDetalhe(chave, rotulo, tipo, chaves.length === 1));
+    }
+    const grupo = criar("fieldset", "grupo-detalhes");
+    grupo.append(criar("legend", "grupo-detalhes__titulo", titulo), lista);
+    return grupo;
+  });
+  const sugestoes = criar("datalist");
+  sugestoes.id = "sugestoes-alinhamento";
+  sugestoes.append(...ALINHAMENTOS.map((alinhamento) => new Option(alinhamento)));
+  $("#campos-detalhes").replaceChildren(...grupos, sugestoes);
+}
+
+function preencherData(chave, data) {
+  const form = formEdicao();
+  form.elements[nomeDoDetalhe(chave, "ano")].value = data ? String(data.ano) : "";
+  opcoesDeMes(form.elements[nomeDoDetalhe(chave, "mes")], data?.mes);
+  opcoesDeDia(form.elements[nomeDoDetalhe(chave, "dia")], data?.dia);
+  form.elements[nomeDoDetalhe(chave, "aprox")].checked = Boolean(data?.aprox);
+}
+
+// "12 de Solcanis de 312 ED · Westna", como na aba Detalhes da ficha, ou só o que tiver
+const textoDoMarco = (marco) => [marco?.data ? textoDaData(marco.data) : "", marco?.onde ?? ""].filter(Boolean).join(" · ");
+
+function preencherDetalhes(detalhes) {
+  const form = formEdicao();
+  for (const [chave, , tipo] of CAMPOS_DOS_DETALHES) {
+    const valor = detalhes[chave];
+    if (tipo === "texto") form.elements[nomeDoDetalhe(chave)].value = valor || "";
+    else if (tipo === "lista") form.elements[nomeDoDetalhe(chave)].value = (valor || []).join("\n");
+    else if (tipo === "data") preencherData(chave, valor);
+    else {
+      preencherData(chave, valor?.data);
+      form.elements[nomeDoDetalhe(chave, "onde")].value = valor?.onde || "";
+    }
+  }
+  // A Morte: o administrador e os editores mudam; o dono só lê
+  $("#campo-morte .marco-form").hidden = !edicao.cuida;
+  $("#morte-leitura").hidden = edicao.cuida;
+  $("#morte-leitura .morte-leitura__valor").textContent = textoDoMarco(detalhes.morte) || "Sem data nem lugar.";
+}
+
+// Só o ano é obrigatório; o dia só vale com o mês
+function dataDoFormulario(chave, rotulo) {
+  const form = formEdicao();
+  const campoAno = form.elements[nomeDoDetalhe(chave, "ano")];
+  const mes = Number(form.elements[nomeDoDetalhe(chave, "mes")].value) || null;
+  if (campoAno.value === "" && !campoAno.validity.badInput) {
+    if (mes) throw erroNoCampo(`Escreva o ano do campo ${rotulo}, ou deixe o mês em branco.`, campoAno);
+    return null;
+  }
+  const ano = Number(campoAno.value);
+  if (campoAno.value === "" || !Number.isInteger(ano) || ano < 0) {
+    throw erroNoCampo(`O ano do campo ${rotulo} precisa ser um número inteiro, de 0 em diante.`, campoAno);
+  }
+  const dia = mes ? Number(form.elements[nomeDoDetalhe(chave, "dia")].value) || null : null;
+  return { ano, mes, dia, aprox: form.elements[nomeDoDetalhe(chave, "aprox")].checked };
+}
+
+// Os Detalhes como o servidor recebe, conferidos como lá. O dono não manda a Morte: ela fica como está.
+function detalhesDoFormulario() {
+  const form = formEdicao();
+  const detalhes = {};
+  for (const [chave, rotulo, tipo] of CAMPOS_DOS_DETALHES) {
+    if (chave === "morte" && !edicao.cuida) continue;
+    if (tipo === "texto") {
+      const campo = form.elements[nomeDoDetalhe(chave)];
+      const valor = campo.value.trim();
+      if (valor.length > LIMITES_DA_FICHA.texto) {
+        throw erroNoCampo(`O campo ${rotulo} pode ter no máximo ${LIMITES_DA_FICHA.texto} caracteres.`, campo);
+      }
+      detalhes[chave] = valor;
+    } else if (tipo === "lista") {
+      const campo = form.elements[nomeDoDetalhe(chave)];
+      const itens = itensDaLista(campo.value);
+      const max = chave === "frases" ? LIMITES_DA_FICHA.frase : LIMITES_DA_FICHA.item;
+      if (itens.length > LIMITES_DA_FICHA.itens) {
+        throw erroNoCampo(`O campo ${rotulo} pode ter no máximo ${LIMITES_DA_FICHA.itens} itens.`, campo);
+      }
+      if (itens.some((item) => item.length > max)) {
+        throw erroNoCampo(`Cada item do campo ${rotulo} pode ter no máximo ${max} caracteres.`, campo);
+      }
+      detalhes[chave] = itens;
+    } else if (tipo === "data") {
+      detalhes[chave] = dataDoFormulario(chave, rotulo);
+    } else {
+      const data = dataDoFormulario(chave, rotulo);
+      const onde = form.elements[nomeDoDetalhe(chave, "onde")].value.trim();
+      detalhes[chave] = data || onde ? { data, onde } : null;
+    }
+  }
+  return detalhes;
+}
+
+/* ---------- Textos: as caixas ---------- */
+
+// Uma caixa: o número, as setas e o "Remover" no alto; depois o título e o texto
+function campoDaCaixa({ titulo = "", texto = "" } = {}) {
+  const item = criar("li", "caixa-form");
+  const subir = botao("↑", "botao--leve caixa-form__seta", () => moverCaixa(item, -1));
+  const descer = botao("↓", "botao--leve caixa-form__seta", () => moverCaixa(item, 1));
+  subir.title = "Subir";
+  descer.title = "Descer";
+  const acoes = criar("div", "caixa-form__acoes");
+  acoes.append(subir, descer, botao("Remover", "botao--leve botao--perigo", () => removerCaixa(item)));
+  const cabeca = criar("div", "caixa-form__cabeca");
+  cabeca.append(criar("span", "caixa-form__numero"), acoes);
+
+  const entrada = criar("input", "caixa-form__titulo");
+  entrada.maxLength = LIMITES_DA_FICHA.tituloDaCaixa;
+  entrada.autocomplete = "off";
+  entrada.placeholder = "Ex.: Descrição, Personalidade, História";
+  entrada.value = titulo;
+  const campoTitulo = criar("label", "campo");
+  campoTitulo.append(criar("span", "campo__rotulo", "Título"), entrada);
+
+  const area = criar("textarea", "caixa-form__texto");
+  area.rows = 8;
+  area.maxLength = LIMITES_DA_FICHA.textoDaCaixa;
+  area.dataset.citavel = "";
+  area.value = texto;
+  const campoTexto = criar("label", "campo");
+  campoTexto.append(criar("span", "campo__rotulo", "Texto"), area);
+
+  item.append(cabeca, campoTitulo, campoTexto);
+  return item;
+}
+
+// Depois de mexer na lista: o número de cada caixa e as setas das pontas apagadas.
+// Sem caixas, o "Citar" fica apagado na aba; no limite, o "+ Caixa" também.
+function numerarCaixas() {
+  const itens = [...$("#lista-caixas").children];
+  itens.forEach((item, i) => {
+    const n = i + 1;
+    item.querySelector(".caixa-form__numero").textContent = `Caixa ${n}`;
+    const [subir, descer, remover] = item.querySelectorAll(".caixa-form__acoes button");
+    subir.disabled = i === 0;
+    descer.disabled = n === itens.length;
+    subir.setAttribute("aria-label", `Subir a caixa ${n}`);
+    descer.setAttribute("aria-label", `Descer a caixa ${n}`);
+    remover.setAttribute("aria-label", `Remover a caixa ${n}`);
+  });
+  $("#caixas-vazio").hidden = itens.length > 0;
+  $("#botao-mais-caixa").disabled = itens.length >= LIMITES_DA_FICHA.caixas;
+  mostrarCitar();
+}
+
+function mostrarCaixas(caixas) {
+  $("#lista-caixas").replaceChildren(...caixas.map(campoDaCaixa));
+  numerarCaixas();
+}
+
+// Todas as caixas, na ordem, para os números das mensagens do servidor baterem com os daqui.
+// Uma caixa toda vazia o servidor ignora; com texto e sem título, dá erro.
+function caixasDoFormulario() {
+  return [...$("#lista-caixas").children].map((item, i) => {
+    const titulo = item.querySelector(".caixa-form__titulo");
+    const texto = item.querySelector(".caixa-form__texto");
+    const caixa = { titulo: titulo.value.trim(), texto: texto.value.trim() };
+    if (caixa.texto && !caixa.titulo) throw erroNoCampo(`Preencha o campo Título da caixa ${i + 1}.`, titulo);
+    if (caixa.texto.length > LIMITES_DA_FICHA.textoDaCaixa) {
+      throw erroNoCampo(`O campo Texto da caixa ${i + 1} pode ter no máximo ${LIMITES_DA_FICHA.textoDaCaixa} caracteres.`, texto);
+    }
+    return caixa;
+  });
+}
+
+function adicionarCaixa() {
+  const lista = $("#lista-caixas");
+  if (lista.children.length >= LIMITES_DA_FICHA.caixas) return;
+  const item = campoDaCaixa();
+  lista.append(item);
+  numerarCaixas();
+  item.querySelector(".caixa-form__titulo").focus();
+}
+
+// O foco segue a caixa que andou; na ponta, passa para a seta que ainda anda
+function moverCaixa(item, passo) {
+  const vizinho = passo < 0 ? item.previousElementSibling : item.nextElementSibling;
+  if (!vizinho) return;
+  if (passo < 0) vizinho.before(item);
+  else vizinho.after(item);
+  numerarCaixas();
+  const [subir, descer] = item.querySelectorAll(".caixa-form__seta");
+  const seta = passo < 0 ? subir : descer;
+  (seta.disabled ? (passo < 0 ? descer : subir) : seta).focus();
+  item.scrollIntoView({ block: "nearest" });
+}
+
+// Uma caixa com texto pede confirmação antes de sair
+async function removerCaixa(item) {
+  if (item.querySelector(".caixa-form__texto").value.trim()) {
+    const titulo = item.querySelector(".caixa-form__titulo").value.trim();
+    const confirmado = await perguntar({
+      titulo: "Remover esta caixa?",
+      texto: `${titulo ? `"${titulo}"` : "A caixa"} sai da ficha, com o texto. Nada muda até você salvar.`,
+      confirmar: "Remover",
+      cancelar: "Cancelar",
+      perigo: true,
+    });
+    if (!confirmado) return;
+  }
+  const vizinho = item.nextElementSibling ?? item.previousElementSibling;
+  item.remove();
+  numerarCaixas();
+  (vizinho?.querySelector(".caixa-form__titulo") ?? $("#botao-mais-caixa")).focus();
+}
+
+/* ---------- Abrir, conferir e salvar ---------- */
+
+// Os Detalhes, o Título ou Frase, os Textos e o que o "Citar" oferece vêm da ficha completa:
+// a da ficha aberta, se já chegou, ou um pedido novo
+function fichaDaEdicao(personagem) {
+  if (fichaAberta.id === personagem.id && fichaAberta.resposta) return Promise.resolve(fichaAberta.resposta);
+  return api.ficha(personagem.id);
+}
+
+// O "Citar" de um personagem novo: o que ele oferece é o mesmo em todas as fichas que a conta pode alterar,
+// então vem da ficha de um personagem qualquer que ela vê. Enquanto não chega, fica o que já se sabia.
+async function carregarCitaveisDoNovo() {
+  const pedido = ++edicao.pedido;
+  const algum = estado.personagens[0];
+  if (!algum) return;
+  try {
+    const { citaveis } = await api.ficha(algum.id);
+    if (pedido !== edicao.pedido || !citaveis) return;
+    edicao.citaveis = citaveis;
+    if ($("#dialogo-citar").open) renderizarCitaveis();
+  } catch (falha) {
+    if (pedido === edicao.pedido) avisoRapido(`A lista do Citar não carregou. ${falha.message}`);
+  }
+}
+
+// Para alterar, o formulário espera a ficha completa; sem ela, não abre, para não salvar por cima do que já existe
+async function abrirEdicao(personagem = null) {
   if (personagem ? !personagem.podeEditar : !podeCadastrar()) return;
+  if (edicao.abrindo) return;
+  let ficha = null;
+  if (personagem) {
+    edicao.abrindo = true;
+    try {
+      ficha = await fichaDaEdicao(personagem);
+    } catch (falha) {
+      avisarFalha(falha);
+      return;
+    } finally {
+      edicao.abrindo = false;
+    }
+  }
+
   const form = formEdicao();
   form.reset();
-  edicao.personagem = personagem;
-  edicao.mesas = new Set(personagem?.mesas ?? []);
-  edicao.remover = { retrato: false };
+  Object.assign(edicao, {
+    personagem,
+    mesas: new Set(personagem?.mesas ?? []),
+    remover: { retrato: false },
+    cuida: ehAdmin() || ehEditor(),
+    destaque: null,
+    citaveis: ficha?.citaveis ?? fichaAberta.resposta?.citaveis ?? { acontecimentos: [], personagens: [] },
+    ultimoCampo: { detalhes: null, textos: null },
+  });
+  edicao.pedido++;
+  if (!personagem) carregarCitaveisDoNovo();
   $("#erro-edicao").hidden = true;
   $("#nova-mesa").hidden = true;
 
@@ -1554,7 +2133,7 @@ function abrirEdicao(personagem = null) {
 
   // Quais campos aparecem
   for (const grupo of ["#grupo-nome", "#grupo-papel", "#grupo-mesas"]) $(grupo).hidden = doPortal;
-  $("#grupo-situacao").hidden = doPortal && !ehAdmin() && !ehEditor();
+  $("#grupo-situacao").hidden = doPortal && !edicao.cuida;
   $("#grupo-visibilidade").hidden = doPortal || !ehAdmin();
   $("#edicao-apagar").hidden = !personagem || doPortal || !ehAdmin();
 
@@ -1567,63 +2146,49 @@ function abrirEdicao(personagem = null) {
   form.jogador.value = personagem?.jogador ?? "";
   renderizarEscolhaMesas();
 
-  // Situação e queda
+  // Situação e epitáfio
   form.situacao.value = personagem?.situacao ?? "vivo";
-  const queda = personagem?.queda;
-  form.queda_ano.value = queda?.data ? String(queda.data.ano) : "";
-  opcoesDeMes(form.queda_mes, queda?.data?.mes);
-  opcoesDeDia(form.queda_dia, queda?.data?.dia);
-  form.epitafio.value = queda?.epitafio ?? "";
+  form.epitafio.value = personagem?.queda?.epitafio ?? "";
   mostrarCamposDependentes();
 
-  // Textos, arte e visibilidade
-  form.origem.value = personagem?.origem ?? "";
-  form.resumo.value = personagem?.resumo ?? "";
-  form.historia.value = personagem?.historia ?? "";
+  // Detalhes, Título ou Frase e Textos
+  const conteudo = ficha?.personagem;
+  preencherDetalhes(conteudo?.detalhes ?? detalhesVazios());
+  atualizarDestaque();
+  if (conteudo?.destaque) escolherDestaque(conteudo.destaque, listasDoDestaque());
+  mostrarCaixas(conteudo?.textos ?? []);
+
+  // Arte e visibilidade
   for (const campo of CAMPOS_IMAGEM) mostrarImagem(campo, personagem?.[campo]);
   form.visibilidade.value = personagem?.visibilidade ?? "todos";
 
+  mostrarAbaDaEdicao("geral");
   $("#dialogo-edicao").showModal();
   $(".edicao__campos").scrollTop = 0;
-  (doPortal ? form.origem : form.nome).focus();
-}
-
-// A situação e, para os caídos, a queda: a data (só o ano é obrigatório) e o epitáfio
-function situacaoDoFormulario() {
-  const form = formEdicao();
-  const situacao = form.situacao.value;
-  if (situacao !== "caido") return { situacao, queda: null };
-  const mes = Number(form.queda_mes.value) || null;
-  let data = null;
-  if (form.queda_ano.value !== "") {
-    const ano = Number(form.queda_ano.value);
-    if (!Number.isInteger(ano) || ano < 0) throw new Error("O ano da queda precisa ser um número inteiro, de 0 em diante.");
-    data = { ano, mes, dia: mes ? Number(form.queda_dia.value) || null : null };
-  } else if (mes) {
-    throw new Error("Escreva o ano da queda, ou deixe o mês em branco.");
-  }
-  const epitafio = form.epitafio.value.trim();
-  return { situacao, queda: data || epitafio ? { data, epitafio } : null };
+  (doPortal ? $("#edicao-aba-geral") : form.nome).focus();
 }
 
 function coletarEdicao() {
   const form = formEdicao();
+  const doPortal = edicao.personagem?.origemDoDado === "portal";
+  const nome = form.nome.value.trim();
+  if (!doPortal && !nome) throw erroNoCampo("Escreva o nome do personagem.", form.nome);
+
   const imagens = {};
   for (const campo of CAMPOS_IMAGEM) {
     const arquivo = form[campo].files[0] ?? null;
     imagens[campo] = { arquivo, remover: edicao.remover[campo] && !arquivo };
   }
+  atualizarDestaque(); // para o destaque apontar o item certo da lista que vai
   const dados = {
-    origem: form.origem.value.trim(),
-    resumo: form.resumo.value.trim(),
-    historia: form.historia.value.trim(),
+    detalhes: detalhesDoFormulario(),
+    destaque: edicao.destaque ? { tipo: edicao.destaque.tipo, indice: edicao.destaque.indice } : null,
+    textos: caixasDoFormulario(),
     imagens,
   };
   if (!$("#grupo-situacao").hidden) Object.assign(dados, situacaoDoFormulario());
-  if (edicao.personagem?.origemDoDado === "portal") return dados;
+  if (doPortal) return dados;
 
-  const nome = form.nome.value.trim();
-  if (!nome) throw new Error("Escreva o nome do personagem.");
   return {
     ...dados,
     nome,
@@ -1635,6 +2200,46 @@ function coletarEdicao() {
   };
 }
 
+// O campo de uma mensagem do servidor, pelo rótulo: "O campo Apelidos …", "… (campo Nascimento).",
+// "Preencha o campo Título da caixa 2.". Vale o rótulo mais longo que aparece inteiro.
+function campoDaMensagem(mensagem) {
+  const form = formEdicao();
+  const caixa = mensagem.match(/campo (Título|Texto) da caixa (\d+)/);
+  if (caixa) {
+    const item = $("#lista-caixas").children[Number(caixa[2]) - 1];
+    return item?.querySelector(caixa[1] === "Título" ? ".caixa-form__titulo" : ".caixa-form__texto") ?? null;
+  }
+  const campos = [
+    ["Nome", form.nome],
+    ["Jogador", form.jogador],
+    ["Epitáfio", form.epitafio],
+  ];
+  for (const [chave, rotulo, tipo] of CAMPOS_DOS_DETALHES) {
+    campos.push([rotulo, form.elements[tipo === "texto" || tipo === "lista" ? nomeDoDetalhe(chave) : nomeDoDetalhe(chave, "ano")]]);
+    if (tipo === "marco") campos.push([`${rotulo} (onde)`, form.elements[nomeDoDetalhe(chave, "onde")]]);
+  }
+  let achado = null;
+  for (const [rotulo, campo] of campos) {
+    const trecho = `campo ${rotulo}`;
+    const i = mensagem.indexOf(trecho);
+    if (i < 0 || /[\p{L}\p{N}]/u.test(mensagem.charAt(i + trecho.length))) continue;
+    if (!achado || rotulo.length > achado.rotulo.length) achado = { rotulo, campo };
+  }
+  return achado?.campo ?? null;
+}
+
+// A mensagem embaixo do formulário. Se ela for de um campo, o formulário vai para a aba dele e põe o foco nele.
+function mostrarErroDaEdicao(falha) {
+  const erro = $("#erro-edicao");
+  erro.textContent = falha.message;
+  erro.hidden = false;
+  const campo = falha.campo ?? campoDaMensagem(falha.message);
+  const painel = campo?.closest(".edicao__painel");
+  if (!painel) return;
+  mostrarAbaDaEdicao(painel.dataset.aba);
+  if (!campo.closest("[hidden]")) campo.focus();
+}
+
 async function enviarEdicao(evento) {
   evento.preventDefault();
   const erro = $("#erro-edicao");
@@ -1644,8 +2249,7 @@ async function enviarEdicao(evento) {
   try {
     dados = coletarEdicao();
   } catch (falha) {
-    erro.textContent = falha.message;
-    erro.hidden = false;
+    mostrarErroDaEdicao(falha);
     return;
   }
   enviar.disabled = true;
@@ -1660,8 +2264,7 @@ async function enviarEdicao(evento) {
     // Alterado pela ficha: ela mostra o que acabou de mudar
     if (personagem && $("#dialogo-ficha").open && personagemPorId(personagem.id)) abrirFicha(personagem.id);
   } catch (falha) {
-    erro.textContent = falha.message;
-    erro.hidden = false;
+    mostrarErroDaEdicao(falha);
   } finally {
     enviar.disabled = false;
   }
@@ -1691,9 +2294,15 @@ async function apagarPersonagem() {
 
 function configurarEdicao() {
   const form = formEdicao();
+  montarDetalhes();
   form.addEventListener("submit", enviarEdicao);
   $("#edicao-cancelar").addEventListener("click", () => $("#dialogo-edicao").close());
   $("#edicao-apagar").addEventListener("click", apagarPersonagem);
+
+  // As abas
+  for (const id of ABAS_DA_EDICAO) $(`#edicao-aba-${id}`).addEventListener("click", () => mostrarAbaDaEdicao(id));
+  $("#edicao-abas").addEventListener("keydown", andarPelasAbasDaEdicao);
+
   form.fonte.addEventListener("change", mostrarFonte);
   // A linha do "+ Mesa" está dentro deste formulário: o Enter nela adiciona a mesa, sem enviar o personagem
   form.mesa_nome.addEventListener("input", () => mostrarSigla(form.mesa_nome, $("#nova-mesa-sigla")));
@@ -1720,6 +2329,142 @@ function configurarEdicao() {
       mostrarImagem(campo, null);
     });
   }
+
+  // O Título ou Frase acompanha os títulos e as frases da aba Detalhes
+  form.destaque.addEventListener("change", () => {
+    const [tipo, indice] = form.destaque.value.split(":");
+    escolherDestaque(tipo ? { tipo, indice: Number(indice) } : null, listasDoDestaque());
+  });
+  for (const chave of ["titulos", "frases"]) form.elements[nomeDoDetalhe(chave)].addEventListener("input", atualizarDestaque);
+
+  // As caixas
+  $("#botao-mais-caixa").addEventListener("click", adicionarCaixa);
+
+  // O "Citar" lembra, em cada aba, o último campo de texto dela que esteve com o foco
+  for (const aba of ["detalhes", "textos"]) {
+    $(`#edicao-${aba}`).addEventListener("focusin", (evento) => {
+      if (evento.target.matches("[data-citavel]")) edicao.ultimoCampo[aba] = evento.target;
+    });
+  }
+  $("#edicao-citar").addEventListener("click", () => citarNaAba(edicao.aba));
+  configurarCitar();
+}
+
+/* =================================================================
+   Citar: uma busca pelos acontecimentos e personagens
+   -----------------------------------------------------------------
+   A mesma das Memórias. O "Citar" das abas Detalhes e Textos põe
+   [[evento:<id>|título]] ou [[personagem:<id>|nome]] no último
+   campo de texto daquela aba que esteve com o foco, onde estava o
+   cursor. O "o que aparece" pode ser mudado depois, no próprio texto.
+   ================================================================= */
+
+const citacao = { area: null }; // o campo que recebe o link
+
+// Um colchete no título fecharia o link antes da hora: vira parêntese
+const semColchetes = (texto) => texto.replace(/\[/g, "(").replace(/\]/g, ")");
+
+// Só nas abas Detalhes e Textos; nos Textos sem caixas, apagado
+function mostrarCitar() {
+  const citar = $("#edicao-citar");
+  citar.hidden = edicao.aba === "geral";
+  citar.disabled = edicao.aba === "textos" && !$("#lista-caixas").children.length;
+  citar.setAttribute("aria-label", edicao.aba === "textos" ? "Citar num texto da aba Textos" : "Citar num campo da aba Detalhes");
+}
+
+// O último campo de texto da aba que esteve com o foco; se nenhum esteve, o primeiro dela
+function citarNaAba(aba) {
+  const ultimo = edicao.ultimoCampo[aba];
+  const alvo = ultimo?.isConnected && !ultimo.closest("[hidden]") ? ultimo : $(`#edicao-${aba} [data-citavel]`);
+  if (alvo) abrirCitar(alvo);
+}
+
+function abrirCitar(area) {
+  citacao.area = area;
+  const busca = $("#citar-busca");
+  busca.value = "";
+  renderizarCitaveis();
+  $("#dialogo-citar").showModal();
+  $("#citar-resultados").scrollTop = 0;
+  busca.focus();
+}
+
+function itemCitavel(nome, extra, trecho) {
+  const item = criar("button", "citar__item");
+  item.type = "button";
+  item.append(criar("span", "citar__nome", nome));
+  if (extra) item.append(criar("span", "citar__extra", extra));
+  item.addEventListener("click", () => inserirCitacao(trecho));
+  const linha = criar("li");
+  linha.append(item);
+  return linha;
+}
+
+function grupoCitavel(titulo, itens) {
+  if (!itens.length) return [];
+  const lista = criar("ul", "citar__lista");
+  lista.append(...itens);
+  const grupo = criar("section", "citar__grupo");
+  grupo.append(criar("h3", "citar__titulo", titulo), lista);
+  return [grupo];
+}
+
+// Sem acentos e sem diferença de maiúsculas
+function renderizarCitaveis() {
+  const termo = normalizar($("#citar-busca").value.trim());
+  const achou = (texto) => !termo || normalizar(texto).includes(termo);
+  const { acontecimentos, personagens } = edicao.citaveis;
+  const eventos = acontecimentos
+    .filter((ev) => achou(ev.titulo))
+    .map((ev) => itemCitavel(ev.titulo, `${ev.ano} ED`, `[[evento:${ev.id}|${semColchetes(ev.titulo)}]]`));
+  const pessoas = personagens
+    .filter((p) => achou(p.nome))
+    .map((p) => itemCitavel(p.nome, "", `[[personagem:${p.id}|${semColchetes(p.nome)}]]`));
+  const resultados = $("#citar-resultados");
+  if (!eventos.length && !pessoas.length) {
+    const nada = acontecimentos.length || personagens.length ? "Nada encontrado." : "Nenhum acontecimento ou personagem para citar ainda.";
+    resultados.replaceChildren(criar("p", "citar__vazio", nada));
+    return;
+  }
+  resultados.replaceChildren(...grupoCitavel("Acontecimentos", eventos), ...grupoCitavel("Personagens", pessoas));
+}
+
+// O link entra onde estava o cursor (ou no lugar do que estava selecionado), e o cursor fica depois dele.
+// O aviso de mudança faz o Título ou Frase acompanhar, se o link entrou nos títulos ou nas frases.
+function inserirCitacao(trecho) {
+  const area = citacao.area;
+  $("#dialogo-citar").close();
+  if (!area?.isConnected) return;
+  area.focus();
+  area.setRangeText(trecho, area.selectionStart, area.selectionEnd, "end");
+  area.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+function configurarCitar() {
+  const busca = $("#citar-busca");
+  const itens = () => [...document.querySelectorAll("#citar-resultados .citar__item")];
+  busca.addEventListener("input", renderizarCitaveis);
+  // Enter escolhe o primeiro achado; a seta para baixo desce para a lista
+  busca.addEventListener("keydown", (evento) => {
+    const primeiro = itens()[0];
+    if (!primeiro || (evento.key !== "Enter" && evento.key !== "ArrowDown")) return;
+    evento.preventDefault();
+    if (evento.key === "Enter") primeiro.click();
+    else primeiro.focus();
+  });
+  // Na lista, as setas andam de um achado para o outro; acima do primeiro, volta para a busca
+  $("#citar-resultados").addEventListener("keydown", (evento) => {
+    if (evento.key !== "ArrowDown" && evento.key !== "ArrowUp") return;
+    const lista = itens();
+    const i = lista.indexOf(document.activeElement);
+    if (i < 0) return;
+    evento.preventDefault();
+    const proximo = lista[evento.key === "ArrowDown" ? i + 1 : i - 1];
+    if (proximo) proximo.focus();
+    else if (evento.key === "ArrowUp") busca.focus();
+  });
+  $("#citar-cancelar").addEventListener("click", () => $("#dialogo-citar").close());
+  fecharAoClicarFora($("#dialogo-citar"));
 }
 
 /* =================================================================
