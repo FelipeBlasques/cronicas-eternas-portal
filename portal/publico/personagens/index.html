@@ -112,130 +112,131 @@
     <div id="ficha-conteudo" class="ficha"></div>
   </dialog>
 
-  <!-- ============ Cadastrar ou alterar (os campos aparecem conforme a conta) ============ -->
+  <!-- ============ Cadastrar ou alterar, em três abas (os campos aparecem conforme a conta) ============ -->
   <dialog id="dialogo-edicao" class="dialogo dialogo--edicao">
     <form id="form-edicao" class="dialogo__form" novalidate>
       <h2 id="edicao-titulo" class="dialogo__titulo">Novo personagem</h2>
-      <p id="edicao-aviso" class="dialogo__texto edicao-aviso" hidden></p>
+
+      <!-- As abas e, na ponta, o "Citar" das abas Detalhes e Textos, sempre à vista enquanto os campos rolam -->
+      <div class="edicao__topo">
+        <div id="edicao-abas" class="edicao__abas" role="tablist" aria-label="Partes da ficha">
+          <button id="edicao-aba-geral" class="edicao__aba" type="button" role="tab" aria-controls="edicao-geral" aria-selected="true">Geral</button>
+          <button id="edicao-aba-detalhes" class="edicao__aba" type="button" role="tab" aria-controls="edicao-detalhes" aria-selected="false" tabindex="-1">Detalhes</button>
+          <button id="edicao-aba-textos" class="edicao__aba" type="button" role="tab" aria-controls="edicao-textos" aria-selected="false" tabindex="-1">Textos</button>
+        </div>
+        <button id="edicao-citar" class="botao botao--leve botao--pequeno botao-citar" type="button" hidden>Citar</button>
+      </div>
 
       <div class="edicao__campos">
-        <div id="grupo-nome" class="edicao__duas">
-          <label class="campo">
-            <span class="campo__rotulo">Nome</span>
-            <input name="nome" maxlength="60" autocomplete="off" required>
-          </label>
-          <label class="campo">
-            <span class="campo__rotulo">Fonte do nome</span>
-            <select name="fonte"></select>
-          </label>
-        </div>
+        <!-- Geral -->
+        <div id="edicao-geral" class="edicao__painel" role="tabpanel" aria-labelledby="edicao-aba-geral" data-aba="geral">
+          <p id="edicao-aviso" class="dialogo__texto edicao-aviso" hidden></p>
 
-        <div id="grupo-papel" class="edicao__duas edicao__duas--papel">
-          <fieldset class="grupo">
-            <legend class="campo__rotulo">Papel</legend>
-            <div class="segmentos">
-              <label><input type="radio" name="papel" value="npc" checked><span>NPC</span></label>
-              <label><input type="radio" name="papel" value="jogador"><span>Personagem de jogador</span></label>
+          <div id="grupo-nome" class="edicao__duas">
+            <label class="campo">
+              <span class="campo__rotulo">Nome</span>
+              <input name="nome" maxlength="60" autocomplete="off" required>
+            </label>
+            <label class="campo">
+              <span class="campo__rotulo">Fonte do nome</span>
+              <select name="fonte"></select>
+            </label>
+          </div>
+
+          <div id="grupo-papel" class="edicao__duas edicao__duas--papel">
+            <fieldset class="grupo">
+              <legend class="campo__rotulo">Papel</legend>
+              <div class="segmentos">
+                <label><input type="radio" name="papel" value="npc" checked><span>NPC</span></label>
+                <label><input type="radio" name="papel" value="jogador"><span>Personagem de jogador</span></label>
+              </div>
+            </fieldset>
+            <label id="campo-jogador" class="campo" hidden>
+              <span class="campo__rotulo">Jogador</span>
+              <input name="jogador" maxlength="40" autocomplete="off">
+              <span class="campo__ajuda">O nome de quem jogou com o personagem, como alguém de uma mesa antiga.</span>
+            </label>
+          </div>
+
+          <fieldset id="grupo-mesas" class="grupo">
+            <legend class="campo__rotulo">Mesas</legend>
+            <div id="escolha-mesas" class="escolhas"></div>
+            <!-- "+ Mesa": só o administrador. Sem form próprio, porque já está dentro de um. -->
+            <div id="nova-mesa" class="nova-mesa" hidden>
+              <div class="painel__linha painel__linha--sigla">
+                <label class="campo">
+                  <span class="campo__rotulo">Nome da mesa</span>
+                  <input name="mesa_nome" maxlength="80" autocomplete="off">
+                  <span id="nova-mesa-sigla" class="campo__ajuda campo__sigla"></span>
+                </label>
+                <label class="campo">
+                  <span class="campo__rotulo">Cor</span>
+                  <input name="mesa_cor" type="color" value="#6b5a45">
+                </label>
+                <button id="nova-mesa-adicionar" class="botao botao--principal botao--pequeno" type="button">Adicionar</button>
+                <button id="nova-mesa-cancelar" class="botao botao--leve" type="button">Cancelar</button>
+              </div>
+              <p id="erro-nova-mesa" class="mensagem-erro" role="alert" hidden></p>
             </div>
           </fieldset>
-          <label id="campo-jogador" class="campo" hidden>
-            <span class="campo__rotulo">Jogador</span>
-            <input name="jogador" maxlength="40" autocomplete="off">
-            <span class="campo__ajuda">O nome de quem jogou com o personagem, como alguém de uma mesa antiga.</span>
-          </label>
-        </div>
 
-        <fieldset id="grupo-mesas" class="grupo">
-          <legend class="campo__rotulo">Mesas</legend>
-          <div id="escolha-mesas" class="escolhas"></div>
-          <!-- "+ Mesa": só o administrador. Sem form próprio, porque já está dentro de um. -->
-          <div id="nova-mesa" class="nova-mesa" hidden>
-            <div class="painel__linha painel__linha--sigla">
-              <label class="campo">
-                <span class="campo__rotulo">Nome da mesa</span>
-                <input name="mesa_nome" maxlength="80" autocomplete="off">
-                <span id="nova-mesa-sigla" class="campo__ajuda campo__sigla"></span>
-              </label>
-              <label class="campo">
-                <span class="campo__rotulo">Cor</span>
-                <input name="mesa_cor" type="color" value="#6b5a45">
-              </label>
-              <button id="nova-mesa-adicionar" class="botao botao--principal botao--pequeno" type="button">Adicionar</button>
-              <button id="nova-mesa-cancelar" class="botao botao--leve" type="button">Cancelar</button>
+          <fieldset id="grupo-situacao" class="grupo">
+            <legend class="campo__rotulo">Situação</legend>
+            <div class="segmentos">
+              <label><input type="radio" name="situacao" value="vivo" checked><span>Vivo</span></label>
+              <label><input type="radio" name="situacao" value="caido"><span>Caído</span></label>
+              <label><input type="radio" name="situacao" value="desaparecido"><span>Desaparecido</span></label>
+              <label><input type="radio" name="situacao" value="aposentado"><span>Aposentado</span></label>
             </div>
-            <p id="erro-nova-mesa" class="mensagem-erro" role="alert" hidden></p>
-          </div>
-        </fieldset>
+          </fieldset>
 
-        <fieldset id="grupo-situacao" class="grupo">
-          <legend class="campo__rotulo">Situação</legend>
-          <div class="segmentos">
-            <label><input type="radio" name="situacao" value="vivo" checked><span>Vivo</span></label>
-            <label><input type="radio" name="situacao" value="caido"><span>Caído</span></label>
-            <label><input type="radio" name="situacao" value="desaparecido"><span>Desaparecido</span></label>
-            <label><input type="radio" name="situacao" value="aposentado"><span>Aposentado</span></label>
-          </div>
-        </fieldset>
-
-        <fieldset id="grupo-queda" class="grupo" hidden>
-          <legend class="campo__rotulo">A queda</legend>
-          <div class="data-campos">
-            <label class="campo campo--ano">
-              <span class="campo__rotulo">Ano</span>
-              <input name="queda_ano" type="number" inputmode="numeric" min="0">
-            </label>
-            <label class="campo">
-              <span class="campo__rotulo">Mês</span>
-              <select name="queda_mes"></select>
-            </label>
-            <label class="campo">
-              <span class="campo__rotulo">Dia</span>
-              <select name="queda_dia"></select>
-            </label>
-          </div>
-          <span class="campo__ajuda">No Ciclo de Sylara. Mês e dia são opcionais; sem o ano, a queda fica sem data.</span>
-          <label class="campo">
+          <label id="campo-epitafio" class="campo" hidden>
             <span class="campo__rotulo">Epitáfio</span>
             <input name="epitafio" maxlength="160" autocomplete="off">
+            <span class="campo__ajuda">A data da queda é a Morte, na aba Detalhes.</span>
           </label>
-        </fieldset>
 
-        <label class="campo">
-          <span class="campo__rotulo">Ancestralidade e classe</span>
-          <input name="origem" maxlength="80" autocomplete="off">
-          <span class="campo__ajuda">Ex.: Elfo, mago 7</span>
-        </label>
+          <label class="campo campo--destaque">
+            <span class="campo__rotulo">Título ou Frase</span>
+            <select id="campo-destaque" name="destaque"></select>
+            <span class="campo__ajuda">Um dos títulos ou uma das frases da aba Detalhes. Aparece abaixo do card e na ficha.</span>
+          </label>
 
-        <label class="campo">
-          <span class="campo__rotulo">Resumo</span>
-          <input name="resumo" maxlength="160" autocomplete="off">
-          <span class="campo__ajuda">Uma frase só. Aparece abaixo do card.</span>
-        </label>
-
-        <label class="campo">
-          <span class="campo__rotulo">História</span>
-          <textarea name="historia" rows="8" maxlength="6000"></textarea>
-          <span class="campo__ajuda">Use **negrito** e *itálico*. Uma linha em branco separa parágrafos; linhas que começam com "- " ou "1. " viram lista.</span>
-        </label>
-
-        <div class="campo">
-          <label class="campo__rotulo" for="campo-retrato">Arte</label>
-          <div id="imagem-retrato" class="imagem-ficha" hidden>
-            <img alt="">
-            <button class="botao botao--leve botao--perigo" type="button">Remover</button>
+          <div class="campo">
+            <label class="campo__rotulo" for="campo-retrato">Arte</label>
+            <div id="imagem-retrato" class="imagem-ficha" hidden>
+              <img alt="">
+              <button class="botao botao--leve botao--perigo" type="button">Remover</button>
+            </div>
+            <input id="campo-retrato" name="retrato" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/avif">
+            <span class="campo__ajuda">Aparece aqui na galeria e na Linha do Tempo. O card das Mesas continua com as imagens do Personalizar.</span>
           </div>
-          <input id="campo-retrato" name="retrato" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/avif">
-          <span class="campo__ajuda">Aparece aqui na galeria e na Linha do Tempo. O card das Mesas continua com as imagens do Personalizar.</span>
+
+          <fieldset id="grupo-visibilidade" class="grupo" hidden>
+            <legend class="campo__rotulo">Visibilidade</legend>
+            <div class="segmentos">
+              <label><input type="radio" name="visibilidade" value="todos" checked><span>Todos</span></label>
+              <label><input type="radio" name="visibilidade" value="admin"><span>Só o administrador</span></label>
+            </div>
+            <span class="campo__ajuda">Para o NPC que o grupo ainda não conheceu.</span>
+          </fieldset>
         </div>
 
-        <fieldset id="grupo-visibilidade" class="grupo" hidden>
-          <legend class="campo__rotulo">Visibilidade</legend>
-          <div class="segmentos">
-            <label><input type="radio" name="visibilidade" value="todos" checked><span>Todos</span></label>
-            <label><input type="radio" name="visibilidade" value="admin"><span>Só o administrador</span></label>
+        <!-- Detalhes: os grupos de campos são montados pelo personagens.js -->
+        <div id="edicao-detalhes" class="edicao__painel" role="tabpanel" aria-labelledby="edicao-aba-detalhes" data-aba="detalhes" hidden>
+          <p class="campo__ajuda edicao__ajuda">Na ficha aparece só o que estiver preenchido. Links: o "Citar" põe [[evento:id|título]] ou [[personagem:id|nome]] no último campo de texto desta aba em que você esteve, onde estava o cursor. O que vem depois da barra é o que aparece, e pode ser mudado à vontade. Quem não vê o acontecimento ou o personagem lê só o texto, sem link.</p>
+          <div id="campos-detalhes" class="detalhes-form"></div>
+        </div>
+
+        <!-- Textos: as caixas de texto livre -->
+        <div id="edicao-textos" class="edicao__painel" role="tabpanel" aria-labelledby="edicao-aba-textos" data-aba="textos" hidden>
+          <p class="campo__ajuda edicao__ajuda">Use **negrito** e *itálico*. Uma linha em branco separa parágrafos; linhas que começam com "- " ou "1. " viram lista. O "Citar" põe o link no texto da última caixa em que você esteve, onde estava o cursor. Uma caixa toda vazia sai ao salvar.</p>
+          <ol id="lista-caixas" class="caixas-form"></ol>
+          <p id="caixas-vazio" class="escolhas__vazio" hidden>Nenhuma caixa ainda.</p>
+          <div>
+            <button id="botao-mais-caixa" class="botao botao--leve caixas-form__mais" type="button">+ Caixa</button>
           </div>
-          <span class="campo__ajuda">Para o NPC que o grupo ainda não conheceu.</span>
-        </fieldset>
+        </div>
       </div>
 
       <p id="erro-edicao" class="mensagem-erro" role="alert" hidden></p>
@@ -245,6 +246,19 @@
         <button id="edicao-enviar" class="botao botao--principal" type="submit">Cadastrar</button>
       </div>
     </form>
+  </dialog>
+
+  <!-- ============ Citar: busca pelos acontecimentos e personagens, como nas Memórias ============ -->
+  <dialog id="dialogo-citar" class="dialogo dialogo--citar">
+    <h2 class="dialogo__titulo">Citar</h2>
+    <label class="campo">
+      <span class="campo__rotulo">Buscar um acontecimento ou personagem</span>
+      <input id="citar-busca" type="search" autocomplete="off" spellcheck="false">
+    </label>
+    <div id="citar-resultados" class="citar__resultados"></div>
+    <div class="dialogo__acoes">
+      <button id="citar-cancelar" class="botao botao--leve" type="button">Cancelar</button>
+    </div>
   </dialog>
 
   <!-- ============ Mesas (só o administrador; montado pelo personagens.js) ============ -->
