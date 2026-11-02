@@ -1,0 +1,499 @@
+/* =================================================================
+   Caderno: a lateral e a nota aberta
+   -----------------------------------------------------------------
+   Duas colunas: a lateral do caderno, presa à altura da tela e com
+   rolagem própria, e a nota aberta numa folha escura com borda de
+   ferro, como a ficha dos Personagens. O desenho do texto da nota
+   fica no marcas.css. A brasa só marca a nota aberta na árvore e o
+   "+ Nota". No celular, uma coluna só: a lateral ou a nota.
+   ================================================================= */
+
+.sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.topo__cargo {
+  margin-left: -0.6rem;
+  font-style: italic;
+  font-size: 0.95rem;
+  color: var(--cinza);
+}
+
+/* "+ Nota": a placa de ferro com a borda em brasa */
+.botao--brasa {
+  border-color: rgba(196, 106, 53, 0.85);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 240, 215, 0.07),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.45),
+    0 0 0 1px rgba(196, 106, 53, 0.18),
+    0 8px 22px -12px var(--brasa-brilho);
+}
+
+.pagina-caderno {
+  display: grid;
+  grid-template-columns: 19rem minmax(0, 1fr);
+  align-items: start;
+  min-height: calc(100vh - var(--altura-topo));
+}
+
+/* =================================================================
+   A lateral
+   ================================================================= */
+
+.lateral {
+  position: sticky;
+  top: var(--altura-topo);
+  display: flex;
+  flex-direction: column;
+  gap: 1.2rem;
+  height: calc(100vh - var(--altura-topo));
+  height: calc(100dvh - var(--altura-topo));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 1.6rem 1.1rem 1.3rem 1.3rem;
+  background: linear-gradient(90deg, rgba(14, 12, 11, 0.9), rgba(14, 12, 11, 0.74));
+  border-right: 1px solid var(--ferro-fraco);
+  scrollbar-width: thin;
+  scrollbar-color: var(--ferro) transparent;
+}
+
+.lateral__cabeca {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.lateral__titulo {
+  margin: 0;
+  font-family: var(--fonte-gotica);
+  font-size: 1.85rem;
+  font-weight: 500;
+  line-height: 1.05;
+  overflow-wrap: anywhere;
+  text-shadow: 0 4px 18px rgba(0, 0, 0, 0.85);
+}
+
+.lateral__acoes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1.1rem;
+}
+
+.lateral__nova {
+  padding: 0.5rem 1rem;
+}
+
+.lateral__busca input {
+  font-size: 1rem;
+}
+
+.lateral__busca input:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.lateral__secao {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.lateral__compartilhadas {
+  display: grid;
+  gap: 1.2rem;
+}
+
+.lateral__compartilhadas:empty {
+  display: none;
+}
+
+.lateral__subtitulo {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 500;
+  font-style: italic;
+  color: var(--pergaminho-apagado);
+}
+
+.lateral__vazio {
+  margin: 0;
+  font-size: 0.95rem;
+  font-style: italic;
+  color: var(--cinza);
+}
+
+.lateral__vazio:empty {
+  display: none;
+}
+
+/* ---------- Fixadas ---------- */
+
+.lateral__lista {
+  display: grid;
+  gap: 0.1rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lateral__link {
+  display: block;
+  padding: 0.2rem 0.5rem;
+  color: var(--pergaminho-apagado);
+  text-decoration: none;
+  border-radius: var(--raio);
+  overflow-wrap: anywhere;
+  transition: color 0.2s, background-color 0.2s;
+}
+
+.lateral__link:hover {
+  color: var(--pergaminho);
+  background: rgba(181, 154, 118, 0.07);
+}
+
+.lateral__link:focus-visible {
+  outline: 2px solid var(--brasa);
+  outline-offset: 1px;
+}
+
+.lateral__link[aria-current] {
+  color: var(--pergaminho);
+}
+
+.lateral__de {
+  font-size: 0.85rem;
+  font-style: italic;
+  color: var(--cinza);
+}
+
+/* ---------- A árvore ---------- */
+
+.arvore,
+.arvore__grupo {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.arvore__item:focus {
+  outline: none;
+}
+
+.arvore__linha {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 2rem;
+  padding: 0.15rem 0.5rem 0.15rem calc(0.3rem + var(--nivel, 0) * 1rem);
+  color: var(--pergaminho-apagado);
+  border-radius: var(--raio);
+  cursor: pointer;
+  user-select: none;
+  transition: color 0.2s, background-color 0.2s;
+}
+
+.arvore__linha:hover {
+  color: var(--pergaminho);
+  background: rgba(181, 154, 118, 0.07);
+}
+
+.arvore__item:focus-visible > .arvore__linha {
+  outline: 2px solid var(--brasa);
+  outline-offset: -1px;
+}
+
+/* A nota aberta, marcada com a brasa */
+.arvore__item[aria-selected="true"] > .arvore__linha {
+  color: var(--pergaminho);
+  background: rgba(196, 106, 53, 0.1);
+  box-shadow: inset 2px 0 0 var(--brasa);
+}
+
+.arvore__item--pasta > .arvore__linha {
+  color: var(--pergaminho);
+}
+
+/* A seta da pasta (aberta, ela vira para baixo); nas notas, um vão do mesmo tamanho */
+.arvore__seta {
+  flex: none;
+  width: 0.95rem;
+  height: 0.95rem;
+  fill: none;
+  stroke: var(--cinza);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 0.2s;
+}
+
+.arvore__item[aria-expanded="true"] > .arvore__linha > .arvore__seta {
+  transform: rotate(90deg);
+}
+
+.arvore__nome {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.arvore__item--pasta > .arvore__linha > .arvore__nome {
+  font-weight: 500;
+}
+
+.arvore__sinais {
+  flex: none;
+  display: flex;
+  gap: 0.25rem;
+}
+
+.arvore__sinal {
+  display: grid;
+  place-items: center;
+}
+
+.arvore__sinal svg {
+  width: 0.95rem;
+  height: 0.95rem;
+  fill: none;
+  stroke: var(--cinza);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* ---------- Etiquetas ---------- */
+
+.lateral__etiquetas summary {
+  cursor: pointer;
+}
+
+.lateral__etiquetas summary:focus-visible {
+  outline: 2px solid var(--brasa);
+  outline-offset: 2px;
+}
+
+.lateral__placas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  padding-top: 0.45rem;
+}
+
+.lateral__quantas {
+  font-size: 0.8em;
+  color: var(--cinza);
+}
+
+/* ---------- O pé ---------- */
+
+.lateral__pe {
+  margin: auto 0 0;
+  padding-top: 0.8rem;
+  font-size: 0.88rem;
+  font-style: italic;
+  color: var(--cinza);
+  border-top: 1px solid var(--ferro-fraco);
+}
+
+/* =================================================================
+   A nota aberta
+   ================================================================= */
+
+.area-nota {
+  min-width: 0;
+  padding: 2.4rem clamp(1rem, 4vw, 3rem) 7rem;
+}
+
+.area-nota:focus {
+  outline: none;
+}
+
+/* Só no celular */
+.area-nota__voltar {
+  display: none;
+}
+
+.area-nota__aviso {
+  margin: 2rem auto 0;
+  max-width: 34rem;
+  text-align: center;
+  font-style: italic;
+  color: var(--pergaminho-apagado);
+}
+
+/* Sem nota aberta: o convite no meio */
+.area-nota__vazio {
+  display: grid;
+  justify-items: center;
+  gap: 1.2rem;
+  margin: 18vh auto 0;
+  max-width: 30rem;
+  text-align: center;
+}
+
+.area-nota__convite {
+  margin: 0;
+  font-size: 1.15rem;
+  font-style: italic;
+  color: var(--pergaminho-apagado);
+}
+
+.area-nota__acoes {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 0.6rem 1.4rem;
+}
+
+/* A folha escura com a borda de ferro (o mesmo fundo dos diálogos e da ficha dos Personagens) */
+.nota {
+  width: min(48rem, 100%);
+  margin: 0 auto;
+  padding: 2.2rem clamp(1.2rem, 4vw, 2.8rem) 2.6rem;
+  background:
+    radial-gradient(120% 60% at 50% 0%, rgba(232, 221, 200, 0.05), transparent 60%),
+    linear-gradient(180deg, #221d19 0%, #15120f 100%);
+  border: 1px solid var(--ferro);
+  border-radius: var(--raio);
+  box-shadow:
+    inset 0 0 0 6px rgba(12, 10, 9, 0.6),
+    inset 0 0 0 7px var(--ferro-fraco),
+    0 40px 90px -30px rgba(0, 0, 0, 0.95);
+}
+
+.nota__caminho {
+  margin: 0 0 0.5rem;
+  font-size: 0.88rem;
+  font-style: italic;
+  color: var(--cinza);
+  overflow-wrap: anywhere;
+}
+
+.nota__dono {
+  color: var(--pergaminho-apagado);
+}
+
+.nota__titulo {
+  margin: 0;
+  font-family: var(--fonte-gotica);
+  font-size: clamp(2.2rem, 4.4vw, 3rem);
+  font-weight: 500;
+  line-height: 1.02;
+  overflow-wrap: anywhere;
+}
+
+.nota__alterada {
+  margin: 0.55rem 0 0;
+  font-size: 0.92rem;
+  font-style: italic;
+  color: var(--pergaminho-apagado);
+}
+
+.nota__barra {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem 1.3rem;
+  margin: 1rem 0 1.6rem;
+  padding-bottom: 0.7rem;
+  border-bottom: 1px solid var(--ferro-fraco);
+}
+
+.nota__mais {
+  font-size: 1.2rem;
+  line-height: 1;
+  letter-spacing: 0.08em;
+}
+
+.nota__vazia {
+  font-style: italic;
+  color: var(--cinza);
+}
+
+.nota__citada {
+  margin-top: 2.2rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--ferro-fraco);
+}
+
+.nota__citada-titulo {
+  margin: 0 0 0.4rem;
+  font-size: 1.05rem;
+  font-weight: 500;
+  font-variant: small-caps;
+  letter-spacing: 0.05em;
+  color: var(--pergaminho-apagado);
+}
+
+.nota__citada-lista {
+  display: grid;
+  gap: 0.2rem;
+  margin: 0;
+  padding-left: 1.2rem;
+}
+
+.nota__de {
+  font-size: 0.9rem;
+  font-style: italic;
+  color: var(--cinza);
+}
+
+/* =================================================================
+   Celular: uma coluna, a lateral ou a nota
+   ================================================================= */
+
+@media (max-width: 760px) {
+  .pagina-caderno {
+    grid-template-columns: minmax(0, 1fr);
+    min-height: 0;
+  }
+
+  .lateral {
+    position: static;
+    height: auto;
+    overflow: visible;
+    padding: 1.4rem 1rem 2rem;
+    background: none;
+    border-right: 0;
+  }
+
+  .pagina-caderno--com-nota .lateral {
+    display: none;
+  }
+
+  .pagina-caderno:not(.pagina-caderno--com-nota) .area-nota {
+    display: none;
+  }
+
+  .area-nota {
+    padding: 1rem 0.6rem 3rem;
+  }
+
+  .area-nota__voltar {
+    display: inline-block;
+    margin: 0 0 0.8rem 0.4rem;
+  }
+
+  .nota {
+    padding: 1.5rem 1.1rem 1.8rem;
+  }
+
+  .arvore__linha {
+    min-height: 2.5rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .arvore__seta,
+  .arvore__linha,
+  .lateral__link {
+    transition: none;
+  }
+}
