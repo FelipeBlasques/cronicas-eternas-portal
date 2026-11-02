@@ -10,6 +10,10 @@
    na galeria. Ninguém precisa de aprovação.
    A arte da galeria fica em "retrato", separada da capa e da arte
    do card das Mesas.
+   A ficha aberta tem abas: Geral, Detalhes (a ficha completa, em
+   "detalhes"), Jornada (os acontecimentos da Linha que o citam) e
+   Textos (caixas de texto livre, em "textos"). O Título ou Frase
+   ("destaque") aponta um item dos títulos ou das frases.
    ================================================================= */
 
 const fs = require("node:fs");
@@ -33,11 +37,60 @@ const {
   apagarImagens,
 } = require("./base");
 const { iniciar: garantirLinha, lerDataDaLinha, podeVer, dataPublica, chaveDaData, textoOpcional } = require("./linha");
+const { linksPara, conferirLinks } = require("./memorias");
 
 const PAPEIS = new Set(["jogador", "npc"]);
 const SITUACOES = new Set(["vivo", "caido", "desaparecido", "aposentado"]);
 const VISIBILIDADES = new Set(["todos", "admin"]);
 const LIMITE_OUTROS = 500;
+
+// A ficha completa da aba Detalhes, na ordem em que aparece: chave, rótulo e tipo.
+// O Nome, que vem primeiro, é o "nome" de sempre.
+const CAMPOS_DOS_DETALHES = [
+  ["titulos", "Títulos", "lista"],
+  ["apelidos", "Apelidos", "lista"],
+  ["nomeReal", "Nome Real", "texto"],
+  ["lar", "Lar", "texto"],
+  ["laresAnteriores", "Lares Anteriores", "lista"],
+  ["genero", "Gênero", "texto"],
+  ["especie", "Espécie", "texto"],
+  ["ocupacao", "Ocupação", "texto"],
+  ["idade", "Idade", "texto"],
+  ["religiao", "Religião", "texto"],
+  ["linguagens", "Linguagem", "lista"],
+  ["nascimento", "Nascimento", "marco"],
+  ["transformado", "Transformado", "marco"],
+  ["morte", "Morte", "marco"],
+  ["destruido", "Destruído", "marco"],
+  ["pais", "Pais", "lista"],
+  ["irmaos", "Irmãos", "lista"],
+  ["filhos", "Filhos", "lista"],
+  ["parentes", "Parentes", "lista"],
+  ["regenciaInicio", "Começo da Regência", "data"],
+  ["regenciaFim", "Término da Regência", "data"],
+  ["predecessor", "Predecessor", "texto"],
+  ["sucessor", "Sucessor", "texto"],
+  ["alinhamento", "Alinhamento", "texto"],
+  ["nivel", "Nível de Desafio / Nível", "texto"],
+  ["classe", "Classe", "texto"],
+  ["frases", "Frases", "lista"],
+];
+const LIMITES = {
+  texto: 120, // um campo de texto dos Detalhes
+  itens: 20, // itens de uma lista
+  item: 160, // cada item de uma lista
+  frase: 300, // cada item das Frases
+  onde: 80, // o "onde" de um marco
+  caixas: 20,
+  tituloDaCaixa: 80,
+  textoDaCaixa: 20000,
+  dados: 1024 * 1024, // o JSON do campo "dados" do formulário, com as caixas de texto
+};
+// O destaque aponta um item de uma destas listas
+const LISTA_DO_DESTAQUE = new Map([
+  ["titulo", "titulos"],
+  ["frase", "frases"],
+]);
 
 const carimbo = () => new Date().toISOString();
 const idAleatorio = () => crypto.randomBytes(4).toString("hex");
@@ -73,8 +126,54 @@ function retratoCopiado(p) {
   return `/uploads/${nome}`;
 }
 
+const numaLinha = (valor) => valor.replace(/\s*\n\s*/g, " ");
+
+// Os Detalhes com tudo vazio: texto "", lista [], data e marco null
+function detalhesVazios() {
+  const vazio = { texto: () => "", lista: () => [], data: () => null, marco: () => null };
+  return Object.fromEntries(CAMPOS_DOS_DETALHES.map(([chave, , tipo]) => [chave, vazio[tipo]()]));
+}
+
+// Antes das abas, a ficha tinha "origem" (ancestralidade e classe), "resumo", "historia" e a data
+// da queda. A origem se divide na primeira vírgula em Espécie e Classe; o resumo vira o primeiro
+// título e o destaque; a história vira a caixa "História"; a data da queda vira a Morte, e a queda
+// fica só com o epitáfio. As chaves antigas saem.
+function migrarParaAsAbas(p) {
+  const detalhes = detalhesVazios();
+  let destaque = null;
+  const textos = [];
+
+  const origem = typeof p.origem === "string" ? numaLinha(p.origem) : "";
+  const virgula = origem.indexOf(",");
+  if (virgula < 0) {
+    detalhes.especie = origem.trim();
+  } else {
+    detalhes.especie = origem.slice(0, virgula).trim();
+    detalhes.classe = origem.slice(virgula + 1).trim();
+  }
+
+  const resumo = typeof p.resumo === "string" ? numaLinha(p.resumo).trim() : "";
+  if (resumo) {
+    detalhes.titulos.push(resumo);
+    destaque = { tipo: "titulo", indice: 0 };
+  }
+
+  const historia = typeof p.historia === "string" ? p.historia.trim() : "";
+  if (historia) textos.push({ titulo: "História", texto: historia });
+
+  const queda = p.queda && typeof p.queda === "object" ? p.queda : null;
+  if (queda?.data) detalhes.morte = { data: queda.data, onde: "" };
+  p.queda = queda?.epitafio ? { epitafio: queda.epitafio } : null;
+
+  delete p.origem;
+  delete p.resumo;
+  delete p.historia;
+  Object.assign(p, { detalhes, destaque, textos });
+}
+
 // Cria a lista dos outros personagens na primeira vez e confere o formato do que está salvo.
-// Quem ainda não tem "retrato" vem de antes da arte própria da galeria e passa pela migração.
+// Quem ainda não tem "retrato" vem de antes da arte própria da galeria e passa pela migração;
+// quem ainda não tem "detalhes" vem de antes das abas e passa pela outra.
 // Devolve true quando precisou mudar alguma coisa.
 function garantirPersonagens() {
   let mudou = false;
@@ -99,6 +198,11 @@ function garantirPersonagens() {
       delete p.arte;
       mudou = true;
     }
+  }
+  for (const p of [...dados.personagens, ...dados.outrosPersonagens]) {
+    if ("detalhes" in p) continue;
+    migrarParaAsAbas(p);
+    mudou = true;
   }
   return mudou;
 }
@@ -156,13 +260,50 @@ function outroEditavel(conta, id) {
 
 /* ---------- Formato enviado à página ---------- */
 
-function fichaPublica(p) {
+const dataOuNada = (data) => (data ? dataPublica(data, true) : null);
+
+// O item que o destaque aponta, se ele ainda existir
+function destaqueValido(p) {
+  const d = p.destaque;
+  const lista = d ? p.detalhes[LISTA_DO_DESTAQUE.get(d.tipo)] : null;
+  return lista && Number.isInteger(d.indice) && lista[d.indice] ? { tipo: d.tipo, indice: d.indice } : null;
+}
+
+function destaqueResolvido(p) {
+  const d = destaqueValido(p);
+  return d ? { tipo: d.tipo, texto: p.detalhes[LISTA_DO_DESTAQUE.get(d.tipo)][d.indice] } : null;
+}
+
+// O que o card precisa. Nos caídos, "Caiu em …" usa a data da Morte.
+function cardPublico(p) {
   const situacao = SITUACOES.has(p.situacao) ? p.situacao : "vivo";
-  const queda =
-    situacao === "caido" && p.queda
-      ? { data: p.queda.data ? dataPublica(p.queda.data, true) : null, epitafio: p.queda.epitafio || "" }
-      : null;
-  return { situacao, queda, origem: p.origem || "", resumo: p.resumo || "", historia: p.historia || "" };
+  const data = p.detalhes.morte?.data || null;
+  const epitafio = p.queda?.epitafio || "";
+  const queda = situacao === "caido" && (data || epitafio) ? { data: dataOuNada(data), epitafio } : null;
+  return { situacao, queda, destaque: destaqueResolvido(p), apelidos: [...p.detalhes.apelidos] };
+}
+
+function detalhesPublicos(d) {
+  const publicos = {};
+  for (const [chave, , tipo] of CAMPOS_DOS_DETALHES) {
+    const valor = d[chave];
+    if (tipo === "texto") publicos[chave] = valor || "";
+    else if (tipo === "lista") publicos[chave] = [...(valor || [])];
+    else if (tipo === "data") publicos[chave] = dataOuNada(valor);
+    else publicos[chave] = valor ? { data: dataOuNada(valor.data), onde: valor.onde || "" } : null;
+  }
+  return publicos;
+}
+
+// Os textos que podem ter links: os campos de texto e os itens das listas dos Detalhes e o texto das caixas
+function textosComLinks(p) {
+  const textos = [];
+  for (const [chave, , tipo] of CAMPOS_DOS_DETALHES) {
+    if (tipo === "texto") textos.push(p.detalhes[chave]);
+    else if (tipo === "lista") textos.push(...p.detalhes[chave]);
+  }
+  for (const caixa of p.textos) textos.push(caixa.texto);
+  return textos.filter((t) => typeof t === "string" && t);
 }
 
 // Os logins do Foundry ficam de fora
@@ -180,7 +321,7 @@ function personagemDoPortal(p, conta) {
     dono: p.dono,
     nomeDono,
     mesas: [p.campanha],
-    ...fichaPublica(p),
+    ...cardPublico(p),
     visibilidade: "todos",
     podeEditar: podeEditarFicha(conta, p),
   };
@@ -196,7 +337,7 @@ function outroPublico(p, conta, conhecidas) {
     papel: PAPEIS.has(p.papel) ? p.papel : "npc",
     jogador: p.jogador || "",
     mesas: p.mesas.filter((id) => conhecidas.has(id)),
-    ...fichaPublica(p),
+    ...cardPublico(p),
     visibilidade: VISIBILIDADES.has(p.visibilidade) ? p.visibilidade : "todos",
     podeEditar: podeEditarOutro(conta),
   };
@@ -219,6 +360,7 @@ function jornadaDe(conta, ids) {
   return Object.fromEntries(jornada);
 }
 
+// A lista vai leve: os Detalhes, os Textos e a Jornada vêm com a ficha de cada um
 function dadosDaGaleria(conta) {
   const conhecidas = idsDasMesas();
   const personagens = [
@@ -234,18 +376,52 @@ function dadosDaGaleria(conta) {
       naPaginaMesas: c.naPaginaMesas !== false,
     })),
     personagens,
-    jornada: jornadaDe(conta, personagens.map((p) => p.id)),
   };
+}
+
+// O que o "Citar" do formulário oferece: só o que a conta vê
+function citaveisPara(conta) {
+  const acontecimentos = (dados.linha?.acontecimentos ?? [])
+    .filter((ev) => podeVer(conta, ev))
+    .sort((a, b) => chaveDaData(a.data) - chaveDaData(b.data))
+    .map((ev) => ({ id: ev.id, titulo: ev.titulo, ano: ev.data.ano }));
+  const personagens = [...dados.personagens, ...dados.outrosPersonagens.filter((p) => podeVerOutro(conta, p))]
+    .map((p) => ({ id: p.id, nome: p.nome }))
+    .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+  return { acontecimentos, personagens };
+}
+
+// A ficha de um personagem, do portal ou outro, com os links que a conta pode seguir.
+// Quem pode editar o personagem recebe também o que pode citar.
+function fichaCompleta(conta, id) {
+  const doPortal = dados.personagens.find((p) => p.id === id);
+  const p = doPortal || outroVisivel(conta, id);
+  const resposta = {
+    personagem: {
+      id: p.id,
+      detalhes: detalhesPublicos(p.detalhes),
+      destaque: destaqueValido(p),
+      textos: p.textos.map((caixa) => ({ titulo: caixa.titulo, texto: caixa.texto })),
+    },
+    jornada: jornadaDe(conta, [p.id])[p.id],
+    links: linksPara(conta, textosComLinks(p)),
+  };
+  if (doPortal ? podeEditarFicha(conta, doPortal) : podeEditarOutro(conta)) resposta.citaveis = citaveisPara(conta);
+  return resposta;
 }
 
 /* ---------- O que chega do formulário ---------- */
 
-// Os dados vêm como JSON no campo "dados"; a imagem, se houver, no campo "retrato"
+// Os dados vêm como JSON no campo "dados", de até 1 MB por causa das caixas de texto;
+// a imagem, se houver, no campo "retrato"
 async function lerFormularioDaFicha(req) {
-  const form = await lerFormulario(req, CONFIG.maxImagem + CONFIG.maxJson);
+  const form = await lerFormulario(req, CONFIG.maxImagem + LIMITES.dados);
   const bruto = form.get("dados");
+  if (typeof bruto === "string" && Buffer.byteLength(bruto) > LIMITES.dados) {
+    throw new ErroHttp(413, "A ficha passou do limite de 1 MB. Encurte os textos.");
+  }
   let corpo = null;
-  if (typeof bruto === "string" && bruto.length <= CONFIG.maxJson) {
+  if (typeof bruto === "string") {
     try {
       corpo = JSON.parse(bruto);
     } catch {
@@ -259,27 +435,112 @@ async function lerFormularioDaFicha(req) {
   return { corpo, form };
 }
 
-// O que o jogador escreve sobre o próprio personagem. O resumo é uma frase só, numa linha.
-function textosDaFicha(corpo) {
-  return {
-    origem: textoOpcional(corpo.origem, "Ancestralidade e classe", 80),
-    resumo: textoOpcional(corpo.resumo, "Resumo", 160).replace(/\s*\n\s*/g, " "),
-    historia: textoOpcional(corpo.historia, "História", 6000),
-  };
+// Um campo de texto dos Detalhes: numa linha, com links
+function textoDoDetalhe(valor, rotulo) {
+  const limpo = numaLinha(textoOpcional(valor, rotulo, LIMITES.texto));
+  conferirLinks(limpo, rotulo);
+  return limpo;
 }
 
-// A queda só vale para os caídos, e a data segue a regra da Linha do Tempo.
-// Sem data e sem epitáfio, o caído fica sem queda.
+// Uma lista dos Detalhes: cada item numa linha, com links. Os itens vazios saem.
+function listaDoDetalhe(valor, rotulo, maxItem) {
+  const itens = [];
+  for (const bruto of Array.isArray(valor) ? valor : []) {
+    const item = typeof bruto === "string" ? numaLinha(bruto.replace(/\r\n?/g, "\n").trim()) : "";
+    if (!item) continue;
+    if (item.length > maxItem) {
+      throw new ErroHttp(400, `Cada item do campo ${rotulo} pode ter no máximo ${maxItem} caracteres.`);
+    }
+    conferirLinks(item, rotulo);
+    itens.push(item);
+  }
+  if (itens.length > LIMITES.itens) {
+    throw new ErroHttp(400, `O campo ${rotulo} pode ter no máximo ${LIMITES.itens} itens.`);
+  }
+  return itens;
+}
+
+// Uma data no Ciclo de Sylara, com as regras da Linha do Tempo. Vazia: null.
+function dataDoDetalhe(valor, rotulo) {
+  if (!valor) return null;
+  try {
+    return lerDataDaLinha(valor, dados.linha.anoAtual, true);
+  } catch (erro) {
+    if (erro instanceof ErroHttp) throw new ErroHttp(400, `${erro.message.replace(/\.$/, "")} (campo ${rotulo}).`);
+    throw erro;
+  }
+}
+
+// Um marco: a data e o onde. Precisa de pelo menos um dos dois; sem nenhum, fica null.
+function marcoDoDetalhe(valor, rotulo) {
+  if (!valor || typeof valor !== "object") return null;
+  const data = dataDoDetalhe(valor.data, rotulo);
+  const onde = numaLinha(textoOpcional(valor.onde, `${rotulo} (onde)`, LIMITES.onde));
+  return data || onde ? { data, onde } : null;
+}
+
+// A ficha completa, campo a campo. "morteMantida": quando quem envia não muda a Morte (o dono),
+// ela fica como está e o que veio no envio é ignorado.
+function detalhesDoCorpo(bruto, morteMantida) {
+  const corpo = bruto && typeof bruto === "object" && !Array.isArray(bruto) ? bruto : {};
+  const detalhes = {};
+  for (const [chave, rotulo, tipo] of CAMPOS_DOS_DETALHES) {
+    if (chave === "morte" && morteMantida !== undefined) {
+      detalhes.morte = morteMantida;
+      continue;
+    }
+    const valor = Object.hasOwn(corpo, chave) ? corpo[chave] : undefined;
+    if (tipo === "texto") detalhes[chave] = textoDoDetalhe(valor, rotulo);
+    else if (tipo === "lista") detalhes[chave] = listaDoDetalhe(valor, rotulo, chave === "frases" ? LIMITES.frase : LIMITES.item);
+    else if (tipo === "data") detalhes[chave] = dataDoDetalhe(valor, rotulo);
+    else detalhes[chave] = marcoDoDetalhe(valor, rotulo);
+  }
+  return detalhes;
+}
+
+// O Título ou Frase aponta um item dos títulos ou das frases, já sem os itens vazios.
+// Um item que não existe deixa o personagem sem destaque.
+function destaqueDoCorpo(bruto, detalhes) {
+  if (!bruto || typeof bruto !== "object") return null;
+  const lista = detalhes[LISTA_DO_DESTAQUE.get(bruto.tipo)];
+  if (!lista || !Number.isInteger(bruto.indice) || bruto.indice < 0 || bruto.indice >= lista.length) return null;
+  return { tipo: bruto.tipo, indice: bruto.indice };
+}
+
+// As caixas de texto livre. Uma caixa toda vazia sai; com texto, precisa de título.
+function textosDoCorpo(lista) {
+  const caixas = [];
+  (Array.isArray(lista) ? lista : []).forEach((bruta, i) => {
+    const caixa = bruta && typeof bruta === "object" ? bruta : {};
+    const titulo = numaLinha(textoOpcional(caixa.titulo, `Título da caixa ${i + 1}`, LIMITES.tituloDaCaixa));
+    const textoDaCaixa = textoOpcional(caixa.texto, `Texto da caixa ${i + 1}`, LIMITES.textoDaCaixa);
+    if (!titulo && !textoDaCaixa) return;
+    if (!titulo) throw new ErroHttp(400, `Preencha o campo Título da caixa ${i + 1}.`);
+    conferirLinks(textoDaCaixa, `Texto da caixa ${i + 1}`);
+    caixas.push({ titulo, texto: textoDaCaixa });
+  });
+  if (caixas.length > LIMITES.caixas) {
+    throw new ErroHttp(400, `A aba Textos pode ter no máximo ${LIMITES.caixas} caixas.`);
+  }
+  return caixas;
+}
+
+// Os Detalhes, o Título ou Frase e os Textos. Quem não muda a Morte passa a que já está guardada.
+function conteudoDaFicha(corpo, morteMantida) {
+  const detalhes = detalhesDoCorpo(corpo.detalhes, morteMantida);
+  return { detalhes, destaque: destaqueDoCorpo(corpo.destaque, detalhes), textos: textosDoCorpo(corpo.textos) };
+}
+
+// O epitáfio só vale para os caídos; a data da queda é a Morte dos Detalhes.
+// Sem epitáfio, a queda fica null.
 function situacaoDaFicha(corpo) {
   const situacao = corpo.situacao ?? "vivo";
   if (!SITUACOES.has(situacao)) {
     throw new ErroHttp(400, "Escolha a situação: vivo, caído, desaparecido ou aposentado.");
   }
   const bruta = situacao === "caido" && corpo.queda && typeof corpo.queda === "object" ? corpo.queda : null;
-  if (!bruta) return { situacao, queda: null };
-  const data = bruta.data ? lerDataDaLinha(bruta.data, dados.linha.anoAtual, true) : null;
-  const epitafio = textoOpcional(bruta.epitafio, "Epitáfio", 160);
-  return { situacao, queda: data || epitafio ? { data, epitafio } : null };
+  const epitafio = bruta ? textoOpcional(bruta.epitafio, "Epitáfio", 160) : "";
+  return { situacao, queda: epitafio ? { epitafio } : null };
 }
 
 // Confere e limpa o que veio do formulário de um outro personagem.
@@ -299,7 +560,7 @@ function valoresDoOutro(corpo, conta, atual) {
     jogador,
     mesas: mesasConhecidas(corpo.mesas),
     ...situacaoDaFicha(corpo),
-    ...textosDaFicha(corpo),
+    ...conteudoDaFicha(corpo),
     visibilidade,
   };
 }
@@ -329,6 +590,7 @@ async function tratarGaleria(req, res, rota, metodo, conta) {
 
   if (!resto.length) {
     if (!recurso && metodo === "GET") return enviarJson(res, 200, dadosDaGaleria(conta));
+    if (recurso === "ficha" && id && metodo === "GET") return enviarJson(res, 200, fichaCompleta(conta, id));
     if (recurso === "ficha" && id && metodo === "PUT") return salvarFicha(req, res, conta, id);
     if (recurso === "outros") {
       if (!id && metodo === "POST") return cadastrarOutro(req, res, conta);
@@ -339,15 +601,16 @@ async function tratarGaleria(req, res, rota, metodo, conta) {
   throw new ErroHttp(404, "Endereço não encontrado.");
 }
 
-// O dono escreve resumo, ancestralidade e história e troca o retrato; o administrador e os editores
-// mudam isso em qualquer ficha e também a situação e a queda.
+// O dono escreve os Detalhes (menos a Morte), o Título ou Frase e os Textos e troca o retrato;
+// o administrador e os editores mudam isso em qualquer ficha e também a situação, o epitáfio e a Morte.
 // Nome e fonte continuam no "Personalizar" das Mesas, e a capa e a arte do card também.
 async function salvarFicha(req, res, conta, id) {
   fichaEditavel(conta, id); // antes de receber as imagens
   const { corpo, form } = await lerFormularioDaFicha(req);
-  const valores = textosDaFicha(corpo);
-  if (conta.admin || conta.editor) Object.assign(valores, situacaoDaFicha(corpo));
   const personagem = fichaEditavel(conta, id);
+  const cuida = Boolean(conta.admin || conta.editor);
+  const valores = conteudoDaFicha(corpo, cuida ? undefined : (personagem.detalhes?.morte ?? null));
+  if (cuida) Object.assign(valores, situacaoDaFicha(corpo));
   Object.assign(personagem, valores);
   await aplicarImagens(personagem, form, CAMPOS_IMAGEM_GALERIA);
   await salvarDados();
