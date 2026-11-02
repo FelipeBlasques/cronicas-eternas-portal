@@ -95,6 +95,9 @@ function nomeDaConta(usuario, reserva) {
 
 // Só o administrador vê os mapas e os lugares guardados para ele
 const podeVer = (conta, item) => Boolean(conta.admin || item.visibilidade !== "admin");
+// Se a conta vê um lugar: nem o mapa nem o lugar são "só o administrador", ou a conta é o administrador.
+// Serve aos links do Caderno.
+const podeVerLugar = (conta, mapa, marcador) => podeVer(conta, mapa) && podeVer(conta, marcador);
 const podeEditarMarcador = (conta, m) =>
   Boolean(conta.admin || (conta.editor && m.registradoPor && m.registradoPor === conta.usuario));
 
@@ -558,5 +561,5 @@ ganchos.excluirConta.push(desligarContaDosMapas);
 ganchos.excluirMesa.push(tirarMesaDosMapas);
 
 // Os endereços /api/mapas/... são desta página. "iniciar" confere os dados ao ligar o portal
-// e devolve true quando precisou mudar alguma coisa.
-module.exports = { prefixo: "/api/mapas", tratar: tratarMapas, iniciar: garantirMapas };
+// e devolve true quando precisou mudar alguma coisa. "podeVerLugar" serve aos links do Caderno.
+module.exports = { prefixo: "/api/mapas", tratar: tratarMapas, iniciar: garantirMapas, podeVerLugar };
