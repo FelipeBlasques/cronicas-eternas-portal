@@ -1512,6 +1512,7 @@ button.card--desaparecido:is(:hover, :focus-visible) .card__nevoa {
 
   .ficha__retrato {
     flex: none;
+    align-self: stretch;
     position: relative;
     aspect-ratio: auto;
     height: min(22rem, 52dvh);
