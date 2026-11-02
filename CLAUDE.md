@@ -65,6 +65,8 @@ portal/
                     fica em `retrato`, separada da capa e da arte do card das Mesas)
     mapas.js        /api/mapas/... (Mapas e lugares)
     memorias.js     /api/memorias/... (Memórias de Draevor: textos que só o administrador escreve e revela)
+    caderno.js      /api/caderno/... (Caderno: notas e pastas de cada conta, em cadernos/<usuario>/caderno.json,
+                    fora do dados.json; os ganchos de conta renomeiam e apagam essas pastas)
   publico/
     comum.js        lista PAGINAS e barra lateral, pedir(), $, criar(), botao(), imagem(),
                     simbolo(), perguntar(), avisoRapido(), avisarFalha(), fecharAoClicarFora(),

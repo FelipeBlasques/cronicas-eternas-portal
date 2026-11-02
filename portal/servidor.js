@@ -17,6 +17,7 @@
      personagens.js  Personagens (a galeria)
      mapas.js     Mapas
      memorias.js  Memórias de Draevor
+     caderno.js   Caderno (cada conta tem o seu, fora do dados.json)
 
    Comandos:
      node servidor.js                     inicia o portal
@@ -69,6 +70,7 @@ const PAGINAS = [
   require("./servidor/personagens"),
   require("./servidor/mapas"),
   require("./servidor/memorias"),
+  require("./servidor/caderno"),
 ];
 
 /* =================================================================
