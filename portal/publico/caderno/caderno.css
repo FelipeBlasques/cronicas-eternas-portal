@@ -5,7 +5,10 @@
    rolagem própria, e a nota aberta numa folha escura com borda de
    ferro, como a ficha dos Personagens. O desenho do texto da nota
    fica no marcas.css. A brasa só marca a nota aberta na árvore e o
-   "+ Nota". No celular, uma coluna só: a lateral ou a nota.
+   "+ Nota". Na edição, o título num campo, a barra de botões das
+   marcas e a área de texto que cresce. Na árvore, o "⋯" de cada
+   item, o renomear e o arrastar. No celular, uma coluna só: a
+   lateral ou a nota, e a barra de botões rola de lado.
    ================================================================= */
 
 .sr {
@@ -267,6 +270,78 @@
   stroke-linejoin: round;
 }
 
+/* O "⋯" do item: aparece com o mouse em cima ou com o foco (no celular, sempre) */
+.arvore__mais {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 1.7rem;
+  height: 1.5rem;
+  margin-right: -0.3rem;
+  padding: 0;
+  font: inherit;
+  font-size: 1.05rem;
+  line-height: 1;
+  letter-spacing: 0.06em;
+  color: var(--pergaminho-apagado);
+  background: none;
+  border: 0;
+  border-radius: var(--raio);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s, color 0.2s, background-color 0.2s;
+}
+
+.arvore__linha:hover > .arvore__mais,
+.arvore__item:focus > .arvore__linha > .arvore__mais,
+.arvore__mais[aria-expanded="true"] {
+  opacity: 1;
+}
+
+.arvore__mais:hover {
+  color: var(--pergaminho);
+  background: rgba(232, 221, 200, 0.08);
+}
+
+@media (hover: none) {
+  .arvore__mais {
+    opacity: 1;
+  }
+}
+
+/* Renomear ali mesmo, no lugar do nome */
+.arvore__renomear {
+  flex: 1;
+  min-width: 0;
+  padding: 0.1rem 0.35rem;
+  font: inherit;
+  color: var(--pergaminho);
+  background: rgba(12, 10, 9, 0.7);
+  border: 1px solid var(--ferro-forte);
+  border-radius: var(--raio);
+}
+
+.arvore__renomear:focus-visible {
+  outline: none;
+  border-color: var(--brasa);
+}
+
+/* A pasta escolhida, onde "+ Nota" e "+ Pasta" criam: marcada de leve, sem a brasa */
+.arvore__item--escolhida > .arvore__linha {
+  background: rgba(181, 154, 118, 0.09);
+}
+
+/* Arrastando: o item fica apagado, e a pasta (ou o título do caderno) de destino, marcada */
+.arvore__item--arrastando > .arvore__linha {
+  opacity: 0.45;
+}
+
+.destino-do-arraste {
+  background: rgba(181, 154, 118, 0.14);
+  box-shadow: inset 0 0 0 1px var(--ferro-forte);
+  border-radius: var(--raio);
+}
+
 /* ---------- Etiquetas ---------- */
 
 .lateral__etiquetas summary {
@@ -446,6 +521,365 @@
 }
 
 /* =================================================================
+   A edição: o título, a barra de botões e o texto
+   ================================================================= */
+
+.nota__cabeca {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.3rem 1.2rem;
+}
+
+.nota__campo-titulo {
+  flex: 1 1 18rem;
+  min-width: 0;
+  margin: 0;
+  padding: 0 0 0.15rem;
+  font-family: var(--fonte-gotica);
+  font-size: clamp(2.2rem, 4.4vw, 3rem);
+  font-weight: 500;
+  line-height: 1.1;
+  color: var(--pergaminho);
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--ferro-fraco);
+  border-radius: 0;
+  transition: border-color 0.25s;
+}
+
+.nota__campo-titulo:focus-visible {
+  outline: none;
+  border-bottom-color: var(--brasa);
+}
+
+/* "Salvando…", "Salvo" e "Não salvou: …", ao lado do título */
+.nota__situacao {
+  margin: 0;
+  max-width: 100%;
+  font-size: 0.9rem;
+  font-style: italic;
+  color: var(--cinza);
+}
+
+.nota__situacao:empty {
+  display: none;
+}
+
+.nota__situacao--falha {
+  color: var(--alerta);
+}
+
+.nota--edicao .nota__barra {
+  margin-bottom: 0.9rem;
+}
+
+/* A barra de botões das marcas: placas de ferro pequenas, em grupos */
+.ferramentas {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.9rem;
+  margin: 0 0 0.9rem;
+}
+
+.ferramentas__grupo {
+  display: flex;
+  gap: 0.2rem;
+}
+
+.ferramenta {
+  display: grid;
+  place-items: center;
+  width: 2.2rem;
+  height: 2.2rem;
+  padding: 0;
+  font: inherit;
+  font-size: 1.05rem;
+  line-height: 1;
+  color: var(--pergaminho-apagado);
+  background: linear-gradient(180deg, #26201b 0%, #17130f 100%);
+  border: 1px solid var(--ferro-fraco);
+  border-radius: var(--raio);
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s;
+}
+
+.ferramenta:hover,
+.ferramenta[aria-expanded="true"] {
+  color: var(--pergaminho);
+  border-color: var(--ferro-forte);
+}
+
+.ferramenta:focus-visible {
+  outline: 2px solid var(--brasa);
+  outline-offset: 2px;
+}
+
+.ferramenta__icone {
+  width: 1.15rem;
+  height: 1.15rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.ferramenta--negrito .ferramenta__letra {
+  font-weight: 700;
+}
+
+.ferramenta--italico .ferramenta__letra {
+  font-style: italic;
+}
+
+.ferramenta--riscado .ferramenta__letra {
+  font-size: 0.92rem;
+  text-decoration: line-through;
+}
+
+/* A área de texto, com as marcas à mostra: cresce com o texto (a altura vem do caderno.js) */
+.nota__campo-texto {
+  display: block;
+  width: 100%;
+  min-height: 22rem;
+  margin: 0;
+  padding: 0.9rem 1rem 1.2rem;
+  font-family: var(--fonte-texto);
+  font-size: 1.08rem;
+  line-height: 1.6;
+  color: var(--pergaminho);
+  background: rgba(12, 10, 9, 0.45);
+  border: 1px solid var(--ferro-fraco);
+  border-radius: var(--raio);
+  resize: none;
+  overflow: hidden;
+  tab-size: 2;
+  transition: border-color 0.25s;
+}
+
+.nota__campo-texto:focus-visible {
+  outline: none;
+  border-color: var(--ferro);
+}
+
+.nota__campo-texto::placeholder {
+  font-style: italic;
+  color: var(--cinza);
+}
+
+/* Um arquivo de imagem sendo arrastado para a nota */
+.nota__campo-texto--soltar {
+  border-style: dashed;
+  border-color: var(--ferro-forte);
+}
+
+/* =================================================================
+   O menu "⋯" (e o do botão Título)
+   ================================================================= */
+
+.menu {
+  position: fixed;
+  z-index: 60;
+  display: grid;
+  min-width: 11rem;
+  max-width: min(18rem, calc(100vw - 16px));
+  padding: 0.35rem;
+  background: linear-gradient(180deg, #241e1a 0%, #15120f 100%);
+  border: 1px solid var(--ferro);
+  border-radius: var(--raio);
+  box-shadow: 0 24px 50px -16px rgba(0, 0, 0, 0.95);
+}
+
+.menu[hidden] {
+  display: none;
+}
+
+.menu__item {
+  display: block;
+  width: 100%;
+  padding: 0.45rem 0.8rem;
+  font: inherit;
+  font-size: 1rem;
+  text-align: left;
+  color: var(--pergaminho-apagado);
+  background: none;
+  border: 0;
+  border-radius: var(--raio);
+  cursor: pointer;
+}
+
+.menu__item:hover,
+.menu__item:focus-visible {
+  color: var(--pergaminho);
+  background: rgba(232, 221, 200, 0.07);
+  outline: none;
+}
+
+.menu__item:focus-visible {
+  box-shadow: inset 0 0 0 1px var(--ferro-forte);
+}
+
+.menu__item--perigo {
+  color: var(--alerta);
+}
+
+.menu__item--perigo:hover,
+.menu__item--perigo:focus-visible {
+  color: #f3b3a2;
+}
+
+/* =================================================================
+   Citar: a busca pelas notas e pelas coisas do portal (como nas Memórias)
+   ================================================================= */
+
+.dialogo.dialogo--citar {
+  width: min(32rem, calc(100vw - 2rem));
+}
+
+#citar-busca::-webkit-search-cancel-button {
+  filter: grayscale(1) brightness(1.6);
+}
+
+.citar__resultados {
+  display: grid;
+  gap: 1rem;
+  max-height: min(50vh, 24rem);
+  overflow: auto;
+  margin-top: 1.1rem;
+  padding-right: 0.5rem;
+}
+
+.citar__titulo {
+  margin: 0 0 0.3rem;
+  font-size: 0.86rem;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--cinza);
+}
+
+.citar__lista {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.citar__item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  width: 100%;
+  padding: 0.4rem 0.6rem;
+  font: inherit;
+  text-align: left;
+  color: var(--pergaminho-apagado);
+  background: none;
+  border: 0;
+  border-radius: var(--raio);
+  cursor: pointer;
+  transition: color 0.2s, background-color 0.2s;
+}
+
+.citar__item:hover,
+.citar__item:focus-visible {
+  color: var(--pergaminho);
+  background: rgba(232, 221, 200, 0.06);
+}
+
+.citar__item:focus-visible {
+  outline: 2px solid var(--brasa);
+  outline-offset: -2px;
+}
+
+.citar__nome {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.citar__extra {
+  flex: none;
+  max-width: 50%;
+  font-size: 0.9rem;
+  font-style: italic;
+  text-align: right;
+  color: var(--cinza);
+  overflow-wrap: anywhere;
+}
+
+.citar__vazio {
+  margin: 0;
+  font-style: italic;
+  color: var(--cinza);
+}
+
+/* =================================================================
+   Mover para…
+   ================================================================= */
+
+.dialogo.dialogo--mover {
+  width: min(30rem, calc(100vw - 2rem));
+}
+
+.mover__lista {
+  display: grid;
+  gap: 0.1rem;
+  max-height: min(50vh, 24rem);
+  overflow: auto;
+  margin: 1rem 0 0;
+  padding: 0 0.4rem 0 0;
+  list-style: none;
+}
+
+.mover__destino {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  width: 100%;
+  padding: 0.4rem 0.6rem 0.4rem calc(0.6rem + var(--nivel, 0) * 1rem);
+  font: inherit;
+  text-align: left;
+  color: var(--pergaminho-apagado);
+  background: none;
+  border: 0;
+  border-radius: var(--raio);
+  cursor: pointer;
+  transition: color 0.2s, background-color 0.2s;
+}
+
+.mover__destino:hover:not(:disabled),
+.mover__destino:focus-visible {
+  color: var(--pergaminho);
+  background: rgba(232, 221, 200, 0.06);
+}
+
+.mover__destino:focus-visible {
+  outline: 2px solid var(--brasa);
+  outline-offset: -2px;
+}
+
+.mover__destino:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.mover__nome {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.mover__aqui {
+  flex: none;
+  font-size: 0.88rem;
+  font-style: italic;
+  color: var(--cinza);
+}
+
+/* =================================================================
    Celular: uma coluna, a lateral ou a nota
    ================================================================= */
 
@@ -488,12 +922,36 @@
   .arvore__linha {
     min-height: 2.5rem;
   }
+
+  /* A barra de botões rola de lado, sem empurrar a página */
+  .ferramentas {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 0.35rem;
+    scrollbar-width: thin;
+    scrollbar-color: var(--ferro) transparent;
+  }
+
+  .ferramentas__grupo {
+    flex: none;
+  }
+
+  .nota__campo-texto {
+    min-height: 16rem;
+    padding: 0.7rem 0.75rem 1rem;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .arvore__seta,
   .arvore__linha,
-  .lateral__link {
+  .arvore__mais,
+  .lateral__link,
+  .ferramenta,
+  .nota__campo-titulo,
+  .nota__campo-texto,
+  .citar__item,
+  .mover__destino {
     transition: none;
   }
 }
