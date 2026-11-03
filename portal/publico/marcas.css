@@ -102,6 +102,7 @@
 /* A caixinha fica no lugar do marcador */
 .marcas__tarefa {
   position: relative;
+  min-height: 1.6em;
   list-style: none;
 }
 

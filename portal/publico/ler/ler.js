@@ -36,7 +36,7 @@ const apiDoServidor = {
 // A imagem do Guia: o mesmo desenho da prévia do Caderno
 function desenhoDaPrevia(tracos) {
   const svg =
-    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 270"><rect width="480" height="270" fill="#1b1714"/>' +
+    '<svg xmlns="http://www.w3.org/2000/svg" width="480" height="270" viewBox="0 0 480 270"><rect width="480" height="270" fill="#1b1714"/>' +
     `<g fill="none" stroke="#c9ab80" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">${tracos}</g></svg>`;
   return `data:image/svg+xml,${encodeURIComponent(svg)}`;
 }
