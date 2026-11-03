@@ -7,8 +7,11 @@
    fica no marcas.css. A brasa só marca a nota aberta na árvore e o
    "+ Nota". Na edição, o título num campo, a barra de botões das
    marcas e a área de texto que cresce. Na árvore, o "⋯" de cada
-   item, o renomear e o arrastar. No celular, uma coluna só: a
-   lateral ou a nota, e a barra de botões rola de lado.
+   item, o renomear e o arrastar. A busca troca as árvores pelos
+   resultados, com o achado destacado em ferro. O diálogo
+   Compartilhar tem uma linha por conta e o link público. No
+   celular, uma coluna só: a lateral ou a nota, e a barra de botões
+   rola de lado.
    ================================================================= */
 
 .sr {
@@ -91,15 +94,6 @@
   padding: 0.5rem 1rem;
 }
 
-.lateral__busca input {
-  font-size: 1rem;
-}
-
-.lateral__busca input:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
 .lateral__secao {
   display: grid;
   gap: 0.35rem;
@@ -171,6 +165,89 @@
   font-size: 0.85rem;
   font-style: italic;
   color: var(--cinza);
+}
+
+/* ---------- A busca ---------- */
+
+/* O "×" fica dentro do campo, à direita */
+.lateral__busca {
+  position: relative;
+}
+
+.lateral__busca input {
+  padding-right: 2rem;
+  font-size: 1rem;
+}
+
+/* O "×" do navegador sai: fica o da página, que volta para as árvores */
+#busca::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.lateral__limpar {
+  position: absolute;
+  right: 0;
+  bottom: 0.2rem;
+  width: 1.9rem;
+  height: 1.9rem;
+  padding: 0;
+  font: inherit;
+  font-size: 1.35rem;
+  line-height: 1;
+  color: var(--pergaminho-apagado);
+  background: none;
+  border: 0;
+  border-radius: var(--raio);
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.lateral__limpar:hover {
+  color: var(--pergaminho);
+}
+
+.lateral__limpar:focus-visible {
+  outline: 2px solid var(--brasa);
+  outline-offset: 1px;
+}
+
+/* Buscando, os resultados ficam no lugar das Fixadas e das árvores */
+.lateral--buscando .lateral__fixadas,
+.lateral--buscando .lateral__arvore,
+.lateral--buscando .lateral__compartilhadas {
+  display: none;
+}
+
+.lateral__resultados {
+  gap: 0.3rem;
+}
+
+.resultado__link {
+  display: grid;
+  gap: 0.12rem;
+  padding: 0.4rem 0.5rem;
+}
+
+.resultado__onde {
+  font-size: 0.82rem;
+  font-style: italic;
+  color: var(--cinza);
+  overflow-wrap: anywhere;
+}
+
+.resultado__trecho {
+  font-size: 0.88rem;
+  line-height: 1.42;
+  color: var(--cinza);
+}
+
+/* O achado: em ferro, sem a brasa */
+.resultado__achado {
+  padding: 0 0.06em;
+  color: var(--pergaminho);
+  background: rgba(181, 154, 118, 0.22);
+  border-radius: 2px;
 }
 
 /* ---------- A árvore ---------- */
@@ -880,6 +957,117 @@
 }
 
 /* =================================================================
+   Compartilhar (só a dona)
+   ================================================================= */
+
+.dialogo.dialogo--compartilhar {
+  width: min(34rem, calc(100vw - 2rem));
+}
+
+.compartilhar__item {
+  font-style: italic;
+  overflow-wrap: anywhere;
+}
+
+.grupo {
+  display: grid;
+  gap: 0.6rem;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.grupo legend {
+  padding: 0;
+  margin-bottom: 0.25rem;
+}
+
+.grupo .campo__ajuda {
+  margin: 0;
+}
+
+/* Uma linha por conta: o nome e as três escolhas */
+.compartilhar__contas {
+  display: grid;
+  max-height: min(36vh, 18rem);
+  overflow: auto;
+  padding-right: 0.4rem;
+}
+
+.compartilhar__conta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem 1rem;
+  padding: 0.45rem 0;
+  border-bottom: 1px solid var(--ferro-fraco);
+}
+
+.compartilhar__nome {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.compartilhar__opcoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.1rem;
+}
+
+.compartilhar__vazio {
+  margin: 0;
+  font-style: italic;
+  color: var(--cinza);
+}
+
+/* Uma escolha só: a marca é redonda, com um ponto no lugar do visto (como nas Memórias) */
+.caixa--opcao .caixa__marca {
+  border-radius: 50%;
+}
+
+.caixa--opcao .caixa__marca::after {
+  left: 50%;
+  top: 50%;
+  width: 0.5rem;
+  height: 0.5rem;
+  border: 0;
+  border-radius: 50%;
+  background: var(--brasa);
+  transform: translate(-50%, -50%) scale(0);
+}
+
+.caixa--opcao input:checked + .caixa__marca::after {
+  transform: translate(-50%, -50%) scale(1);
+}
+
+.compartilhar__link {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.compartilhar__link input {
+  font-size: 0.95rem;
+}
+
+.compartilhar__botoes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1.3rem;
+}
+
+.compartilhar__situacao {
+  margin: 0;
+  font-style: italic;
+}
+
+.compartilhar__situacao:empty {
+  display: none;
+}
+
+/* =================================================================
    Celular: uma coluna, a lateral ou a nota
    ================================================================= */
 
@@ -951,7 +1139,8 @@
   .nota__campo-titulo,
   .nota__campo-texto,
   .citar__item,
-  .mover__destino {
+  .mover__destino,
+  .lateral__limpar {
     transition: none;
   }
 }

@@ -14,7 +14,10 @@
    a barra de botões das marcas, o Citar ([[ e ![[), as imagens e o
    salvar sozinho. Na árvore, o "⋯" de cada item cria, renomeia,
    move, fixa, baixa, copia o link e apaga; a dona também arrasta.
-   Compartilhar e buscar vêm depois: por enquanto, avisam "em breve".
+   A dona compartilha notas e pastas com as outras contas e liga o
+   link público de uma nota (a leitura pública fica em ../ler/). A
+   busca troca as árvores pelos resultados; clicar numa etiqueta
+   busca as notas com ela.
 
    No servidor, conversa com o servidor/caderno.js. Aberta fora dele
    (arquivo no PC ou prévia), usa cadernos de exemplo e um painel
@@ -30,6 +33,7 @@ const CONFIG = {
   esperaParaSalvar: 1500, // ms depois da última mudança no texto, para salvar sozinho
   maximoSemSalvar: 10000, // ms, no máximo, escrevendo sem parar antes de salvar
   novasTentativas: [2000, 5000, 10000], // quando não salvou: as esperas de cada nova tentativa
+  esperaParaBuscar: 300, // ms depois da última tecla no campo da busca, para buscar
 };
 
 // Os mesmos limites do servidor/caderno.js (a prévia usa todos; a página, os dos campos e das imagens)
@@ -44,6 +48,8 @@ const LIMITES = {
   imagens: 1024 * 1024 * 1024, // bytes somando todas as imagens de um caderno (1 GB)
   fixadas: 30, // notas que cada conta pode fixar
   link: 120, // caracteres do "o que aparece" de um link
+  busca: 2, // caracteres, no mínimo, para buscar
+  resultados: 50, // notas que a busca devolve, no máximo
 };
 const TIPOS_DE_IMAGEM = ["image/png", "image/jpeg", "image/webp", "image/gif", "image/avif"];
 
@@ -79,6 +85,12 @@ const apiDoServidor = {
     return pedir("POST", "/api/caderno/imagens", formulario);
   },
   citaveis: () => pedir("GET", "/api/caderno/citaveis"),
+  compartilharNota: (id, contas) => pedir("PUT", `${caminhoDe("/api/caderno/notas", id)}/compartilhada`, { contas }),
+  compartilharPasta: (id, contas) => pedir("PUT", `${caminhoDe("/api/caderno/pastas", id)}/compartilhada`, { contas }),
+  ligarLink: (id) => pedir("POST", `${caminhoDe("/api/caderno/notas", id)}/link`),
+  desligarLink: (id) => pedir("DELETE", `${caminhoDe("/api/caderno/notas", id)}/link`),
+  // O administrador busca no caderno que está lendo ("conta")
+  buscar: (q, conta) => pedir("GET", `/api/caderno/busca?${new URLSearchParams(conta ? { q, conta } : { q })}`),
   estado: () => pedir("GET", "/api/estado", undefined, { silencioso: true }),
   sair: () => pedir("POST", "/api/sair"),
 };
@@ -775,6 +787,83 @@ function criarApiDePrevia() {
           .map((m) => ({ id: `${mapa.id}/${m.id}`, nome: m.nome, mapa: mapa.nome })),
       );
 
+  // Com quem compartilhar: contas que existem, sem o administrador nem a dona, com "ver" ou "editar"
+  function contasDoCompartilhar(valor, dono) {
+    if (!valor || typeof valor !== "object" || Array.isArray(valor)) throw erroComCodigo("Escolha com quem compartilhar.");
+    for (const [usuario, nivel] of Object.entries(valor)) {
+      if (!Object.hasOwn(FORCA, nivel)) throw erroComCodigo('Escolha "ver" ou "editar" para cada conta.');
+      const outra = contaDe(usuario);
+      if (!outra) throw erroComCodigo("Uma das contas escolhidas não existe. Recarregue a página.");
+      if (outra.admin) throw erroComCodigo("O administrador já lê todos os cadernos. Escolha só as outras contas.");
+      if (usuario === dono) throw erroComCodigo("Este caderno já é seu. Escolha só as outras contas.");
+    }
+    return { ...valor };
+  }
+
+  async function compartilharItem(tipo, id, contas) {
+    await esperar(120);
+    exigirQuemEscreve();
+    const { dono, item, nivel } = itemVisivel(tipo, id);
+    if (nivel !== "dona") throw soADona(dono, `compartilhar esta ${tipo}`);
+    item.compartilhada = contasDoCompartilhar(contas, dono);
+    return { ok: true };
+  }
+
+  // O token do link público: 24 bytes aleatórios em base64url
+  const novoToken = () =>
+    btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(24))))
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/, "");
+
+  // O texto como aparece na leitura, sem as marcas e numa linha só: os links e as imagens contam
+  // pelo que aparece. Serve à busca e ao trecho dos resultados.
+  const REGEX_PROTEGIDO = /\uE000([\uE001-\uE07F])/g;
+  const protegerEscapes = (texto) => texto.replace(REGEX_ESCAPE, (_, ch) => `\uE000${String.fromCharCode(0xe000 + ch.charCodeAt(0))}`);
+  const tirarProtecao = (texto) => texto.replace(REGEX_PROTEGIDO, (_, ch) => String.fromCharCode(ch.charCodeAt(0) - 0xe000));
+  function textoSimples(texto) {
+    return tirarProtecao(
+      protegerEscapes(texto)
+        .replace(REGEX_IMAGEM, (_, id, legenda) => legenda || " ")
+        .replace(/!?\[\[(?:nota|personagem|evento|mesa|memoria|lugar):[^\]|\n]+\|([^\]\n]*)\]\]/g, "$1")
+        .replace(/\[([^\]\n]*)\]\(https?:\/\/[^)\s]*\)/g, "$1")
+        .replace(/^[ \t]*#+[ \t]+/gm, "") // títulos
+        .replace(/^[ \t]*(?:>[ \t]?)+/gm, "") // citações
+        .replace(/^[ \t]*(?:-{3,}|\*{3,}|_{3,})[ \t]*$/gm, "") // separadores
+        .replace(/^[ \t]*(?:[-*]|\d+\.)[ \t]+(?:\[[ xX]\][ \t]+)?/gm, "") // listas e tarefas
+        .replace(/^[ \t]*\|?(?:[ \t]*:?-+:?[ \t]*\|)+(?:[ \t]*:?-+:?[ \t]*)?$/gm, "") // a linha de traços da tabela
+        .replace(/\*\*|~~|\*/g, "")
+        .replace(/\|/g, " "),
+    )
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  // Uns 120 caracteres do texto em volta do achado, sem cortar palavras nas pontas.
+  // "pos" -1: o achado foi só no título, e o trecho é o começo do texto.
+  function trechoEmVolta(simples, pos, tamanho) {
+    const largura = 120;
+    if (simples.length <= largura) return simples;
+    const folga = Math.max(0, Math.floor((largura - tamanho) / 2));
+    let inicio = pos < 0 ? 0 : Math.max(0, Math.min(pos - folga, simples.length - largura));
+    let fim = Math.min(simples.length, inicio + largura);
+    const fimDoAchado = pos < 0 ? inicio : pos + tamanho;
+    if (inicio > 0) {
+      const espaco = simples.indexOf(" ", inicio);
+      if (espaco !== -1 && espaco < (pos < 0 ? fim : pos)) inicio = espaco + 1;
+    }
+    if (fim < simples.length) {
+      const espaco = simples.lastIndexOf(" ", fim);
+      if (espaco > Math.max(inicio, fimDoAchado)) fim = espaco;
+    }
+    if (/[\uDC00-\uDFFF]/.test(simples[inicio])) inicio += 1;
+    if (/[\uD800-\uDBFF]/.test(simples[fim - 1])) fim -= 1;
+    return `${inicio > 0 ? "…" : ""}${simples.slice(inicio, fim)}${fim < simples.length ? "…" : ""}`;
+  }
+
+  // As datas são ISO, então a ordem do texto é a ordem do tempo
+  const doMaisRecente = (a = "", b = "") => (a < b ? 1 : a > b ? -1 : 0);
+
   return {
     trocarConta(cargo) {
       conta = CONTAS_DA_PREVIA[cargo];
@@ -952,6 +1041,72 @@ function criarApiDePrevia() {
         lugares: lugaresVisiveis(leitor),
       });
     },
+    compartilharNota: (id, contas) => compartilharItem("nota", id, contas),
+    compartilharPasta: (id, contas) => compartilharItem("pasta", id, contas),
+    // Liga o link público, ou gera outro: o antigo para de funcionar na hora
+    async ligarLink(id) {
+      await esperar(120);
+      exigirQuemEscreve();
+      const { dono, item: nota, nivel } = itemVisivel("nota", id);
+      if (nivel !== "dona") throw soADona(dono, "ligar o link público desta nota");
+      nota.link = { token: novoToken(), criadoEm: carimbo() };
+      return { link: { endereco: `/ler/#${nota.link.token}` } };
+    },
+    async desligarLink(id) {
+      await esperar(120);
+      exigirQuemEscreve();
+      const { dono, item: nota, nivel } = itemVisivel("nota", id);
+      if (nivel !== "dona") throw soADona(dono, "desligar o link público desta nota");
+      nota.link = null;
+      return { ok: true };
+    },
+    // No título e no texto, sem diferença de maiúsculas e acentos. Começando com #, busca a etiqueta.
+    // Primeiro os achados no título, depois os mais recentes. O administrador busca no caderno de uma conta.
+    async buscar(q, usuario) {
+      await esperar(120);
+      const leitor = leitorAtual();
+      const pedida = String(q ?? "")
+        .replace(/\s+/g, " ")
+        .trim();
+      if (pedida.length < LIMITES.busca) throw erroComCodigo(`Escreva pelo menos ${LIMITES.busca} caracteres para buscar.`);
+      let lista;
+      if (leitor.admin) {
+        if (!usuario) throw erroComCodigo("Escolha o caderno em que buscar.");
+        const dona = contaDe(usuario);
+        if (!dona || dona.admin) throw erroComCodigo("Essa conta não existe ou não tem caderno.", "nao-encontrado");
+        lista = notasLegiveis(leitor, [{ dono: usuario, c: cadernoDe(usuario) }]);
+      } else {
+        lista = notasLegiveis(leitor);
+      }
+      const etiqueta = pedida.startsWith("#") ? pedida.slice(1).trim() : null;
+      const termo = etiqueta === null ? dobrar(pedida) : `#${dobrar(etiqueta)}`;
+      const achados = [];
+      for (const achado of lista) {
+        const { nota } = achado;
+        let noTitulo = false;
+        if (etiqueta !== null) {
+          if (!lerCodigos(nota.texto).etiquetas.has(normalizar(etiqueta))) continue;
+        } else {
+          noTitulo = dobrar(nota.titulo).includes(termo);
+          if (!noTitulo && !dobrar(textoSimples(nota.texto)).includes(termo)) continue;
+        }
+        achados.push({ achado, noTitulo });
+      }
+      achados.sort((a, b) =>
+        a.noTitulo !== b.noTitulo ? (a.noTitulo ? -1 : 1) : doMaisRecente(a.achado.nota.alteradaEm, b.achado.nota.alteradaEm),
+      );
+      const resultados = achados.slice(0, LIMITES.resultados).map(({ achado }) => {
+        const simples = textoSimples(achado.nota.texto);
+        return {
+          id: achado.nota.id,
+          titulo: achado.nota.titulo,
+          dono: pessoa(achado.dono),
+          caminho: caminhoDaNota(leitor, achado),
+          trecho: trechoEmVolta(simples, dobrar(simples).indexOf(termo), termo.length),
+        };
+      });
+      return copia({ resultados });
+    },
     async caderno() {
       const leitor = leitorAtual();
       const quem = { usuario: leitor.usuario, nome: leitor.nome, cargo: conta.cargo };
@@ -1025,6 +1180,26 @@ const podeAlterarNota = (nota) => nota?.nivel === "dona" || nota?.nivel === "edi
 const porNomeNatural = (a, b) => a.localeCompare(b, "pt-BR", { numeric: true });
 const milhar = (n) => n.toLocaleString("pt-BR");
 
+// Sem diferença de maiúsculas e acentos e sem mudar o tamanho do texto, como no servidor: cada
+// caractere vira um só, e uma posição no texto dobrado vale no original (para destacar o achado)
+const dobras = new Map();
+function dobrarCaractere(ch) {
+  let dobrado = dobras.get(ch);
+  if (dobrado === undefined) {
+    const semAcento = ch.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    dobrado = semAcento.length === 1 ? semAcento : ch;
+    dobras.set(ch, dobrado);
+  }
+  return dobrado;
+}
+
+function dobrar(texto) {
+  // Em minúsculas, só uma letra rara (o İ turco) muda de tamanho: aí vão só as letras sem acento
+  const minusculas = texto.toLowerCase();
+  const base = minusculas.length === texto.length ? minusculas : texto.replace(/[A-Z]/g, (l) => l.toLowerCase());
+  return base.replace(/[^\x00-\x7f]/g, dobrarCaractere);
+}
+
 // "120 MB", "1 GB", "1,5 GB": a mesma conta do servidor
 function emBytes(bytes) {
   for (const [unidade, tamanho] of [
@@ -1082,9 +1257,6 @@ const pastasAbertas = new Set(
   })(),
 );
 const guardarPastas = () => guardar(GUARDA_PASTAS, JSON.stringify([...pastasAbertas]));
-
-// O Compartilhar ainda não funciona
-const emBreve = (oQue) => () => avisoRapido(`${oQue}: em breve.`);
 
 // As outras contas, para os nomes de quem recebeu um compartilhamento
 const nomeDaConta = (usuario) => estado.dados?.contas?.find((c) => c.usuario === usuario)?.nome ?? usuario;
@@ -1307,7 +1479,7 @@ function barraDaNota(nota, { editando = false } = {}) {
     alternar.setAttribute("aria-keyshortcuts", "Control+E");
     barra.append(alternar);
   }
-  if (nota.nivel === "dona") barra.append(botao("Compartilhar", "botao--leve", emBreve("Compartilhar")));
+  if (nota.nivel === "dona") barra.append(botao("Compartilhar", "botao--leve", () => abrirCompartilhar("nota", nota.id)));
   const mais = botao("⋯", "botao--leve nota__mais", () => {
     if (menu.botao === mais) return fecharMenu();
     abrirMenu(mais, opcoesDe({ tipo: "nota", id: nota.id, nivel: nota.nivel, naBarra: true }), { rotulo: "Mais opções da nota" });
@@ -1374,7 +1546,7 @@ function renderizarNota(lida, { manterRolagem = false } = {}) {
   folha.append(titulo, alterada, barra);
 
   const texto = criar("div", "marcas nota__texto");
-  const opcoes = { idDaNota: nota.id, aoAbrirNota: abrirNota };
+  const opcoes = { idDaNota: nota.id, aoAbrirNota: abrirNota, aoClicarEtiqueta: buscarEtiqueta };
   if (podeAlterarNota(nota)) opcoes.aoMarcarTarefa = marcarTarefa;
   if (nota.texto.trim()) texto.append(...desenharMarcas(nota.texto, lida, opcoes));
   else texto.append(criar("p", "nota__vazia", "Esta nota ainda está vazia."));
@@ -2424,7 +2596,7 @@ function opcoesDe({ tipo, id, nivel, naBarra = false }) {
   }
   if (altera) opcao("Renomear", () => (naBarra ? renomearNaBarra() : comecarRenomear(tipo, id)));
   if (dona) opcao("Mover para…", () => abrirMover(tipo, id));
-  if (dona) opcao("Compartilhar…", emBreve("Compartilhar"));
+  if (dona) opcao("Compartilhar…", () => abrirCompartilhar(tipo, id));
   if (tipo === "nota" && temCaderno()) {
     const fixada = estado.dados.fixadas.some((f) => f.id === id);
     opcao(fixada ? "Desafixar" : "Fixar", () => fixar(id, !fixada));
@@ -2879,6 +3051,413 @@ async function copiarLink(id) {
 }
 
 /* =================================================================
+   Compartilhar (só a dona)
+   -----------------------------------------------------------------
+   Notas e pastas, com as outras contas: "Não", "Ver" ou "Editar"
+   para cada uma, gravado no "Salvar". Na nota, também o link
+   público, que liga, gera outro e desliga na hora. Com o diálogo
+   aberto, as respostas do link aparecem dentro dele (o fundo
+   escurecido cobriria o aviso rápido).
+   ================================================================= */
+
+const compartilhar = {
+  tipo: null, // "nota" ou "pasta"
+  id: null,
+  antes: {}, // as contas como estavam ao abrir: sem mudança, o "Salvar" só fecha
+  sessao: 0, // conta as aberturas: a resposta de um pedido de antes não mexe no diálogo aberto depois
+  ocupado: false, // um pedido a caminho: os botões esperam
+};
+
+const NIVEIS_DO_COMPARTILHAR = [
+  ["", "Não"],
+  ["ver", "Ver"],
+  ["editar", "Editar"],
+];
+
+// O endereço completo do link público. O servidor manda sem o domínio (/ler/#<token>) e a página põe o
+// location.origin na frente. Na prévia, é a leitura pública desta mesma cópia do site.
+function enderecoPublico(endereco) {
+  if (!MODO_PREVIA) return location.origin + endereco;
+  const [caminho, token = ""] = endereco.split("#");
+  const pagina = caminho.replace(/^\//, "") + (COMO_ARQUIVO ? "index.html" : "");
+  return new URL(`${RAIZ}${pagina}#${token}`, location.href).href;
+}
+
+async function abrirCompartilhar(tipo, id) {
+  const dialogo = $("#dialogo-compartilhar");
+  if (!temCaderno() || dialogo.open) return;
+  const arvore = estado.dados.caderno;
+  const item = (tipo === "nota" ? arvore.notas : arvore.pastas).find((x) => x.id === id);
+  if (!item) return;
+  let contas = item.compartilhada ?? {};
+  let link = null;
+  // Da nota, ela inteira: o endereço do link público só vem com ela
+  if (tipo === "nota") {
+    let lida;
+    try {
+      lida = await api.nota(id);
+    } catch (falha) {
+      return avisarFalha(falha);
+    }
+    if (dialogo.open) return;
+    contas = lida.nota.compartilhada ?? {};
+    link = lida.nota.link ?? null;
+  }
+  compartilhar.sessao += 1;
+  Object.assign(compartilhar, { tipo, id, antes: { ...contas } });
+  $("#compartilhar-item").textContent = tipo === "nota" ? `A nota "${item.titulo}"` : `A pasta "${item.nome}"`;
+  $("#compartilhar-ajuda-pasta").hidden = tipo !== "pasta";
+  renderizarContasDoCompartilhar(contas);
+  $("#compartilhar-link").hidden = tipo !== "nota";
+  mostrarLinkPublico(link);
+  $("#link-situacao").textContent = "";
+  mostrarErroDoCompartilhar("");
+  ficarOcupado(false);
+  dialogo.showModal();
+}
+
+// Uma linha para cada conta, em ordem de nome, com "Não", "Ver" e "Editar"
+function renderizarContasDoCompartilhar(atuais) {
+  const outras = [...(estado.dados.contas ?? [])].sort((a, b) => porNomeNatural(a.nome, b.nome));
+  const lugar = $("#compartilhar-contas");
+  if (!outras.length) {
+    lugar.replaceChildren(criar("p", "compartilhar__vazio", "Ainda não há outras contas no portal."));
+    return;
+  }
+  lugar.replaceChildren(
+    ...outras.map((conta, i) => {
+      const atual = Object.hasOwn(atuais, conta.usuario) ? atuais[conta.usuario] : "";
+      const linha = criar("div", "compartilhar__conta");
+      linha.dataset.usuario = conta.usuario;
+      linha.setAttribute("role", "radiogroup");
+      const nome = criar("span", "compartilhar__nome", conta.nome);
+      nome.id = `compartilhar-nome-${i}`;
+      linha.setAttribute("aria-labelledby", nome.id);
+      const opcoes = criar("span", "compartilhar__opcoes");
+      for (const [valor, rotulo] of NIVEIS_DO_COMPARTILHAR) {
+        const opcao = criar("label", "caixa caixa--opcao");
+        const entrada = criar("input");
+        entrada.type = "radio";
+        entrada.name = `compartilhar-${i}`;
+        entrada.value = valor;
+        entrada.checked = valor === atual;
+        const marca = criar("span", "caixa__marca");
+        marca.setAttribute("aria-hidden", "true");
+        opcao.append(entrada, marca, criar("span", null, rotulo));
+        opcoes.append(opcao);
+      }
+      linha.append(nome, opcoes);
+      return linha;
+    }),
+  );
+}
+
+// As contas com "ver" ou "editar"; quem ficou com "Não" sai
+function contasEscolhidas() {
+  const contas = {};
+  for (const linha of document.querySelectorAll("#compartilhar-contas .compartilhar__conta")) {
+    const valor = linha.querySelector("input:checked")?.value;
+    if (valor) contas[linha.dataset.usuario] = valor;
+  }
+  return contas;
+}
+
+const mesmasContas = (a, b) =>
+  Object.keys(a).length === Object.keys(b).length && Object.entries(a).every(([usuario, nivel]) => Object.hasOwn(b, usuario) && b[usuario] === nivel);
+
+function mostrarLinkPublico(link) {
+  $("#link-desligado").hidden = Boolean(link);
+  $("#link-ligado").hidden = !link;
+  $("#link-endereco").value = link ? enderecoPublico(link.endereco) : "";
+}
+
+function mostrarErroDoCompartilhar(mensagem) {
+  const erro = $("#erro-compartilhar");
+  erro.textContent = mensagem;
+  erro.hidden = !mensagem;
+}
+
+// Os botões não ficam desligados (o foco sairia deles): só esperam a resposta
+function ficarOcupado(sim) {
+  compartilhar.ocupado = sim;
+  $("#form-compartilhar").setAttribute("aria-busy", String(sim));
+}
+
+async function salvarCompartilhar(evento) {
+  evento.preventDefault();
+  if (compartilhar.ocupado) return;
+  const { tipo, id, sessao } = compartilhar;
+  const dialogo = $("#dialogo-compartilhar");
+  const contas = contasEscolhidas();
+  if (mesmasContas(contas, compartilhar.antes)) return dialogo.close();
+  ficarOcupado(true);
+  mostrarErroDoCompartilhar("");
+  try {
+    if (tipo === "nota") await api.compartilharNota(id, contas);
+    else await api.compartilharPasta(id, contas);
+  } catch (falha) {
+    if (sessao === compartilhar.sessao) {
+      ficarOcupado(false);
+      mostrarErroDoCompartilhar(falha.message);
+    }
+    return;
+  }
+  if (sessao === compartilhar.sessao) {
+    ficarOcupado(false);
+    dialogo.close();
+  }
+  if (navegacao.lida?.nota.id === id) navegacao.lida.nota.compartilhada = contas;
+  // Os sinais da árvore mudam; o foco volta para o item, se estava na lateral
+  const naArvore = $("#lateral").contains(document.activeElement) || document.activeElement === document.body;
+  await atualizarLateral({ foco: naArvore ? { tipo, id } : null });
+  const oQue = tipo === "nota" ? "A nota" : "A pasta";
+  avisoRapido(Object.keys(contas).length ? "Compartilhamento salvo." : `${oQue} não está mais compartilhada com ninguém.`);
+}
+
+// O link público muda na hora: "ligar", "gerar" (outro: o antigo para de funcionar) ou "desligar"
+async function mudarLinkPublico(acao) {
+  if (compartilhar.ocupado) return;
+  const { id, sessao } = compartilhar;
+  if (acao === "gerar") {
+    const sim = await perguntar({
+      titulo: "Gerar outro link?",
+      texto: "O link antigo para de funcionar.",
+      confirmar: "Gerar outro",
+      cancelar: "Cancelar",
+    });
+    if (!sim || sessao !== compartilhar.sessao || !$("#dialogo-compartilhar").open) return;
+  }
+  const situacao = $("#link-situacao");
+  ficarOcupado(true);
+  mostrarErroDoCompartilhar("");
+  situacao.textContent = { ligar: "Ligando o link…", gerar: "Gerando outro link…", desligar: "Desligando o link…" }[acao];
+  let resposta;
+  try {
+    resposta = acao === "desligar" ? await api.desligarLink(id) : await api.ligarLink(id);
+  } catch (falha) {
+    if (sessao === compartilhar.sessao) {
+      ficarOcupado(false);
+      situacao.textContent = "";
+      mostrarErroDoCompartilhar(falha.message);
+    }
+    return;
+  }
+  const link = acao === "desligar" ? null : resposta.link;
+  if (navegacao.lida?.nota.id === id) navegacao.lida.nota.link = link;
+  if (sessao === compartilhar.sessao) {
+    ficarOcupado(false);
+    mostrarLinkPublico(link);
+    situacao.textContent = {
+      ligar: "Link público ligado.",
+      gerar: "Link novo gerado. O antigo parou de funcionar.",
+      desligar: "Link público desligado. Ele parou de funcionar.",
+    }[acao];
+    // O botão que tinha o foco sumiu: ele passa para o que ficou no lugar
+    if (acao === "ligar") $("#link-copiar").focus();
+    else if (acao === "desligar") $("#link-ligar").focus();
+  }
+  atualizarLateral(); // o elo na árvore
+}
+
+async function copiarLinkPublico() {
+  const campo = $("#link-endereco");
+  const situacao = $("#link-situacao");
+  if (await copiarTexto(campo.value)) {
+    situacao.textContent = "Link copiado.";
+    return;
+  }
+  campo.focus();
+  campo.select();
+  situacao.textContent = "Não deu para copiar sozinho: o link está selecionado, copie com Ctrl+C.";
+}
+
+function configurarCompartilhar() {
+  const dialogo = $("#dialogo-compartilhar");
+  $("#form-compartilhar").addEventListener("submit", salvarCompartilhar);
+  $("#compartilhar-cancelar").addEventListener("click", () => dialogo.close());
+  $("#link-ligar").addEventListener("click", () => mudarLinkPublico("ligar"));
+  $("#link-gerar").addEventListener("click", () => mudarLinkPublico("gerar"));
+  $("#link-desligar").addEventListener("click", () => mudarLinkPublico("desligar"));
+  $("#link-copiar").addEventListener("click", copiarLinkPublico);
+  $("#link-endereco").addEventListener("focus", (evento) => evento.target.select());
+  fecharAoClicarFora(dialogo);
+  // O item da árvore que abriu o diálogo pode ter sido desenhado de novo (o link ligou ou desligou):
+  // o foco volta para o item novo
+  dialogo.addEventListener("close", () => {
+    if (document.activeElement && document.activeElement !== document.body) return;
+    if (compartilhar.tipo) focarNaArvore(compartilhar.tipo, compartilhar.id);
+  });
+}
+
+/* =================================================================
+   A busca
+   -----------------------------------------------------------------
+   Com 2 caracteres ou mais, 300 ms depois da última tecla, os
+   resultados ficam no lugar das árvores (e das Fixadas). O "×" e
+   o Esc voltam para elas. Começando com #, busca a etiqueta: é o
+   que o clique numa etiqueta põe no campo. O administrador busca
+   no caderno que está lendo.
+   ================================================================= */
+
+const estadoDaBusca = {
+  termo: "", // o que está buscado ("" sem busca: as árvores à mostra)
+  pedido: 0, // conta as buscas, para ignorar a resposta de uma que ficou para trás
+  espera: null, // o timer dos 300 ms
+};
+
+// Como o servidor lê: os espaços juntos e sem as pontas
+const termoDoCampo = () => $("#busca").value.replace(/\s+/g, " ").trim();
+
+function aoDigitarNaBusca() {
+  clearTimeout(estadoDaBusca.espera);
+  $("#busca-limpar").hidden = !$("#busca").value;
+  const termo = termoDoCampo();
+  if (termo.length < LIMITES.busca) return voltarParaAsArvores();
+  estadoDaBusca.espera = setTimeout(() => buscar(termo), CONFIG.esperaParaBuscar);
+}
+
+function aplicarModoDaBusca() {
+  const buscando = Boolean(estadoDaBusca.termo);
+  $("#lateral").classList.toggle("lateral--buscando", buscando);
+  $("#secao-resultados").hidden = !buscando;
+}
+
+// "deNovo": a mesma busca, porque o caderno mudou; os resultados de antes ficam até chegarem os novos
+async function buscar(termo, { deNovo = false } = {}) {
+  clearTimeout(estadoDaBusca.espera);
+  const pedido = ++estadoDaBusca.pedido;
+  estadoDaBusca.termo = termo;
+  aplicarModoDaBusca();
+  const situacao = $("#busca-situacao");
+  if (!deNovo) situacao.textContent = "Buscando…";
+  let resposta;
+  try {
+    resposta = await api.buscar(termo, ehAdmin() ? estado.escolhida : null);
+  } catch (falha) {
+    if (pedido !== estadoDaBusca.pedido) return;
+    situacao.textContent = falha.message;
+    $("#lista-resultados").replaceChildren();
+    return;
+  }
+  if (pedido !== estadoDaBusca.pedido) return;
+  renderizarResultados(resposta.resultados, termo);
+}
+
+function voltarParaAsArvores() {
+  clearTimeout(estadoDaBusca.espera);
+  estadoDaBusca.pedido++;
+  if (!estadoDaBusca.termo) return;
+  estadoDaBusca.termo = "";
+  aplicarModoDaBusca();
+  $("#lista-resultados").replaceChildren();
+  $("#busca-situacao").textContent = "";
+}
+
+// O "×" e o Esc: o campo vazio e as árvores de volta
+function limparBusca() {
+  $("#busca").value = "";
+  $("#busca-limpar").hidden = true;
+  voltarParaAsArvores();
+}
+
+function renderizarResultados(resultados, termo) {
+  const n = resultados.length;
+  $("#busca-situacao").textContent = !n
+    ? "Nenhuma nota encontrada."
+    : n === 1
+      ? "1 nota"
+      : n >= LIMITES.resultados
+        ? `As ${milhar(n)} primeiras notas`
+        : `${milhar(n)} notas`;
+  // O achado, como o servidor procura: na etiqueta, "#" colado no nome
+  const achado = termo.startsWith("#") ? `#${termo.slice(1).trim()}` : termo;
+  $("#lista-resultados").replaceChildren(...resultados.map((resultado) => itemDoResultado(resultado, achado)));
+  marcarNaArvore(navegacao.id);
+}
+
+// O título, onde a nota está (de quem é, nas compartilhadas, e as pastas) e o trecho, com o achado destacado
+function itemDoResultado(resultado, achado) {
+  const item = criar("li", "resultado");
+  item.dataset.id = resultado.id;
+  const link = linkDeNota(resultado.id, "", "lateral__link resultado__link");
+  const titulo = criar("span", "resultado__titulo");
+  titulo.append(...comDestaque(resultado.titulo, achado));
+  link.append(titulo);
+  const onde = [];
+  if (!ehAdmin() && !ehMinha(resultado.dono)) onde.push(`Do caderno de ${resultado.dono.nome}`);
+  if (resultado.caminho.length) onde.push(resultado.caminho.map((p) => p.nome).join(" › "));
+  if (onde.length) link.append(criar("span", "resultado__onde", onde.join(" · ")));
+  if (resultado.trecho) {
+    const trecho = criar("span", "resultado__trecho");
+    trecho.append(...comDestaque(resultado.trecho, achado));
+    link.append(trecho);
+  }
+  item.append(link);
+  return item;
+}
+
+// O texto com cada achado (sem diferença de maiúsculas e acentos) num <mark>. Montado com criar():
+// o texto nunca vira HTML.
+function comDestaque(texto, achado) {
+  const alvo = dobrar(achado);
+  const dobrado = dobrar(texto);
+  const partes = [];
+  let desde = 0;
+  for (let pos = alvo ? dobrado.indexOf(alvo) : -1; pos !== -1; pos = dobrado.indexOf(alvo, pos + alvo.length)) {
+    if (pos > desde) partes.push(texto.slice(desde, pos));
+    partes.push(criar("mark", "resultado__achado", texto.slice(pos, pos + alvo.length)));
+    desde = pos + alvo.length;
+  }
+  if (desde < texto.length) partes.push(texto.slice(desde));
+  return partes;
+}
+
+// Clicar numa etiqueta (na nota ou na lista de Etiquetas) busca as notas com ela. No celular, a busca
+// fica na lateral: a nota aberta dá lugar a ela.
+function buscarEtiqueta(nome) {
+  $("#busca").value = `#${nome}`;
+  $("#busca-limpar").hidden = false;
+  buscar(termoDoCampo());
+  if (noCelular() && navegacao.id) voltarAoCaderno();
+}
+
+function configurarBusca() {
+  const campo = $("#busca");
+  campo.addEventListener("input", aoDigitarNaBusca);
+  campo.addEventListener("keydown", (evento) => {
+    if (evento.key === "Escape" && campo.value) {
+      evento.preventDefault();
+      limparBusca();
+    } else if (evento.key === "Enter") {
+      // Sem esperar os 300 ms
+      evento.preventDefault();
+      const termo = termoDoCampo();
+      if (termo.length >= LIMITES.busca) buscar(termo);
+    } else if (evento.key === "ArrowDown" && estadoDaBusca.termo) {
+      const primeiro = $("#lista-resultados a");
+      if (primeiro) {
+        evento.preventDefault();
+        primeiro.focus();
+      }
+    }
+  });
+  $("#busca-limpar").addEventListener("click", () => {
+    limparBusca();
+    campo.focus();
+  });
+  // Nos resultados, as setas andam de um para o outro; para cima do primeiro, o campo
+  $("#lista-resultados").addEventListener("keydown", (evento) => {
+    if (evento.key !== "ArrowDown" && evento.key !== "ArrowUp") return;
+    const links = [...document.querySelectorAll("#lista-resultados a")];
+    const i = links.indexOf(document.activeElement);
+    if (i === -1) return;
+    evento.preventDefault();
+    const destino = evento.key === "ArrowDown" ? links[i + 1] : (links[i - 1] ?? campo);
+    destino?.focus();
+  });
+}
+
+/* =================================================================
    A lateral
    ================================================================= */
 
@@ -2912,6 +3491,10 @@ function renderizarLateral() {
 
   marcarNaArvore(navegacao.id);
   marcarPastaEscolhida();
+
+  // Com uma busca à mostra, ela é feita de novo: o caderno mudou (ou, para o administrador, é outro)
+  aplicarModoDaBusca();
+  if (estadoDaBusca.termo) buscar(estadoDaBusca.termo, { deNovo: true });
 }
 
 // Só o administrador: "Caderno de: Neia (8 notas)", em ordem de nome
@@ -2957,12 +3540,15 @@ function renderizarCompartilhadas(secoes) {
   );
 }
 
-// As plaquinhas, com quantas notas tem cada uma (clicar para buscar vem com a busca)
+// As plaquinhas, com quantas notas tem cada uma. Clicar busca as notas com a etiqueta.
 function renderizarEtiquetas(etiquetas) {
   $("#secao-etiquetas").hidden = !etiquetas.length;
   $("#lista-etiquetas").replaceChildren(
     ...etiquetas.map((etiqueta) => {
-      const placa = criar("span", "marcas__etiqueta lateral__etiqueta", `#${etiqueta.nome}`);
+      const placa = criar("button", "marcas__etiqueta lateral__etiqueta", `#${etiqueta.nome}`);
+      placa.type = "button";
+      placa.title = `Buscar as notas com #${etiqueta.nome}`;
+      placa.addEventListener("click", () => buscarEtiqueta(etiqueta.nome));
       const quantas = criar("small", "lateral__quantas", ` ${etiqueta.quantas}`);
       quantas.append(criar("span", "sr", etiqueta.quantas === 1 ? " nota" : " notas"));
       placa.append(quantas);
@@ -3196,10 +3782,12 @@ function teclaNaArvore(evento) {
   if (destino) focarItem(destino);
 }
 
-// Marca a nota aberta na árvore (com as pastas acima dela abertas) e nas Fixadas
+// Marca a nota aberta na árvore (com as pastas acima dela abertas), nas Fixadas e nos resultados da busca
 function marcarNaArvore(id) {
   for (const item of document.querySelectorAll('.arvore__item--nota[aria-selected="true"]')) item.setAttribute("aria-selected", "false");
-  for (const link of document.querySelectorAll(".lateral__fixada > a[aria-current]")) link.removeAttribute("aria-current");
+  for (const link of document.querySelectorAll(".lateral__fixada > a[aria-current], .resultado > a[aria-current]")) {
+    link.removeAttribute("aria-current");
+  }
   if (!id) return;
   for (const item of document.querySelectorAll(".arvore__item--nota")) {
     if (item.dataset.id !== id) continue;
@@ -3209,8 +3797,8 @@ function marcarNaArvore(id) {
     }
     passarOTab(item);
   }
-  for (const fixada of document.querySelectorAll(".lateral__fixada")) {
-    if (fixada.dataset.id === id) fixada.firstElementChild.setAttribute("aria-current", "true");
+  for (const marcada of document.querySelectorAll(".lateral__fixada, .resultado")) {
+    if (marcada.dataset.id === id) marcada.firstElementChild.setAttribute("aria-current", "true");
   }
 }
 
@@ -3442,6 +4030,8 @@ function configurarEventos() {
   configurarMenu();
   configurarCitar();
   configurarConflito();
+  configurarCompartilhar();
+  configurarBusca();
   $("#mover-cancelar").addEventListener("click", () => $("#dialogo-mover").close());
   fecharAoClicarFora($("#dialogo-mover"));
 

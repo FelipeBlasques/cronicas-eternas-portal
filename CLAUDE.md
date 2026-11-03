@@ -7,6 +7,7 @@ Portal do grupo de RPG em https://cronicaseternas.com. Cada jogador tem conta, v
 - VPS Hostinger com Ubuntu. Foundry 14 em `/opt/foundry`, no endereço vtt.cronicaseternas.com.
 - O portal é a pasta `portal/` deste repositório, instalada em `/opt/portal`. É Node 24 **sem dependências**. Roda como `portal.service` na porta 3000, atrás do nginx.
 - Os dados ficam fora do código, em `/var/lib/portal`: `dados.json`, `segredo` e `uploads/`. Eles nunca entram no repositório.
+- Os cadernos ficam em `/var/lib/portal/cadernos/` (`<usuario>/caderno.json` e `<usuario>/imagens/`), fora do `dados.json`.
 - As imagens fixas das campanhas (`publico/imagens/`) não estão no repositório. Se existirem no servidor, a atualização não as apaga.
 - O app dos jogadores fica noutro repositório, `FelipeBlasques/cronicas-eternas-app` (Tauri, fork do FLC). Ele abre o portal na janela principal e manda tudo o que é de vtt.cronicaseternas.com para a janela do jogo. Páginas novas do portal não precisam de mudança no app.
 
@@ -44,7 +45,9 @@ O `unzip -o` só cria e substitui arquivos, nunca apaga. Se uma mudança tirar a
 - **Editor** (`conta.editor`): registra e altera acontecimentos na Linha do Tempo (apagar vira pedido aprovado pelo administrador); cadastra e altera qualquer personagem que vê na galeria (apagar e escolher quem vê ficam com o administrador); marca lugares nos mapas e altera só os que ele marcou.
 - **Jogador:** só a conta.
 
-Sem login, nenhuma página abre.
+Toda conta que não é administrador tem um **Caderno**, que só ela altera (e quem ela deixar editar). O administrador lê todos os cadernos e não altera nenhum.
+
+Sem login, nenhuma página abre. A exceção é a leitura pública de uma nota do Caderno (`/ler/#<token>`), que abre com o link.
 
 ## Mapa do código
 
@@ -90,6 +93,8 @@ portal/
     mapas/                       index.html, visor.js, mapas.js, mapas.css
     memorias/                    index.html, memorias.js, memorias.css
     caderno/                     index.html, caderno.js, caderno.css (carrega também ../marcas.js e ../marcas.css)
+    ler/                         index.html, ler.js, ler.css: a leitura pública de uma nota do Caderno (/ler/#<token>),
+                                 sem login e sem a barra lateral; carrega também ../marcas.js e ../marcas.css
 planejamento/       especificações e roteiro das sessões; referencias/ com o Atlas de Tyrenar
 ```
 

@@ -88,12 +88,22 @@
         <button id="botao-nota-de-hoje" class="botao botao--leve" type="button">Nota de hoje</button>
       </div>
 
-      <label class="campo lateral__busca">
-        <span class="sr">Buscar nas notas</span>
-        <input id="busca" type="search" placeholder="Buscar nas notas" autocomplete="off" spellcheck="false" disabled>
-      </label>
+      <!-- A busca: com 2 caracteres ou mais, os resultados ficam no lugar das árvores; o "×" volta para elas -->
+      <div class="lateral__busca" role="search">
+        <label class="campo">
+          <span class="sr">Buscar nas notas</span>
+          <input id="busca" type="search" placeholder="Buscar nas notas" autocomplete="off" spellcheck="false">
+        </label>
+        <button id="busca-limpar" class="lateral__limpar" type="button" title="Voltar para o caderno" aria-label="Limpar a busca e voltar para o caderno" hidden>×</button>
+      </div>
 
-      <section id="secao-fixadas" class="lateral__secao" aria-labelledby="titulo-fixadas" hidden>
+      <section id="secao-resultados" class="lateral__secao" aria-labelledby="titulo-resultados" hidden>
+        <h3 id="titulo-resultados" class="lateral__subtitulo">Resultados</h3>
+        <p id="busca-situacao" class="lateral__vazio" role="status"></p>
+        <ul id="lista-resultados" class="lateral__lista lateral__resultados"></ul>
+      </section>
+
+      <section id="secao-fixadas" class="lateral__secao lateral__fixadas" aria-labelledby="titulo-fixadas" hidden>
         <h3 id="titulo-fixadas" class="lateral__subtitulo">Fixadas</h3>
         <ul id="lista-fixadas" class="lateral__lista"></ul>
       </section>
@@ -157,6 +167,48 @@
     <div class="dialogo__acoes">
       <button id="mover-cancelar" class="botao botao--leve" type="button">Cancelar</button>
     </div>
+  </dialog>
+
+  <!-- ============ Compartilhar (só a dona): com contas e, na nota, o link público ============ -->
+  <dialog id="dialogo-compartilhar" class="dialogo dialogo--compartilhar" aria-labelledby="compartilhar-titulo">
+    <form id="form-compartilhar" class="dialogo__form" novalidate>
+      <h2 id="compartilhar-titulo" class="dialogo__titulo">Compartilhar</h2>
+      <p id="compartilhar-item" class="dialogo__texto compartilhar__item"></p>
+
+      <fieldset class="grupo">
+        <legend class="campo__rotulo">Contas</legend>
+        <p class="campo__ajuda">Quem pode ver só lê. Quem pode editar muda o texto, o título e as imagens, e cria notas dentro da pasta. Mover, apagar e compartilhar ficam com você.</p>
+        <p id="compartilhar-ajuda-pasta" class="campo__ajuda" hidden>Tudo o que está na pasta, e o que for criado nela depois, fica compartilhado.</p>
+        <div id="compartilhar-contas" class="compartilhar__contas"></div>
+      </fieldset>
+
+      <!-- Só na nota: liga e desliga na hora, sem esperar o "Salvar" -->
+      <fieldset id="compartilhar-link" class="grupo" hidden>
+        <legend class="campo__rotulo">Link público</legend>
+        <p class="campo__ajuda">Qualquer pessoa com o link lê esta nota, mesmo sem conta no portal. Ninguém altera por ele.</p>
+        <div id="link-desligado">
+          <button id="link-ligar" class="botao botao--leve" type="button">Ligar o link público</button>
+        </div>
+        <div id="link-ligado" class="compartilhar__link" hidden>
+          <label class="campo">
+            <span class="sr">Endereço do link público</span>
+            <input id="link-endereco" type="text" readonly spellcheck="false">
+          </label>
+          <div class="compartilhar__botoes">
+            <button id="link-copiar" class="botao botao--leve" type="button">Copiar</button>
+            <button id="link-gerar" class="botao botao--leve" type="button">Gerar outro link</button>
+            <button id="link-desligar" class="botao botao--leve" type="button">Desligar</button>
+          </div>
+        </div>
+        <p id="link-situacao" class="campo__ajuda compartilhar__situacao" role="status"></p>
+      </fieldset>
+
+      <p id="erro-compartilhar" class="mensagem-erro" role="alert" hidden></p>
+      <div class="dialogo__acoes">
+        <button id="compartilhar-cancelar" class="botao botao--leve" type="button">Cancelar</button>
+        <button id="compartilhar-salvar" class="botao botao--principal" type="submit">Salvar</button>
+      </div>
+    </form>
   </dialog>
 
   <!-- ============ Conflito: outra pessoa salvou a nota enquanto você escrevia ============ -->
