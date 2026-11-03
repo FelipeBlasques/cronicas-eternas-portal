@@ -1,0 +1,97 @@
+/* =================================================================
+   Leitura pública de uma nota do Caderno
+   -----------------------------------------------------------------
+   Sem a barra lateral: o cabeçalho com o nome do portal e a nota
+   no meio, na mesma folha escura com borda de ferro da página do
+   Caderno. O desenho do texto fica no marcas.css.
+   ================================================================= */
+
+.leitura {
+  min-width: 0;
+  padding: 2.6rem clamp(1rem, 4vw, 3rem) 7rem;
+}
+
+/* A folha escura com a borda de ferro (a mesma da nota no Caderno) */
+.leitura__folha {
+  width: min(48rem, 100%);
+  margin: 0 auto;
+  padding: 2.2rem clamp(1.2rem, 4vw, 2.8rem) 2.6rem;
+  background:
+    radial-gradient(120% 60% at 50% 0%, rgba(232, 221, 200, 0.05), transparent 60%),
+    linear-gradient(180deg, #221d19 0%, #15120f 100%);
+  border: 1px solid var(--ferro);
+  border-radius: var(--raio);
+  box-shadow:
+    inset 0 0 0 6px rgba(12, 10, 9, 0.6),
+    inset 0 0 0 7px var(--ferro-fraco),
+    0 40px 90px -30px rgba(0, 0, 0, 0.95);
+}
+
+.leitura__dono {
+  margin: 0 0 0.5rem;
+  font-size: 0.88rem;
+  font-style: italic;
+  color: var(--pergaminho-apagado);
+  overflow-wrap: anywhere;
+}
+
+.leitura__titulo {
+  margin: 0;
+  font-family: var(--fonte-gotica);
+  font-size: clamp(2.2rem, 4.4vw, 3rem);
+  font-weight: 500;
+  line-height: 1.02;
+  overflow-wrap: anywhere;
+}
+
+.leitura__alterada {
+  margin: 0.55rem 0 0;
+  font-size: 0.92rem;
+  font-style: italic;
+  color: var(--pergaminho-apagado);
+}
+
+.leitura__texto {
+  margin-top: 1.6rem;
+  padding-top: 1.3rem;
+  border-top: 1px solid var(--ferro-fraco);
+}
+
+.leitura__vazia {
+  font-style: italic;
+  color: var(--cinza);
+}
+
+/* "Abrindo a nota…" e o link que não está mais ativo */
+.leitura__falha {
+  display: grid;
+  justify-items: center;
+  gap: 1.2rem;
+}
+
+.leitura__aviso {
+  margin: 14vh auto 0;
+  max-width: 34rem;
+  text-align: center;
+  font-size: 1.15rem;
+  font-style: italic;
+  color: var(--pergaminho-apagado);
+}
+
+.leitura__falha .botao {
+  text-decoration: none;
+}
+
+/* =================================================================
+   Celular
+   ================================================================= */
+
+@media (max-width: 760px) {
+  .leitura {
+    padding: 1.2rem 0.6rem 3rem;
+  }
+
+  .leitura__folha {
+    padding: 1.5rem 1.1rem 1.8rem;
+  }
+}

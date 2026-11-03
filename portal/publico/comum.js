@@ -90,7 +90,7 @@ const PAGINAS = [
     nome: "Caderno",
     curto: "Caderno",
     caminho: "caderno/",
-    pronta: false, // true só na sessão 10.5
+    pronta: true,
     icone: "M5 2.5h12a1.5 1.5 0 0 1 1.5 1.5v16a1.5 1.5 0 0 1-1.5 1.5H5ZM8.5 2.5v19M14.5 2.5v6l-1.5-1.2-1.5 1.2v-6M18.5 11h2.5v3h-2.5", // caderno com fita e fecho
   },
 ];
@@ -188,8 +188,9 @@ function marcarNaBarra(id, quantas, explicacao = "") {
 // Os números da barra em qualquer página: as regras da casa novas ou alteradas desde a
 // última visita e, para o administrador, os pedidos dos editores na Linha do Tempo.
 // Fora da prévia e em silêncio: sem sessão ou sem conexão, a barra só fica sem números.
+// Uma página sem a barra (a leitura pública do Caderno, que abre sem login) não pede nada.
 async function atualizarBarra() {
-  if (MODO_PREVIA) return;
+  if (MODO_PREVIA || !document.querySelector(".barra-lateral")) return;
   let barra;
   try {
     barra = await pedir("GET", "/api/barra", undefined, { silencioso: true });

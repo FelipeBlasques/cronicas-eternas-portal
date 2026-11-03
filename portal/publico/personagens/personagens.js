@@ -2696,6 +2696,17 @@ async function iniciar() {
   iniciarCinzas(30);
   if (MODO_PREVIA) configurarSimulacao();
 
+  // Link para uma mesa (do Caderno): a galeria já se desenha com o filtro dela ligado. Uma mesa que
+  // não existe sai do filtro ao desenhar (veja renderizarFiltros).
+  const mesa = location.hash.match(/^#mesa-(.+)$/)?.[1];
+  if (mesa) {
+    try {
+      estado.filtros.mesas.add(decodeURIComponent(mesa));
+    } catch {
+      // endereço estragado: a galeria abre sem filtro
+    }
+  }
+
   try {
     await recarregar();
   } catch (falha) {
