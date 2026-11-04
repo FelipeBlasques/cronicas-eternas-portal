@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chat · Crônicas Eternas</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alegreya:ital,wght@0,400;0,500;0,700;1,400;1,500&family=Grenze+Gotisch:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="../style.css">
+  <link rel="stylesheet" href="chat.css">
+  <script src="../comum.js" defer></script>
+  <script src="chat.js" defer></script>
+</head>
+<body class="chat" data-pagina="chat" data-raiz="../">
+
+  <!-- ============ Desenhos usados pela página ============ -->
+  <svg class="simbolos" aria-hidden="true" focusable="false">
+    <defs>
+      <symbol id="runa-entrada" viewBox="0 0 24 40"><path d="M6 4V36M6 6L17 13L6 20L17 36"/></symbol>
+      <symbol id="divisor" viewBox="0 0 320 20">
+        <path d="M0 10H132M188 10H320M132 10L142 6L150 10L142 14ZM188 10L178 6L170 10L178 14Z"/>
+        <path d="M160 2L168 10L160 18L152 10Z"/>
+      </symbol>
+      <symbol id="icone-texto" viewBox="0 0 24 24"><path d="M9.5 3.5L7.5 20.5M16.5 3.5l-2 17M4 8.5h16.5M3.5 15.5H20"/></symbol>
+      <symbol id="icone-voz" viewBox="0 0 24 24"><path d="M3.5 9.5h3.5l5-4.5v14l-5-4.5H3.5ZM15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></symbol>
+      <symbol id="icone-mais" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+      <symbol id="icone-menu" viewBox="0 0 24 24"><circle cx="5.5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="18.5" cy="12" r="1.3"/></symbol>
+      <symbol id="icone-engrenagem" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M18.7 5.3l-2.1 2.1M7.4 16.6l-2.1 2.1"/></symbol>
+      <symbol id="icone-imagem" viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="15" rx="1.5"/><circle cx="8.5" cy="9.5" r="1.8"/><path d="M3.5 17.5l5.5-5 4 3.5 3-2.5 4.5 4"/></symbol>
+      <symbol id="icone-responder" viewBox="0 0 24 24"><path d="M9.5 6L3.5 12l6 6M3.5 12H14a6.5 6.5 0 0 1 6.5 6.5V20"/></symbol>
+      <symbol id="icone-lapis" viewBox="0 0 24 24"><path d="M15.5 4.5l4 4L8.5 19.5H4.5v-4ZM13 7l4 4"/></symbol>
+      <symbol id="icone-lixeira" viewBox="0 0 24 24"><path d="M4 6.5h16M9.5 6.5V4h5v2.5M6 6.5l1 14h10l1-14M10 10.5v6M14 10.5v6"/></symbol>
+      <symbol id="icone-membros" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.8 2.9-6.5 6.5-6.5s6.5 2.7 6.5 6.5M16 4.8a3.4 3.4 0 0 1 0 6.4M18 13.8c2.2.8 3.5 3 3.5 6.2"/></symbol>
+      <symbol id="icone-fechar" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+      <symbol id="icone-privada" viewBox="0 0 24 24"><path d="M4 5.5h16v10.5H10l-4.5 3.5V16H4Z"/></symbol>
+    </defs>
+  </svg>
+
+  <!-- ============ Tela de entrada ============ -->
+  <main id="entrada" class="entrada" hidden>
+    <div class="entrada__cabeca">
+      <h1 class="marca">
+        <span class="marca__linha">Crônicas</span>
+        <span class="marca__linha marca__linha--recuo">Eternas</span>
+      </h1>
+      <div class="entrada__divisor">
+        <svg class="divisor" aria-hidden="true"><use href="#divisor"/></svg>
+        <span class="centelha" aria-hidden="true"></span>
+      </div>
+    </div>
+
+    <form id="form-entrar" class="portao" novalidate>
+      <span class="portao__fecho" aria-hidden="true"></span>
+      <p class="portao__convite">Entre para conversar com o grupo.</p>
+
+      <label class="campo">
+        <span class="campo__rotulo">Usuário</span>
+        <input name="usuario" autocomplete="username" autocapitalize="none" spellcheck="false" required>
+      </label>
+
+      <label class="campo">
+        <span class="campo__rotulo">Senha</span>
+        <input name="senha" type="password" autocomplete="current-password" required>
+      </label>
+
+      <label class="caixa">
+        <input name="lembrar" type="checkbox" checked>
+        <span class="caixa__marca" aria-hidden="true"></span>
+        <span>Lembrar login neste computador</span>
+      </label>
+
+      <p id="erro-entrar" class="mensagem-erro" role="alert" hidden></p>
+
+      <button class="botao botao--principal botao--entrar" type="submit">
+        <svg class="botao__runa" aria-hidden="true"><use href="#runa-entrada"/></svg>
+        <span class="botao__texto">Entrar</span>
+      </button>
+
+      <p id="dica-teste" class="dica" hidden>
+        Pré-visualização: entre como mestre, neia ou takezo, com a senha <strong>teste</strong>.
+      </p>
+    </form>
+
+    <noscript>
+      <p class="dica">Ative o JavaScript do navegador para entrar.</p>
+    </noscript>
+  </main>
+
+  <!-- ============ O chat (depois do login) ============ -->
+  <div id="chat" class="chat-tela" hidden>
+
+    <!-- Esquerda: a lista -->
+    <aside class="lado" aria-label="Canais e conversas">
+      <div class="lado__topo">
+        <span class="lado__marca">Crônicas Eternas</span>
+        <a id="link-portal" class="lado__portal" href="../">← Portal</a>
+      </div>
+      <nav id="lista" class="lista-canais" aria-label="Canais"></nav>
+      <div id="painel-voz" class="painel-voz" hidden></div>
+      <div class="faixa-conta">
+        <span id="nome-conta" class="faixa-conta__nome"></span>
+        <button id="botao-configuracoes" class="icone-botao" type="button" title="Configurações" aria-label="Configurações" hidden>
+          <svg aria-hidden="true"><use href="#icone-engrenagem"/></svg>
+        </button>
+        <button id="botao-sair" class="botao botao--leve botao--pequeno" type="button">Sair</button>
+      </div>
+    </aside>
+
+    <!-- Centro: o canal aberto -->
+    <main class="centro">
+      <header class="centro__cabeca">
+        <h1 id="titulo-canal" class="centro__titulo"></h1>
+        <div id="falando-como" class="falando-como" hidden></div>
+        <button id="botao-membros" class="icone-botao" type="button" title="Quem vê este canal" aria-label="Quem vê este canal" aria-pressed="true">
+          <svg aria-hidden="true"><use href="#icone-membros"/></svg>
+        </button>
+      </header>
+
+      <div id="mensagens" class="mensagens" aria-live="polite"></div>
+      <div id="sala" class="sala" hidden></div>
+
+      <form id="escrever" class="escrever" novalidate>
+        <div id="respondendo" class="respondendo" hidden>
+          <span id="respondendo-texto" class="respondendo__texto"></span>
+          <button id="respondendo-cancelar" class="icone-botao" type="button" title="Cancelar" aria-label="Cancelar a resposta">
+            <svg aria-hidden="true"><use href="#icone-fechar"/></svg>
+          </button>
+        </div>
+        <div id="anexos" class="anexos" hidden></div>
+        <div id="lista-mencoes" class="lista-mencoes" role="listbox" hidden></div>
+        <div class="escrever__linha">
+          <button id="botao-imagem" class="icone-botao" type="button" title="Enviar imagem" aria-label="Enviar imagem">
+            <svg aria-hidden="true"><use href="#icone-imagem"/></svg>
+          </button>
+          <input id="arquivo-imagem" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/avif" multiple hidden>
+          <textarea id="campo-texto" class="escrever__campo" rows="1" maxlength="4000" placeholder="Escreva uma mensagem" aria-label="Mensagem"></textarea>
+        </div>
+        <p id="escrever-aviso" class="escrever__aviso" hidden></p>
+      </form>
+    </main>
+
+    <!-- Direita: quem vê o canal -->
+    <aside id="membros" class="membros" aria-label="Quem vê este canal"></aside>
+  </div>
+
+  <!-- ============ Imagem aberta ============ -->
+  <dialog id="dialogo-imagem" class="dialogo dialogo--imagem">
+    <img id="imagem-grande" alt="">
+  </dialog>
+
+  <!-- ============ Criar ou renomear canal ============ -->
+  <dialog id="dialogo-canal" class="dialogo">
+    <form id="form-canal" class="dialogo__form" novalidate>
+      <h2 id="canal-titulo" class="dialogo__titulo">Novo canal</h2>
+      <label class="campo">
+        <span class="campo__rotulo">Nome</span>
+        <input name="nome" maxlength="40" autocomplete="off" required>
+      </label>
+      <fieldset id="canal-tipo" class="grupo-tipo">
+        <legend class="campo__rotulo">Tipo</legend>
+        <label class="caixa"><input type="radio" name="tipo" value="texto" checked><span class="caixa__marca" aria-hidden="true"></span><span>Texto</span></label>
+        <label class="caixa"><input type="radio" name="tipo" value="voz"><span class="caixa__marca" aria-hidden="true"></span><span>Voz</span></label>
+      </fieldset>
+      <p id="erro-canal" class="mensagem-erro" role="alert" hidden></p>
+      <div class="dialogo__acoes">
+        <button id="canal-cancelar" class="botao botao--leve" type="button">Cancelar</button>
+        <button id="canal-enviar" class="botao botao--principal" type="submit">Criar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- ============ Categorias das mesas (administrador) ============ -->
+  <dialog id="dialogo-categorias" class="dialogo dialogo--largo">
+    <h2 class="dialogo__titulo">Categorias das mesas</h2>
+    <p class="dialogo__texto">Marque as mesas que têm categoria no chat e acerte a ordem. Uma mesa desmarcada perde os canais e o histórico deles.</p>
+    <div id="lista-categorias" class="lista-categorias"></div>
+    <p id="erro-categorias" class="mensagem-erro" role="alert" hidden></p>
+    <div class="dialogo__acoes">
+      <button id="categorias-cancelar" class="botao botao--leve" type="button">Cancelar</button>
+      <button id="categorias-salvar" class="botao botao--principal" type="button">Salvar</button>
+    </div>
+  </dialog>
+
+  <!-- ============ Nova conversa privada ============ -->
+  <dialog id="dialogo-nova-conversa" class="dialogo">
+    <h2 class="dialogo__titulo">Nova conversa</h2>
+    <p class="dialogo__texto">Só vocês dois leem as mensagens privadas.</p>
+    <div id="lista-contas" class="lista-contas"></div>
+    <div class="dialogo__acoes">
+      <button id="nova-conversa-fechar" class="botao botao--leve" type="button">Fechar</button>
+    </div>
+  </dialog>
+
+  <!-- ============ Aviso e confirmação ============ -->
+  <dialog id="dialogo-aviso" class="dialogo">
+    <form method="dialog">
+      <h2 id="aviso-titulo" class="dialogo__titulo"></h2>
+      <p id="aviso-texto" class="dialogo__texto"></p>
+      <div class="dialogo__acoes">
+        <button id="aviso-cancelar" class="botao botao--leve" value="cancelar" hidden></button>
+        <button id="aviso-confirmar" class="botao botao--principal" value="confirmar">Entendi</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="aviso-rapido" class="aviso-rapido" role="status" aria-live="polite" hidden></div>
+
+  <!-- ============ Só na prévia ============ -->
+  <details id="simulacao" class="simulacao" hidden>
+    <summary>Prévia</summary>
+    <label class="campo">
+      <span class="campo__rotulo">Ver o chat como</span>
+      <select id="sim-conta">
+        <option value="mestre">Administrador (mestre)</option>
+        <option value="neia">Jogadora (Neia)</option>
+        <option value="takezo">Editor (Takezo)</option>
+      </select>
+    </label>
+    <button id="sim-restaurar" class="botao botao--leve" type="button">Restaurar os exemplos</button>
+    <p class="simulacao__nota">Só existe na prévia. Uma mensagem nova chega a cada 20 segundos.</p>
+  </details>
+</body>
+</html>
