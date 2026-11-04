@@ -106,7 +106,9 @@ portal/
                                  sem login e sem a barra lateral; carrega também ../marcas.js e ../marcas.css
     chat/                        index.html, chat.js (texto: lista, mensagens, privadas, eventos, administração e
                                  prévia), chat.css: a página do chat, com login próprio, sem a barra lateral e sem as
-                                 cinzas; voz.js e livekit-client.js chegam na sessão 11.4
+                                 cinzas; voz.js (voz e vídeo: o painel, a sala, as configurações de aparelhos, o volume
+                                 por pessoa e a voz simulada da prévia; usa o estado e os ganchosDaVoz do chat.js);
+                                 livekit-client.js (a cópia fixa do LiveKit) e LICENCA-livekit.txt (versão e licença)
 planejamento/       especificações e roteiro das sessões; referencias/ com o Atlas de Tyrenar
 ```
 

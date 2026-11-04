@@ -1362,3 +1362,447 @@ button.seletor-persona:focus-visible {
   font-size: 0.85rem;
   color: var(--cinza);
 }
+
+/* =================================================================
+   Voz e vídeo (voz.js)
+   -----------------------------------------------------------------
+   A brasa só na moldura de quem fala e na sala em que você está.
+   ================================================================= */
+
+/* Na lista: a sala em que você está e os ícones de quem está nela */
+.item-canal--conectado > .item-canal__link .item-canal__icone {
+  color: var(--brasa);
+}
+
+.item-canal__sala li {
+  cursor: context-menu;
+}
+
+.item-canal__pessoa {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.item-canal__estados {
+  display: inline-flex;
+  gap: 0.2rem;
+  margin-left: auto;
+  padding-right: 0.3rem;
+}
+
+.estado-voz {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.estado-voz--desligado {
+  color: var(--alerta);
+}
+
+/* O painel de voz, embaixo da lista */
+.painel-voz {
+  padding: 0.55rem 0.7rem 0.6rem;
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.painel-voz__cabeca {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+}
+
+.painel-voz__textos {
+  flex: 1;
+  min-width: 0;
+}
+
+.painel-voz__situacao {
+  margin: 0;
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: #9bb27a;
+}
+
+.painel-voz__situacao[data-situacao="conectando"],
+.painel-voz__situacao[data-situacao="reconectando"] {
+  color: var(--pergaminho-apagado);
+}
+
+.painel-voz--caiu .painel-voz__situacao {
+  font-weight: 500;
+  color: var(--alerta);
+}
+
+.painel-voz__sala {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 0.9rem;
+  color: var(--pergaminho-apagado);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.painel-voz__sala:hover .painel-voz__nome {
+  color: var(--pergaminho);
+  text-decoration: underline;
+}
+
+.painel-voz__nome {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.painel-voz__categoria {
+  overflow: hidden;
+  font-size: 0.78rem;
+  color: var(--cinza);
+  text-overflow: ellipsis;
+}
+
+.painel-voz__som {
+  width: 100%;
+  margin-top: 0.45rem;
+}
+
+.painel-voz__botoes {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.25rem;
+  margin-top: 0.45rem;
+}
+
+.painel-voz__botoes--queda {
+  justify-content: flex-start;
+  gap: 0.4rem;
+}
+
+.painel-voz__botoes[hidden],
+.painel-voz__som[hidden] {
+  display: none;
+}
+
+.botao-voz {
+  width: 36px;
+  height: 32px;
+  border-color: var(--ferro-fraco);
+}
+
+.botao-voz--desligado,
+.botao-voz--desligado:hover:not(:disabled) {
+  color: var(--alerta);
+  background: rgba(147, 52, 42, 0.16);
+}
+
+.botao-voz--ligado,
+.botao-voz--ligado:hover:not(:disabled) {
+  color: var(--pergaminho);
+  background: rgba(232, 221, 200, 0.12);
+  border-color: var(--ferro);
+}
+
+.botao-voz--sair:hover:not(:disabled) {
+  color: var(--pergaminho);
+  background: var(--sangue);
+}
+
+/* A sala no centro */
+.sala {
+  display: flex;
+  flex-direction: column;
+}
+
+.sala__vestibulo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.8rem;
+  margin: auto;
+  padding: 2rem;
+  max-width: 32rem;
+  text-align: center;
+}
+
+.sala__icone {
+  width: 42px;
+  height: 42px;
+  fill: none;
+  stroke: var(--pergaminho-apagado);
+  stroke-width: 1.3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.sala__nome {
+  margin: 0;
+  font-family: var(--fonte-gotica);
+  font-size: 2rem;
+  font-weight: 500;
+}
+
+.sala__texto {
+  margin: 0;
+  color: var(--pergaminho-apagado);
+}
+
+.sala__texto--aviso {
+  color: var(--alerta);
+}
+
+.sala__presentes {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem 1rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sala__presente {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.sala__presente-retrato {
+  width: 32px;
+  height: 32px;
+  font-size: 1rem;
+}
+
+.sala__como {
+  margin: 0;
+  color: var(--pergaminho-apagado);
+}
+
+.sala__como .nome-persona {
+  color: var(--pergaminho);
+}
+
+/* A chamada: a grade, ou o quadro grande e a faixa embaixo */
+.sala__chamada {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-height: 0;
+  padding: 1rem;
+}
+
+.sala__espera {
+  margin: auto;
+}
+
+.sala__espera[hidden] {
+  display: none;
+}
+
+.sala__palco {
+  display: none;
+}
+
+.sala__grade {
+  --colunas: 1;
+  display: grid;
+  flex: 1;
+  grid-template-columns: repeat(var(--colunas), minmax(0, 1fr));
+  grid-auto-rows: minmax(0, 1fr);
+  gap: 0.75rem;
+  min-height: 0;
+}
+
+.sala__chamada--destaque .sala__palco {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.sala__chamada--destaque .sala__palco .quadro {
+  flex: 1;
+}
+
+.sala__chamada--destaque .sala__grade {
+  display: flex;
+  flex: none;
+  gap: 0.6rem;
+  height: 120px;
+  overflow-x: auto;
+}
+
+.sala__chamada--destaque .sala__grade .quadro {
+  flex: none;
+  width: 200px;
+}
+
+.quadro {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  overflow: hidden;
+  background: radial-gradient(70% 70% at 50% 40%, rgba(232, 221, 200, 0.05), transparent 70%), var(--pedra);
+  border: 1px solid var(--ferro-fraco);
+  border-radius: var(--raio);
+  cursor: pointer;
+  transition: box-shadow 0.15s, border-color 0.15s;
+}
+
+.quadro:focus-visible {
+  outline: 2px solid var(--pergaminho-apagado);
+  outline-offset: 2px;
+}
+
+.quadro--falando {
+  border-color: var(--brasa);
+  box-shadow: 0 0 0 2px var(--brasa), 0 0 14px var(--brasa-brilho);
+}
+
+.quadro__midia {
+  display: grid;
+  flex: 1;
+  place-items: center;
+  min-width: 0;
+  min-height: 0;
+}
+
+.quadro__video,
+.quadro__simulado {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: #000;
+}
+
+.quadro__video--tela,
+.quadro--tela .quadro__simulado {
+  object-fit: contain;
+}
+
+.quadro__video--espelho {
+  transform: scaleX(-1);
+}
+
+.quadro__retrato {
+  width: min(96px, 45%);
+  height: auto;
+  aspect-ratio: 1;
+  font-size: 2.4rem;
+}
+
+.sala__chamada--destaque .sala__grade .quadro__retrato {
+  width: 52px;
+  font-size: 1.4rem;
+}
+
+.quadro__rotulo {
+  position: absolute;
+  left: 0.5rem;
+  bottom: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  max-width: calc(100% - 1rem);
+  padding: 0.15rem 0.5rem;
+  font-size: 0.92rem;
+  background: rgba(14, 12, 11, 0.78);
+  border-radius: var(--raio);
+}
+
+.quadro__nome {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.quadro__de {
+  flex: none;
+  color: var(--pergaminho-apagado);
+}
+
+/* Configurações de voz */
+.voz-teste {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  margin: -0.2rem 0 1rem;
+}
+
+.voz-teste__barra {
+  flex: 1;
+  height: 8px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid var(--ferro-fraco);
+  border-radius: 4px;
+}
+
+.voz-teste__nivel {
+  --nivel: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, #6f8a52, #9bb27a 70%, var(--alerta));
+  transform: scaleX(var(--nivel));
+  transform-origin: left center;
+  transition: transform 0.06s linear;
+}
+
+/* O volume de uma pessoa (clique direito) */
+.volume-pessoa {
+  position: absolute;
+  z-index: 60;
+  width: 15rem;
+  padding: 0.8rem 0.9rem 0.6rem;
+  background: var(--carvao);
+  border: 1px solid var(--ferro);
+  border-radius: var(--raio);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55);
+}
+
+.volume-pessoa[hidden] {
+  display: none;
+}
+
+.volume-pessoa__nome {
+  margin: 0 0 0.5rem;
+  overflow: hidden;
+  font-weight: 700;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.volume-pessoa__linha {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 0.2rem 0.5rem;
+  margin-bottom: 0.6rem;
+}
+
+.volume-pessoa__linha .campo__rotulo {
+  grid-column: 1 / -1;
+}
+
+.volume-pessoa__linha input[type="range"] {
+  width: 100%;
+  accent-color: var(--pergaminho-apagado);
+}
+
+.volume-pessoa__valor {
+  min-width: 2.8rem;
+  font-size: 0.9rem;
+  text-align: right;
+  color: var(--pergaminho-apagado);
+}
