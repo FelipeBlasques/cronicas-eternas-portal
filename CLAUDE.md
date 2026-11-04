@@ -110,7 +110,8 @@ portal/
     ler/                         index.html, ler.js, ler.css: a leitura pública de uma nota do Caderno (/ler/#<token>),
                                  sem login e sem a barra lateral; carrega também ../marcas.js e ../marcas.css
     chat/                        index.html, chat.js (texto: lista, mensagens, privadas, eventos, administração,
-                                 os avisos do navegador por canal, o som e a prévia), chat.css: a página do chat, com
+                                 "Seu perfil", o card de quem fala, os avisos do navegador por canal e os do
+                                 app (cronicasEternasApp.avisar), o som e a prévia), chat.css: a página do chat, com
                                  login próprio, sem a barra lateral e sem as cinzas; voz.js (voz e vídeo: o painel, a sala, as configurações de aparelhos, o volume
                                  por pessoa e a voz simulada da prévia; usa o estado e os ganchosDaVoz do chat.js);
                                  livekit-client.js (a cópia fixa do LiveKit) e LICENCA-livekit.txt (versão e licença)
