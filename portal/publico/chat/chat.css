@@ -1,24 +1,32 @@
 /* =================================================================
    Crônicas Eternas: Chat
    -----------------------------------------------------------------
-   Só computador: largura mínima de 1100 px e altura mínima de 640 px
-   (abaixo disso, a página rola). Três colunas: a lista (260 px), o
-   canal aberto e quem vê o canal (220 px, recolhível). Sem as cinzas
-   animadas: a página fica aberta horas.
+   Só computador. A página nunca rola: o que não cabe rola dentro da
+   própria coluna (lista, mensagens, membros) e dos diálogos. Três
+   colunas: a lista (260 px), o canal aberto e quem vê o canal (220 px,
+   recolhível). Abaixo de 1100 px de largura, a coluna da direita abre
+   por cima do centro; abaixo de 760 px, a página rola de lado.
+   Sem as cinzas animadas: a página fica aberta horas.
    A brasa só no canal atual, nas menções e na moldura de quem fala.
    ================================================================= */
 
+html:has(body.chat) {
+  overflow: hidden;
+}
+
 body.chat {
-  min-width: 1100px;
-  min-height: 640px;
+  overflow: hidden;
   background:
     radial-gradient(90% 60% at 50% 0%, rgba(232, 221, 200, 0.035), transparent 70%),
     var(--fuligem);
 }
 
-/* A tela de entrada usa o portão do style.css */
+/* A tela de entrada usa o portão do style.css; rola por dentro se não couber */
 body.chat .entrada {
-  min-height: max(100vh, 640px);
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 /* =================================================================
@@ -28,7 +36,8 @@ body.chat .entrada {
 .chat-tela {
   display: grid;
   grid-template-columns: 260px minmax(0, 1fr) 220px;
-  height: max(100vh, 640px);
+  height: 100vh;
+  height: 100dvh;
   overflow: hidden;
 }
 
@@ -38,6 +47,44 @@ body.sem-membros .chat-tela {
 
 body.sem-membros .membros {
   display: none;
+}
+
+/* Janela estreita: a coluna da direita só aparece pelo botão, por cima do centro */
+@media (max-width: 1099.98px) {
+  .chat-tela,
+  body.sem-membros .chat-tela {
+    position: relative;
+    grid-template-columns: 260px minmax(0, 1fr);
+  }
+
+  .membros,
+  body.sem-membros .membros {
+    position: absolute;
+    top: 3.4rem;
+    right: 0;
+    bottom: 0;
+    z-index: 20;
+    display: none;
+    width: 240px;
+    box-shadow: -18px 0 40px -18px rgba(0, 0, 0, 0.95);
+  }
+
+  body.membros-por-cima .membros {
+    display: block;
+  }
+}
+
+/* Abaixo de 760 px, a página rola de lado (só de lado) */
+@media (max-width: 759.98px) {
+  html:has(body.chat) {
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  body.chat {
+    min-width: 760px;
+    overflow: visible;
+  }
 }
 
 /* Botões só com ícone */
@@ -1819,4 +1866,428 @@ button.seletor-persona:focus-visible {
   font-size: 0.9rem;
   text-align: right;
   color: var(--pergaminho-apagado);
+}
+
+/* =================================================================
+   Perfis: o apelido e o nome da conta, a frase
+   ================================================================= */
+
+.nomes-conta {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+}
+
+.nomes-conta__apelido {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nomes-conta__conta {
+  flex: none;
+  max-width: 45%;
+  overflow: hidden;
+  font-size: 0.8rem;
+  text-overflow: ellipsis;
+  color: var(--cinza);
+}
+
+.membro__frase {
+  overflow: hidden;
+  font-size: 0.78rem;
+  font-style: italic;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--pergaminho-apagado);
+}
+
+/* O que abre o card de quem fala */
+.abre-card,
+.msg__nome.abre-card,
+.item-canal__sala li.abre-card {
+  cursor: pointer;
+}
+
+.msg__nome.abre-card:hover,
+.quadro__nome.abre-card:hover {
+  text-decoration: underline;
+  text-decoration-color: var(--ferro-forte);
+  text-underline-offset: 0.18em;
+}
+
+.abre-card:focus-visible {
+  outline: 2px solid var(--brasa);
+  outline-offset: 2px;
+  border-radius: var(--raio);
+}
+
+.msg__retrato-botao {
+  display: block;
+  width: fit-content;
+  border-radius: 50%;
+}
+
+.membro.abre-card:focus-visible {
+  outline-offset: 0;
+}
+
+/* A explicação dos avisos bloqueados, dentro do menu da engrenagem */
+.menu-chat__item:disabled .menu-chat__explicacao {
+  display: grid;
+  gap: 0.2rem;
+  font-size: 0.9rem;
+  line-height: 1.4;
+  white-space: normal;
+  color: var(--pergaminho-apagado);
+}
+
+.menu-chat__explicacao strong {
+  font-weight: 500;
+  color: var(--pergaminho);
+}
+
+/* =================================================================
+   O card de quem fala
+   -----------------------------------------------------------------
+   Uns 300 px, ao lado do que foi clicado. A moldura na cor do
+   perfil (conta) ou da mesa (personagens).
+   ================================================================= */
+
+.card-pessoa {
+  position: fixed;
+  z-index: 70;
+  width: 300px;
+  max-height: calc(100vh - 16px);
+  max-height: calc(100dvh - 16px);
+  overflow-y: auto;
+  border-radius: calc(var(--raio) + 2px);
+  box-shadow: 0 24px 60px -18px rgba(0, 0, 0, 0.95);
+  scrollbar-width: thin;
+  scrollbar-color: var(--ferro) transparent;
+}
+
+.card-pessoa:focus {
+  outline: none;
+}
+
+.card-pessoa--previa {
+  position: static;
+  max-height: none;
+  overflow: visible;
+}
+
+.card-pessoa__caixa {
+  --cor-card: var(--ferro);
+  overflow: hidden;
+  background: linear-gradient(180deg, #221d19 0%, #15120f 100%);
+  border: 2px solid var(--cor-card);
+  border-radius: calc(var(--raio) + 2px);
+}
+
+/* Conta: a faixa e a foto sobre a borda dela */
+.card-pessoa__faixa {
+  aspect-ratio: 3 / 1;
+  overflow: hidden;
+  background: var(--cor-card);
+}
+
+.card-pessoa__faixa-imagem {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.card-pessoa__foto {
+  position: relative;
+  display: block;
+  width: fit-content;
+  margin: -42px 0 0 0.9rem;
+  border-radius: 50%;
+  box-shadow: 0 0 0 5px #201b17;
+}
+
+.card-pessoa__retrato {
+  width: 80px;
+  height: 80px;
+  font-size: 2.3rem;
+}
+
+.card-pessoa__foto .presenca {
+  right: 3px;
+  bottom: 3px;
+  width: 16px;
+  height: 16px;
+  box-shadow: 0 0 0 3px #201b17;
+}
+
+.card-pessoa__corpo {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.55rem 1rem 1rem;
+}
+
+.card-pessoa__nome {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: 1.3rem;
+  font-weight: 500;
+  line-height: 1.15;
+}
+
+.card-pessoa__conta {
+  margin: -0.35rem 0 0;
+  font-size: 0.85rem;
+  color: var(--cinza);
+}
+
+.card-pessoa__frase {
+  margin: 0;
+  font-style: italic;
+  color: var(--pergaminho-apagado);
+  overflow-wrap: anywhere;
+}
+
+.card-pessoa__sobre {
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--ferro-fraco);
+}
+
+.card-pessoa__titulo {
+  margin: 0 0 0.2rem;
+  font-size: 0.74rem;
+  font-weight: 500;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--cinza);
+}
+
+.card-pessoa__texto {
+  font-size: 0.95rem;
+  overflow-wrap: anywhere;
+}
+
+.card-pessoa__situacao {
+  display: grid;
+  gap: 0.2rem;
+  padding-top: 0.5rem;
+  font-size: 0.92rem;
+  border-top: 1px solid var(--ferro-fraco);
+}
+
+.card-pessoa__no-chat {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+  color: var(--pergaminho-apagado);
+}
+
+.card-pessoa__no-chat::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #8fae6a;
+}
+
+.card-pessoa__sala {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--pergaminho);
+  text-decoration: none;
+}
+
+.card-pessoa__sala:hover,
+.card-pessoa__sala:focus-visible {
+  text-decoration: underline;
+  text-decoration-color: var(--brasa);
+  outline: none;
+}
+
+.card-pessoa__icone {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.card-pessoa__sala-mesa {
+  color: var(--cinza);
+}
+
+.card-pessoa__acao {
+  justify-self: start;
+  margin-top: 0.2rem;
+}
+
+/* Personagem, Mestre e outro personagem: o retrato grande */
+.card-pessoa__retrato-grande {
+  display: grid;
+  place-items: center;
+  padding: 1rem 1rem 0.2rem;
+  background: radial-gradient(90% 80% at 50% 20%, rgba(232, 221, 200, 0.06), transparent 70%);
+}
+
+.card-pessoa__arte {
+  width: 132px;
+  height: 132px;
+  font-size: 3.6rem;
+  box-shadow: 0 0 0 2px var(--cor-card), 0 14px 30px -14px rgba(0, 0, 0, 0.9);
+}
+
+.card-pessoa__arte.retrato--logo {
+  width: 220px;
+  height: 110px;
+  box-shadow: none;
+}
+
+.card-pessoa__caixa:not(.card-pessoa__caixa--conta) .card-pessoa__nome {
+  text-align: center;
+}
+
+.card-pessoa__mesa {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  margin: -0.2rem 0 0;
+  font-size: 0.92rem;
+  color: var(--pergaminho-apagado);
+}
+
+.card-pessoa__ponto {
+  width: 9px;
+  height: 9px;
+  flex: none;
+  border-radius: 2px;
+  background: var(--cor, var(--ferro));
+  box-shadow: 0 0 0 1px rgba(232, 221, 200, 0.25);
+}
+
+.card-pessoa__dono {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0;
+  padding-top: 0.5rem;
+  font-size: 0.92rem;
+  border-top: 1px solid var(--ferro-fraco);
+}
+
+.card-pessoa__rotulo {
+  font-style: italic;
+  color: var(--cinza);
+}
+
+.card-pessoa__quem {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.15rem 0.45rem 0.15rem 0.2rem;
+  font: inherit;
+  color: var(--pergaminho);
+  background: rgba(232, 221, 200, 0.05);
+  border: 1px solid var(--ferro-fraco);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.card-pessoa__quem:hover:not(:disabled),
+.card-pessoa__quem:focus-visible {
+  border-color: var(--ferro-forte);
+  outline: none;
+}
+
+.card-pessoa__mini {
+  width: 22px;
+  height: 22px;
+  font-size: 0.72rem;
+}
+
+.card-pessoa__ficha {
+  justify-self: center;
+  font-size: 0.95rem;
+  color: var(--pergaminho);
+  text-decoration: none;
+  border-bottom: 1px solid var(--brasa);
+}
+
+.card-pessoa__ficha:hover,
+.card-pessoa__ficha:focus-visible {
+  color: #fff;
+  outline: none;
+}
+
+/* =================================================================
+   Seu perfil (o diálogo da engrenagem)
+   ================================================================= */
+
+.dialogo--perfil {
+  width: min(46rem, calc(100vw - 2rem));
+  max-height: calc(100vh - 2rem);
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
+}
+
+.perfil {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 1.6rem;
+  align-items: start;
+}
+
+.perfil__campos {
+  display: grid;
+  gap: 1rem;
+}
+
+.perfil__campos textarea {
+  width: 100%;
+  min-height: 5.5rem;
+  resize: vertical;
+  font: inherit;
+  font-size: 1rem;
+  line-height: 1.45;
+  color: var(--pergaminho);
+  background: rgba(0, 0, 0, 0.22);
+  border: 1px solid var(--ferro);
+  border-radius: var(--raio);
+  padding: 0.45rem 0.55rem;
+}
+
+.perfil__campos textarea:focus-visible {
+  outline: none;
+  border-color: var(--brasa);
+}
+
+.perfil__imagem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+
+.perfil__botoes {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.perfil__previa {
+  display: grid;
+  gap: 0.4rem;
+}
+
+@media (max-width: 759.98px) {
+  .perfil {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }

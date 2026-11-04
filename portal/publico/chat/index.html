@@ -202,6 +202,64 @@
     </div>
   </dialog>
 
+  <!-- ============ Seu perfil (Geral e privadas) ============ -->
+  <dialog id="dialogo-perfil" class="dialogo dialogo--perfil">
+    <form id="form-perfil" class="dialogo__form" novalidate>
+      <h2 class="dialogo__titulo">Seu perfil</h2>
+      <p class="dialogo__texto">Vale na Geral e nas mensagens privadas. Nas mesas, quem fala é o personagem.</p>
+      <div class="perfil">
+        <div class="perfil__campos">
+          <label class="campo">
+            <span class="campo__rotulo">Apelido</span>
+            <input name="apelido" maxlength="32" autocomplete="off" spellcheck="false">
+          </label>
+          <label class="campo">
+            <span class="campo__rotulo">Frase</span>
+            <input name="frase" maxlength="80" autocomplete="off">
+          </label>
+          <label class="campo">
+            <span class="campo__rotulo">Sobre mim</span>
+            <textarea name="sobre" maxlength="300" rows="4"></textarea>
+          </label>
+          <div class="perfil__linha">
+            <label class="campo">
+              <span class="campo__rotulo">Cor</span>
+              <input name="cor" type="color">
+            </label>
+          </div>
+          <div class="perfil__imagem">
+            <span class="campo__rotulo">Foto</span>
+            <div class="perfil__botoes">
+              <button id="perfil-foto-escolher" class="botao botao--leve botao--pequeno" type="button">Escolher</button>
+              <button id="perfil-foto-remover" class="botao botao--leve botao--pequeno" type="button">Remover</button>
+            </div>
+            <input id="perfil-foto" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/avif" hidden>
+          </div>
+          <div class="perfil__imagem">
+            <span class="campo__rotulo">Faixa</span>
+            <div class="perfil__botoes">
+              <button id="perfil-faixa-escolher" class="botao botao--leve botao--pequeno" type="button">Escolher</button>
+              <button id="perfil-faixa-remover" class="botao botao--leve botao--pequeno" type="button">Remover</button>
+            </div>
+            <input id="perfil-faixa" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/avif" hidden>
+          </div>
+        </div>
+        <div class="perfil__previa">
+          <span class="campo__rotulo">Como os outros veem</span>
+          <div id="perfil-previa"></div>
+        </div>
+      </div>
+      <p id="erro-perfil" class="mensagem-erro" role="alert" hidden></p>
+      <div class="dialogo__acoes">
+        <button id="perfil-cancelar" class="botao botao--leve" type="button">Cancelar</button>
+        <button id="perfil-salvar" class="botao botao--principal" type="submit">Salvar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- ============ O card de quem fala ============ -->
+  <div id="card-pessoa" class="card-pessoa" role="dialog" aria-label="Perfil" hidden></div>
+
   <!-- ============ Aviso e confirmação ============ -->
   <dialog id="dialogo-aviso" class="dialogo">
     <form method="dialog">

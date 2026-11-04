@@ -22,7 +22,8 @@
 
    Usa o chat.js (carregado antes): estado, ganchosDaVoz, acharCanal(),
    retratoDe(), nomeDaPersona(), personaEscolhidaDa(), desenharLista(),
-   lerLocal(), gravarLocal(), eu(); e o comum.js: pedir(), criar(),
+   lerLocal(), gravarLocal(), eu(), personaDaContaDe(), abreCard() e
+   personaDaPresencaNaSala() (o card de quem está na sala); e o comum.js: pedir(), criar(),
    simbolo(), avisarFalha(), avisoRapido().
    ================================================================= */
 
@@ -122,7 +123,7 @@ function minhaPersonaNa(idSala) {
     const escolhida = personaEscolhidaDa(mesa);
     if (escolhida) return escolhida;
   }
-  return { tipo: "conta", id: eu(), nome: estado.dados?.conta.nome ?? eu(), imagem: null, fonte: null };
+  return personaDaContaDe(eu());
 }
 
 // A presença do servidor traz só nome, imagem e fonte: o tipo vem da categoria (para a cor do selo)
@@ -351,7 +352,7 @@ function criarMotorSimulado(idSala, avisos) {
         { usuario: eu(), persona: minhaPersonaNa(idSala), local: true, mudo: false, camera: false, tela: false, falando: false },
         ...outras.map((p) => ({
           usuario: p.usuario,
-          persona: personaDaPresenca(p, categoria),
+          persona: personaDaPresencaNaSala(p, categoria),
           local: false,
           mudo: Boolean(p.mudo),
           ensurdecido: Boolean(p.ensurdecido),
@@ -688,6 +689,7 @@ function desenharVestibulo(caixa, canal, categoria) {
     for (const pessoa of pessoas) {
       const item = criar("li", "sala__presente");
       item.append(retratoDe(personaDaPresenca(pessoa, categoria), categoria, "sala__presente-retrato"), nomeDaPersona(pessoa));
+      abreCard(item, () => ({ usuario: pessoa.usuario, persona: personaDaPresencaNaSala(pessoa, categoria), categoria }));
       lista.append(item);
     }
     vestibulo.append(lista);
@@ -828,8 +830,9 @@ function atualizarQuadro(registro, q, categoria) {
     }
   }
 
-  // O rótulo: o nome e os ícones
+  // O rótulo: o nome (que abre o card, sem ampliar o quadro) e os ícones
   const nome = nomeDaPersona(p.persona, "quadro__nome");
+  abreCard(nome, () => ({ usuario: p.usuario, persona: p.persona, categoria }));
   const partes = [];
   if (ehTela) partes.push(simbolo("icone-tela", "estado-voz"), criar("span", "quadro__de", "Tela de "), nome);
   else {

@@ -85,6 +85,7 @@ const apiDoServidor = {
   alterarCanal: (id, mudancas) => pedir("PUT", caminhoDe("/api/chat/canais", id), mudancas),
   apagarCanal: (id) => pedir("DELETE", caminhoDe("/api/chat/canais", id)),
   categorias: (mesas) => pedir("PUT", "/api/chat/categorias", { mesas }),
+  mudarPerfil: (form) => pedir("PUT", "/api/chat/perfil", form),
   mesasDoAdmin: async () => (await pedir("GET", "/api/admin")).campanhas,
   entrar: (usuario, senha, lembrar) => pedir("POST", "/api/entrar", { usuario, senha, lembrar }),
   sair: () => pedir("POST", "/api/sair"),
@@ -113,7 +114,7 @@ const apiDoServidor = {
   },
 };
 
-const TIPOS_DE_EVENTO = ["mensagem", "editada", "apagada", "lida", "canais", "voz", "presenca", "recarregar"];
+const TIPOS_DE_EVENTO = ["mensagem", "editada", "apagada", "lida", "canais", "voz", "presenca", "perfil", "recarregar"];
 
 /* =================================================================
    Prévia: um chat de mentira, só na memória do navegador
@@ -230,7 +231,29 @@ function exemplosDaPrevia() {
     takezo: { "canal-geral01": ultima("canal-geral01") },
   };
 
-  return { contas, mesas, personagens, outros, categorias, canais, historicos, lidas, personas: {}, ocultas: {}, noChat: ["mestre", "neia"] };
+  // Os perfis do chat (takezo nunca mexeu no dele: fica o padrão)
+  const perfis = {
+    mestre: {
+      apelido: "Mestre Felipe",
+      foto: desenhoDeExemplo("#7a4a2e", "F"),
+      faixa: desenhoDeExemplo("#3a2a20", "✦", 360, 120),
+      cor: "#a0522d",
+      frase: "Quem rola os dados também chora.",
+      sobre: "Narro **Ode to Sleep** e *Cinzas de Vael*.\nPergunte das regras da casa por privada. ||O dragão existe.||",
+      alteradoEm: new Date(minutosAtras(600)).toISOString(),
+    },
+    neia: {
+      apelido: "Neia ✿",
+      foto: desenhoDeExemplo("#365c5c", "N"),
+      faixa: null,
+      cor: "#4f7f6f",
+      frase: "Elfa nas horas vagas.",
+      sobre: "",
+      alteradoEm: new Date(minutosAtras(900)).toISOString(),
+    },
+  };
+
+  return { contas, mesas, personagens, outros, categorias, canais, historicos, lidas, perfis, personas: {}, ocultas: {}, noChat: ["mestre", "neia"] };
 }
 
 function criarApiDePrevia() {
@@ -260,7 +283,25 @@ function criarApiDePrevia() {
   const veChave = (usuario, chave) =>
     ehPrivada(chave) ? participantes(chave).includes(usuario) : veCategoria(usuario, categoriaDe(canalDe(chave)?.categoria));
 
-  const personaDaConta = (c) => ({ tipo: "conta", id: c.usuario, nome: c.nome, imagem: null, fonte: null });
+  const personaDaConta = (c) => {
+    const p = mundo.perfis[c.usuario];
+    return { tipo: "conta", id: c.usuario, nome: p?.apelido || c.nome, imagem: p?.foto ?? null, fonte: null };
+  };
+  const CORES_PADRAO = CORES_DAS_CONTAS;
+  function perfilPublico(usuario) {
+    const p = mundo.perfis[usuario] ?? {};
+    let soma = 0;
+    for (const letra of String(usuario)) soma = (soma * 31 + letra.codePointAt(0)) >>> 0;
+    return {
+      apelido: p.apelido ?? "",
+      foto: p.foto ?? null,
+      faixa: p.faixa ?? null,
+      cor: p.cor || CORES_PADRAO[soma % CORES_PADRAO.length],
+      frase: p.frase ?? "",
+      sobre: p.sobre ?? "",
+      alteradoEm: p.alteradoEm ?? null,
+    };
+  }
   const personaDoPersonagem = (p, tipo = "personagem") => ({ tipo, id: p.id, nome: p.nome, imagem: p.retrato || null, fonte: p.fonte });
   const personaDoMestre = (mesa) => ({ tipo: "mestre", id: mesa.id, nome: "Mestre", imagem: mesa.titulo || null, fonte: null });
 
@@ -395,6 +436,7 @@ function criarApiDePrevia() {
       personas,
       membros,
       personasDosMembros,
+      perfis: Object.fromEntries(mundo.contas.map((c) => [c.usuario, perfilPublico(c.usuario)])),
       voz: { configurada: true, salas: salasDaPrevia(visiveis) },
     };
   }
@@ -585,6 +627,51 @@ function criarApiDePrevia() {
       avisar("canais", {});
       return { ok: true };
     },
+    // Como o PUT /api/chat/perfil: um campo que não veio fica como está
+    async mudarPerfil(form) {
+      await pausa();
+      const novo = { ...(mundo.perfis[eu] ?? {}) };
+      const campo = (nome) => (typeof form.get(nome) === "string" ? form.get(nome) : undefined);
+      const apelido = campo("apelido");
+      if (apelido !== undefined) {
+        const limpo = apelido.replace(/\s+/g, " ").trim();
+        if (limpo.length > 32) throw falha("O apelido pode ter no máximo 32 caracteres.");
+        novo.apelido = limpo;
+      }
+      const cor = campo("cor");
+      if (cor !== undefined) {
+        const limpa = cor.trim().toLowerCase();
+        if (limpa && !/^#[0-9a-f]{6}$/.test(limpa)) throw falha("Escolha uma cor válida.");
+        novo.cor = limpa || null;
+      }
+      const frase = campo("frase");
+      if (frase !== undefined) {
+        const limpa = frase.replace(/\s+/g, " ").trim();
+        if (limpa.length > 80) throw falha("A frase pode ter no máximo 80 caracteres.");
+        novo.frase = limpa;
+      }
+      const sobre = campo("sobre");
+      if (sobre !== undefined) {
+        const limpo = sobre.replace(/\r\n?/g, "\n").trim();
+        if (limpo.length > 300) throw falha('O "Sobre mim" pode ter no máximo 300 caracteres.');
+        novo.sobre = limpo;
+      }
+      for (const nome of ["foto", "faixa"]) {
+        const arquivo = form.get(nome);
+        if (arquivo instanceof File && arquivo.size) {
+          if (!CONFIG.tiposDeImagem.includes(arquivo.type)) throw falha("Use imagens PNG, JPG, WEBP, GIF ou AVIF.");
+          if (arquivo.size > CONFIG.maxImagem) throw falha("Cada imagem pode ter no máximo 10 MB.");
+          novo[nome] = URL.createObjectURL(arquivo);
+        } else if (form.get(`remover_${nome}`) === "1") {
+          novo[nome] = null;
+        }
+      }
+      novo.alteradoEm = new Date().toISOString();
+      mundo.perfis[eu] = novo;
+      const perfil = perfilPublico(eu);
+      avisar("perfil", { usuario: eu, perfil });
+      return { perfil };
+    },
     async mesasDoAdmin() {
       await pausa();
       return mundo.mesas.map((m) => ({ ...m }));
@@ -738,6 +825,67 @@ function nomeDaPersona(persona, classe = "") {
 }
 
 /* =================================================================
+   Perfis: o apelido, a foto e o resto de cada conta (Geral e privadas)
+   ================================================================= */
+
+const LIMITES_DO_PERFIL = { apelido: 32, frase: 80, sobre: 300 };
+
+function perfilDe(usuario) {
+  const p = estado.dados?.perfis?.[usuario];
+  return {
+    apelido: p?.apelido ?? "",
+    foto: p?.foto ?? null,
+    faixa: p?.faixa ?? null,
+    cor: p?.cor || corDaConta(usuario),
+    frase: p?.frase ?? "",
+    sobre: p?.sobre ?? "",
+  };
+}
+
+// O nome da conta no chat: o apelido, ou o nome da conta
+function apelidoDe(usuario) {
+  const apelido = perfilDe(usuario).apelido.trim();
+  if (apelido) return apelido;
+  return contaPorUsuario(usuario)?.nome ?? privadaComUsuario(usuario)?.com.nome ?? usuario;
+}
+
+const privadaComUsuario = (usuario) => estado.dados?.privadas.find((p) => p.com.usuario === usuario);
+
+function personaDaContaDe(usuario) {
+  return { tipo: "conta", id: usuario, nome: apelidoDe(usuario), imagem: perfilDe(usuario).foto, fonte: null };
+}
+
+// O apelido grande e, quando for diferente, o nome da conta pequeno
+function nomesDaConta(usuario, classe) {
+  const caixa = criar("span", `${classe} nomes-conta`);
+  const apelido = apelidoDe(usuario);
+  const nomeConta = contaPorUsuario(usuario)?.nome ?? privadaComUsuario(usuario)?.com.nome ?? usuario;
+  caixa.append(criar("span", "nomes-conta__apelido", apelido));
+  if (nomeConta !== apelido) caixa.append(criar("small", "nomes-conta__conta", nomeConta));
+  return caixa;
+}
+
+// Um perfil novo (o seu, salvo, ou o de outra conta, pelo evento): troca o nome e a foto
+// em tudo o que a página já tem e redesenha
+function aplicarPerfil(usuario, perfil) {
+  if (!estado.dados) return;
+  (estado.dados.perfis ??= {})[usuario] = perfil;
+  const persona = personaDaContaDe(usuario);
+  const trocar = (p) => {
+    if (p?.tipo === "conta" && p.id === usuario) Object.assign(p, { nome: persona.nome, imagem: persona.imagem });
+  };
+  for (const h of estado.historicos.values()) for (const m of h.lista) trocar(m.persona);
+  for (const personas of Object.values(estado.dados.personasDosMembros ?? {})) trocar(personas[usuario]);
+  if (usuario === eu()) $("#nome-conta").textContent = persona.nome;
+  desenharLista();
+  desenharCabeca();
+  desenharMembros();
+  if (estado.alvo && !estado.alvo.voz) desenharMensagens();
+  ganchosDaVoz.mudou?.();
+  redesenharCard();
+}
+
+/* =================================================================
    Formatação do texto das mensagens
    -----------------------------------------------------------------
    Só estas marcas: **negrito**, *itálico*, ~~riscado~~, ||spoiler||,
@@ -757,7 +905,7 @@ function nomeDaMencao(usuario) {
     const persona = achado && estado.dados.personasDosMembros?.[achado.categoria.id]?.[usuario];
     if (persona) return persona.nome;
   }
-  return contaPorUsuario(usuario)?.nome ?? usuario;
+  return apelidoDe(usuario);
 }
 
 // O texto de uma resposta, numa linha só, sem as marcas de menção nem o spoiler
@@ -822,6 +970,8 @@ function emLinha(destino, texto) {
       const em = criar("em");
       emLinha(em, italico.slice(1, -1));
       destino.append(em);
+    } else if (mencao && mencoesComoTexto) {
+      destino.append(mencao);
     } else if (mencao) {
       const usuario = mencao.slice(2, -1);
       const marca = criar("span", "mencao", `@${nomeDaMencao(usuario)}`);
@@ -860,7 +1010,19 @@ function blocoDeTexto(destino, texto) {
   fechar();
 }
 
-function desenharTexto(destino, texto) {
+// O "Sobre mim" usa as mesmas marcas, menos as menções (ficam como texto)
+let mencoesComoTexto = false;
+
+function desenharTexto(destino, texto, { semMencoes = false } = {}) {
+  mencoesComoTexto = semMencoes;
+  try {
+    desenharTextoComMarcas(destino, texto);
+  } finally {
+    mencoesComoTexto = false;
+  }
+}
+
+function desenharTextoComMarcas(destino, texto) {
   const partes = texto.split("```");
   let pendente = "";
   let depoisDoCodigo = false;
@@ -903,6 +1065,7 @@ const mesmoDia = (a, b) => dataDe(a).toDateString() === dataDe(b).toDateString()
 function mostrarEntrada(mensagem = "") {
   ganchosDaVoz.encerrar?.();
   fecharEventos();
+  fecharCard();
   for (const dialogo of document.querySelectorAll("dialog[open]")) dialogo.close();
   limparAnexos();
   estado.dados = null;
@@ -981,7 +1144,7 @@ async function abrirChat() {
     $("#simulacao").hidden = false;
     $("#sim-conta").value = eu();
   }
-  $("#nome-conta").textContent = estado.dados.conta.nome;
+  $("#nome-conta").textContent = apelidoDe(eu());
   desenharLista();
   abrirPeloEndereco();
   conectarEventos();
@@ -1049,6 +1212,7 @@ function itemDoCanal(canal, categoria) {
         const conta = contaPorUsuario(pessoa.usuario);
         if (conta) linha.title = `por ${conta.nome}`;
         linha.append(retratoDe(pessoa, categoria, "item-canal__retrato"), nomeDaPersona(pessoa, "item-canal__pessoa"));
+        abreCard(linha, () => ({ usuario: pessoa.usuario, persona: personaDaPresencaNaSala(pessoa, categoria), categoria }));
         const icones = criar("span", "item-canal__estados");
         if (pessoa.ensurdecido) icones.append(simbolo("icone-fone-mudo", "estado-voz estado-voz--desligado"));
         else if (pessoa.mudo) icones.append(simbolo("icone-microfone-mudo", "estado-voz estado-voz--desligado"));
@@ -1088,10 +1252,10 @@ function itemDaPrivada(privada) {
   const ponto = criar("span", "presenca");
   ponto.classList.toggle("presenca--no-chat", Boolean(conta?.noChat));
   ponto.title = conta?.noChat ? "No chat agora" : "Fora do chat";
-  const persona = { tipo: "conta", id: privada.com.usuario, nome: privada.com.nome, imagem: null };
+  const persona = personaDaContaDe(privada.com.usuario);
   const retrato = criar("span", "item-privada__retrato");
   retrato.append(retratoDe(persona, null, "item-privada__selo"), ponto);
-  link.append(retrato, criar("span", "item-canal__nome", privada.com.nome));
+  link.append(retrato, nomesDaConta(privada.com.usuario, "item-canal__nome"));
   if (privada.naoLidas > 0) {
     item.classList.add("item-canal--nao-lido");
     link.append(contadorDe(privada.naoLidas));
@@ -1102,7 +1266,7 @@ function itemDaPrivada(privada) {
   }
   item.append(
     link,
-    botaoDeIcone("icone-fechar", `Tirar a conversa com ${privada.com.nome} da lista`, () => ocultarPrivada(privada), "item-canal__menu"),
+    botaoDeIcone("icone-fechar", `Tirar a conversa com ${persona.nome} da lista`, () => ocultarPrivada(privada), "item-canal__menu"),
   );
   return item;
 }
@@ -1308,7 +1472,7 @@ function configurarDialogoDoCanal() {
 }
 
 function abrirConfiguracoes() {
-  const itens = [{ titulo: "Avisos" }, itemDosAvisos(), itemDoSom()];
+  const itens = [{ titulo: "Perfil" }, { texto: "Seu perfil", acao: abrirPerfil }, { titulo: "Avisos" }, itemDosAvisos(), itemDoSom()];
   if (estado.dados.conta.admin) itens.push({ titulo: "Administração" }, { texto: "Categorias das mesas", acao: abrirCategorias });
   abrirMenu($("#botao-configuracoes"), itens);
 }
@@ -1403,15 +1567,16 @@ function configurarCategorias() {
    ================================================================= */
 
 function abrirNovaConversa() {
-  const contas = estado.dados.contas.filter((c) => c.usuario !== eu()).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+  const contas = estado.dados.contas.filter((c) => c.usuario !== eu()).sort((a, b) => apelidoDe(a.usuario).localeCompare(apelidoDe(b.usuario), "pt-BR"));
   const itens = contas.map((conta) => {
     const b = criar("button", "linha-conta");
     b.type = "button";
     const ponto = criar("span", "presenca");
     ponto.classList.toggle("presenca--no-chat", Boolean(conta.noChat));
     const retrato = criar("span", "item-privada__retrato");
-    retrato.append(retratoDe({ tipo: "conta", id: conta.usuario, nome: conta.nome }, null, "item-privada__selo"), ponto);
-    b.append(retrato, criar("span", "linha-conta__nome", conta.nome), criar("span", "linha-conta__usuario", conta.usuario));
+    retrato.append(retratoDe(personaDaContaDe(conta.usuario), null, "item-privada__selo"), ponto);
+    const apelido = apelidoDe(conta.usuario);
+    b.append(retrato, criar("span", "linha-conta__nome", apelido), criar("span", "linha-conta__usuario", apelido === conta.nome ? conta.usuario : conta.nome));
     b.addEventListener("click", () => {
       $("#dialogo-nova-conversa").close();
       irPara(`#privada-${conta.usuario}`);
@@ -1495,6 +1660,7 @@ function abrirAlvo(alvo) {
   }
   estado.alvo = alvo;
   fecharListaDeMencoes();
+  fecharCard();
   desenharLista();
   desenharCabeca();
   desenharMembros();
@@ -1626,8 +1792,7 @@ function desenharCabeca() {
   const alvo = estado.alvo;
   if (!alvo) return;
   if (alvo.tipo === "privada") {
-    const conta = contaPorUsuario(alvo.usuario);
-    titulo.append(simbolo("icone-privada", "centro__icone"), conta?.nome ?? privadaDaLista(alvo.chave)?.com.nome ?? alvo.usuario);
+    titulo.append(simbolo("icone-privada", "centro__icone"), apelidoDe(alvo.usuario));
     return;
   }
   const { canal, categoria } = acharCanal(alvo.id);
@@ -1775,6 +1940,9 @@ function edicaoDe(m) {
   return caixa;
 }
 
+// O card de quem mandou: na Geral e nas privadas, o perfil de agora
+const infoDaMensagem = (m, categoria) => ({ usuario: m.autor.usuario, persona: m.persona, categoria });
+
 function elementoDaMensagem(m, continua, categoria) {
   const el = criar("article", "msg");
   el.dataset.id = m.id;
@@ -1791,7 +1959,11 @@ function elementoDaMensagem(m, continua, categoria) {
     hora.title = dataCompleta(m.em);
     lado.append(hora);
   } else {
-    lado.append(retratoDe(m.persona, categoria, "msg__retrato"));
+    const retrato = criar("span", "msg__retrato-botao");
+    retrato.append(retratoDe(m.persona, categoria, "msg__retrato"));
+    retrato.setAttribute("aria-label", m.persona.nome);
+    abreCard(retrato, () => infoDaMensagem(m, categoria));
+    lado.append(retrato);
   }
 
   const corpo = criar("div", "msg__corpo");
@@ -1799,6 +1971,7 @@ function elementoDaMensagem(m, continua, categoria) {
     const cabeca = criar("div", "msg__cabeca");
     const nome = nomeDaPersona(m.persona, "msg__nome");
     nome.title = `por ${m.autor.nomeConta}`;
+    abreCard(nome, () => infoDaMensagem(m, categoria));
     const hora = criar("time", "msg__hora", horaDe(m.em));
     hora.dateTime = m.em;
     hora.title = dataCompleta(m.em);
@@ -1899,7 +2072,7 @@ function inicioDoCanal() {
   const inicio = criar("div", "mensagens__inicio");
   const alvo = estado.alvo;
   if (alvo.tipo === "privada") {
-    const nome = contaPorUsuario(alvo.usuario)?.nome ?? privadaDaLista(alvo.chave)?.com.nome ?? alvo.usuario;
+    const nome = apelidoDe(alvo.usuario);
     inicio.append(criar("h2", "mensagens__inicio-titulo", nome), criar("p", null, `O começo da sua conversa com ${nome}. Só vocês dois leem.`));
   } else {
     const { canal } = acharCanal(alvo.id);
@@ -2256,14 +2429,17 @@ function quemVeOAlvo() {
     return [eu(), alvo.usuario]
       .map((usuario) => contaPorUsuario(usuario))
       .filter(Boolean)
-      .map((c) => ({ usuario: c.usuario, nome: c.nome, nomeConta: c.nome, persona: { tipo: "conta", id: c.usuario, nome: c.nome, imagem: null } }));
+      .map((c) => {
+        const persona = personaDaContaDe(c.usuario);
+        return { usuario: c.usuario, nome: persona.nome, nomeConta: c.nome, persona };
+      });
   }
   const categoria = acharCanal(alvo.id)?.categoria;
   if (!categoria) return [];
   const personas = estado.dados.personasDosMembros?.[categoria.id] ?? {};
   return (estado.dados.membros?.[categoria.id] ?? []).map((usuario) => {
     const conta = contaPorUsuario(usuario);
-    const persona = personas[usuario] ?? { tipo: "conta", id: usuario, nome: conta?.nome ?? usuario, imagem: null };
+    const persona = personas[usuario] ?? personaDaContaDe(usuario);
     return { usuario, nome: persona.nome, nomeConta: conta?.nome ?? usuario, persona };
   });
 }
@@ -2418,7 +2594,10 @@ function desenharMembros() {
     retrato.append(retratoDe(p.persona, categoria, "membro__imagem"), ponto);
     const nomes = criar("span", "membro__nomes");
     nomes.append(nomeDaPersona(p.persona, "membro__nome"), criar("small", "membro__conta", p.nomeConta));
+    const frase = p.persona.tipo === "conta" ? perfilDe(p.usuario).frase : "";
+    if (frase) nomes.append(criar("small", "membro__frase", frase));
     item.append(retrato, nomes);
+    abreCard(item, () => ({ usuario: p.usuario, persona: p.persona, categoria }));
     return item;
   };
   const grupo = (titulo, lista, classe = "") => {
@@ -2433,18 +2612,418 @@ function desenharMembros() {
   coluna.replaceChildren(...grupo("No chat agora", noChat), ...grupo("Fora", fora, "membros__lista--fora"));
 }
 
+// Na janela larga, o botão mostra ou recolhe a coluna (e a escolha fica guardada). Abaixo de
+// 1100 px, a coluna abre por cima do centro e fecha ao clicar fora ou com Esc.
+const janelaEstreita = matchMedia("(max-width: 1099.98px)");
+
 function configurarMembros() {
   const botaoMembros = $("#botao-membros");
-  const aplicar = (aberta) => {
-    document.body.classList.toggle("sem-membros", !aberta);
+  const coluna = $("#membros");
+  const aplicar = () => {
+    const aberta = janelaEstreita.matches
+      ? document.body.classList.contains("membros-por-cima")
+      : !document.body.classList.contains("sem-membros");
     botaoMembros.setAttribute("aria-pressed", String(aberta));
   };
-  aplicar(lerLocal("chat:membros") !== "fechada");
+  const fecharPorCima = () => {
+    if (!document.body.classList.contains("membros-por-cima")) return;
+    document.body.classList.remove("membros-por-cima");
+    aplicar();
+  };
+  document.body.classList.toggle("sem-membros", lerLocal("chat:membros") === "fechada");
+  aplicar();
   botaoMembros.addEventListener("click", () => {
-    const aberta = document.body.classList.contains("sem-membros");
-    aplicar(aberta);
-    gravarLocal("chat:membros", aberta ? "aberta" : "fechada");
+    if (janelaEstreita.matches) {
+      document.body.classList.toggle("membros-por-cima");
+    } else {
+      const fechar = !document.body.classList.contains("sem-membros");
+      document.body.classList.toggle("sem-membros", fechar);
+      gravarLocal("chat:membros", fechar ? "fechada" : "aberta");
+    }
+    aplicar();
   });
+  janelaEstreita.addEventListener("change", () => {
+    document.body.classList.remove("membros-por-cima");
+    aplicar();
+  });
+  document.addEventListener("pointerdown", (evento) => {
+    if (!janelaEstreita.matches || coluna.contains(evento.target) || botaoMembros.contains(evento.target)) return;
+    if ($("#card-pessoa")?.contains(evento.target)) return;
+    fecharPorCima();
+  });
+  document.addEventListener("keydown", (evento) => {
+    if (evento.key === "Escape" && document.body.classList.contains("membros-por-cima") && !cardAberto()) fecharPorCima();
+  });
+}
+
+/* =================================================================
+   O card de quem fala
+   -----------------------------------------------------------------
+   Abre ao clicar no nome ou na imagem de alguém (mensagens, coluna
+   da direita, salas de voz). Conta: o perfil. Personagem, Mestre e
+   outro personagem: o retrato, a mesa e quem joga.
+   ================================================================= */
+
+let cardAtual = null; // { ancora, info }: info = { usuario, persona, categoria }
+
+const cardAberto = () => !$("#card-pessoa").hidden;
+
+// A ficha na galeria do portal (o mesmo endereço que a galeria já abre)
+function enderecoDaFicha(id) {
+  const hash = `#personagem-${encodeURIComponent(id)}`;
+  const host = location.hostname;
+  if (!MODO_PREVIA && host.startsWith("chat.")) return `https://${host.slice("chat.".length)}/personagens/${hash}`;
+  return COMO_ARQUIVO ? `${RAIZ}personagens/index.html${hash}` : `${RAIZ}personagens/${hash}`;
+}
+
+// A sala de voz em que a conta está, se você vê essa sala
+function salaDeVozDe(usuario) {
+  if (usuario === eu()) {
+    const id = ganchosDaVoz.salaConectada?.();
+    return id ? acharCanal(id) : null;
+  }
+  for (const [id, pessoas] of Object.entries(estado.dados?.voz?.salas ?? {})) {
+    if (pessoas.some((p) => p.usuario === usuario)) return acharCanal(id);
+  }
+  return null;
+}
+
+// A presença de voz traz só o nome, a imagem e a fonte: na Geral é a conta; na mesa, a persona
+// escolhida pela pessoa (a mesma com que ela entrou, se o nome bate)
+function personaDaPresencaNaSala(pessoa, categoria) {
+  if (!categoria?.mesa) return personaDaContaDe(pessoa.usuario);
+  const escolhida = estado.dados?.personasDosMembros?.[categoria.id]?.[pessoa.usuario];
+  if (escolhida && escolhida.nome === pessoa.nome) return escolhida;
+  const admin = Boolean(contaPorUsuario(pessoa.usuario)?.admin);
+  const tipo = admin ? (pessoa.nome === "Mestre" ? "mestre" : "outro") : "personagem";
+  return { tipo, id: tipo === "mestre" ? categoria.mesa : null, nome: pessoa.nome, imagem: pessoa.imagem ?? null, fonte: pessoa.fonte ?? null };
+}
+
+// Faz um elemento abrir o card (clique, Enter ou espaço)
+function abreCard(elemento, info) {
+  elemento.classList.add("abre-card");
+  if (!elemento.matches("button, a")) {
+    elemento.tabIndex = 0;
+    elemento.setAttribute("role", "button");
+  }
+  elemento.addEventListener("click", (evento) => {
+    evento.stopPropagation();
+    if (cardAtual?.ancora === elemento && cardAberto()) return fecharCard();
+    abrirCard(elemento, info());
+  });
+  elemento.addEventListener("keydown", (evento) => {
+    if (evento.key !== "Enter" && evento.key !== " ") return;
+    evento.preventDefault();
+    evento.stopPropagation();
+    abrirCard(elemento, info());
+  });
+}
+
+function linhaDoDono(rotulo, usuario, aoClicar) {
+  const linha = criar("p", "card-pessoa__dono");
+  linha.append(criar("span", "card-pessoa__rotulo", rotulo));
+  const quem = criar("button", "card-pessoa__quem");
+  quem.type = "button";
+  quem.title = "Ver o perfil";
+  quem.append(retratoDe(personaDaContaDe(usuario), null, "card-pessoa__mini"), criar("span", null, apelidoDe(usuario)));
+  if (aoClicar) quem.addEventListener("click", aoClicar);
+  else quem.disabled = true;
+  linha.append(quem);
+  return linha;
+}
+
+function linhaDaMesa(categoria) {
+  const mesa = criar("p", "card-pessoa__mesa");
+  if (categoria?.cor) mesa.style.setProperty("--cor", categoria.cor);
+  mesa.append(criar("span", "card-pessoa__ponto"), categoria?.nome ?? "");
+  return mesa;
+}
+
+// O card de uma conta. "perfil" e "persona" podem vir de fora (a prévia do diálogo do perfil).
+function cardDaConta(usuario, { perfil = perfilDe(usuario), persona = personaDaContaDe(usuario), previa = false } = {}) {
+  const card = criar("div", "card-pessoa__caixa card-pessoa__caixa--conta");
+  card.style.setProperty("--cor-card", perfil.cor);
+  const faixa = criar("div", "card-pessoa__faixa");
+  if (perfil.faixa) {
+    const img = imagem(perfil.faixa, "card-pessoa__faixa-imagem");
+    img.addEventListener("error", () => img.remove(), { once: true });
+    faixa.append(img);
+  }
+  const foto = criar("span", "card-pessoa__foto");
+  const ponto = criar("span", "presenca");
+  const conta = contaPorUsuario(usuario);
+  ponto.classList.toggle("presenca--no-chat", Boolean(conta?.noChat));
+  foto.append(retratoDe(persona, null, "card-pessoa__retrato"), ponto);
+  card.append(faixa, foto);
+
+  const corpo = criar("div", "card-pessoa__corpo");
+  const nomeConta = conta?.nome ?? privadaComUsuario(usuario)?.com.nome ?? usuario;
+  corpo.append(criar("h2", "card-pessoa__nome", persona.nome));
+  if (nomeConta !== persona.nome) corpo.append(criar("p", "card-pessoa__conta", nomeConta));
+  if (perfil.frase) corpo.append(criar("p", "card-pessoa__frase", perfil.frase));
+  if (perfil.sobre) {
+    const sobre = criar("section", "card-pessoa__sobre");
+    const texto = criar("div", "msg__texto card-pessoa__texto");
+    desenharTexto(texto, perfil.sobre, { semMencoes: true });
+    sobre.append(criar("h3", "card-pessoa__titulo", "Sobre mim"), texto);
+    corpo.append(sobre);
+  }
+
+  if (!previa) {
+    const situacao = criar("div", "card-pessoa__situacao");
+    if (conta?.noChat) situacao.append(criar("p", "card-pessoa__no-chat", "No chat agora"));
+    const sala = salaDeVozDe(usuario);
+    if (sala) {
+      const link = criar("a", "card-pessoa__sala");
+      link.href = `#canal-${sala.canal.id}`;
+      link.append(simbolo("icone-voz", "card-pessoa__icone"), sala.canal.nome);
+      if (sala.categoria.mesa) link.append(criar("span", "card-pessoa__sala-mesa", ` · ${sala.categoria.nome}`));
+      link.addEventListener("click", fecharCard);
+      situacao.append(link);
+    }
+    if (situacao.childElementCount) corpo.append(situacao);
+  }
+
+  if (usuario === eu()) {
+    const editar = botao("Editar perfil", "botao botao--leve botao--pequeno card-pessoa__acao", () => {
+      fecharCard();
+      abrirPerfil();
+    });
+    editar.disabled = previa;
+    corpo.append(editar);
+  } else if (conta) {
+    corpo.append(
+      botao("Mensagem privada", "botao botao--leve botao--pequeno card-pessoa__acao", () => {
+        fecharCard();
+        irPara(`#privada-${usuario}`);
+      }),
+    );
+  }
+  card.append(corpo);
+  return card;
+}
+
+// O card de um personagem, do Mestre ou de outro personagem (nas mesas)
+function cardDoPersonagem({ usuario, persona, categoria }) {
+  const card = criar("div", `card-pessoa__caixa card-pessoa__caixa--${persona.tipo}`);
+  card.style.setProperty("--cor-card", corDaCategoria(categoria));
+  const retrato = criar("div", "card-pessoa__retrato-grande");
+  retrato.append(retratoDe(persona, categoria, "card-pessoa__arte"));
+  card.append(retrato);
+
+  const corpo = criar("div", "card-pessoa__corpo");
+  const nome = criar("h2", "card-pessoa__nome");
+  nome.append(nomeDaPersona(persona));
+  corpo.append(nome, linhaDaMesa(categoria));
+  const verDono = () => abrirCard(cardAtual?.ancora ?? $("#card-pessoa"), { usuario, persona: personaDaContaDe(usuario), categoria: null }, true);
+  corpo.append(linhaDoDono(persona.tipo === "outro" ? "interpretado por" : "jogado por", usuario, verDono));
+  if ((persona.tipo === "personagem" || persona.tipo === "outro") && persona.id) {
+    const ficha = criar("a", "card-pessoa__ficha", "Ver ficha");
+    ficha.href = enderecoDaFicha(persona.id);
+    if (!window.cronicasEternasApp) {
+      ficha.target = "cronicas-portal";
+      ficha.rel = "noopener";
+    }
+    ficha.addEventListener("click", fecharCard);
+    corpo.append(ficha);
+  }
+  card.append(corpo);
+  return card;
+}
+
+function conteudoDoCard(info) {
+  if (info.persona?.tipo === "conta" || !info.persona) return cardDaConta(info.usuario);
+  return cardDoPersonagem(info);
+}
+
+// Ao lado do que foi clicado, dentro da janela. "manterLugar": troca o conteúdo sem mexer
+// (o "jogado por" abre o perfil do dono no mesmo lugar)
+function abrirCard(ancora, info, manterLugar = false) {
+  const card = $("#card-pessoa");
+  cardAtual = { ancora, info };
+  card.replaceChildren(conteudoDoCard(info));
+  card.hidden = false;
+  if (!manterLugar) posicionarCard();
+  card.focus({ preventScroll: true });
+}
+
+function posicionarCard() {
+  const card = $("#card-pessoa");
+  const caixa = cardAtual.ancora.getBoundingClientRect();
+  const largura = card.offsetWidth;
+  const altura = card.offsetHeight;
+  let esquerda = caixa.right + 10;
+  if (esquerda + largura > window.innerWidth - 8) esquerda = caixa.left - largura - 10;
+  if (esquerda < 8) esquerda = Math.min(Math.max(8, caixa.left), window.innerWidth - largura - 8);
+  const topo = Math.min(Math.max(8, caixa.top), window.innerHeight - altura - 8);
+  card.style.setProperty("left", `${Math.max(8, esquerda)}px`);
+  card.style.setProperty("top", `${Math.max(8, topo)}px`);
+}
+
+function fecharCard() {
+  if (!cardAtual && !cardAberto()) return;
+  $("#card-pessoa").hidden = true;
+  $("#card-pessoa").replaceChildren();
+  cardAtual = null;
+}
+
+// Um perfil, a presença ou a voz mudaram: o card aberto acompanha, no mesmo lugar
+function redesenharCard() {
+  if (!cardAtual || !cardAberto()) return;
+  $("#card-pessoa").replaceChildren(conteudoDoCard(cardAtual.info));
+}
+
+function configurarCard() {
+  const card = $("#card-pessoa");
+  card.tabIndex = -1;
+  document.addEventListener("pointerdown", (evento) => {
+    if (!cardAberto() || card.contains(evento.target) || cardAtual?.ancora.contains(evento.target)) return;
+    fecharCard();
+  });
+  document.addEventListener("keydown", (evento) => {
+    if (evento.key !== "Escape" || !cardAberto()) return;
+    evento.stopPropagation();
+    const ancora = cardAtual?.ancora;
+    fecharCard();
+    if (ancora?.isConnected) ancora.focus({ preventScroll: true });
+  });
+  window.addEventListener("resize", fecharCard);
+}
+
+/* =================================================================
+   Seu perfil (a engrenagem)
+   ================================================================= */
+
+// O que está no diálogo: as imagens novas escolhidas e as que vão ser removidas
+const edicaoDoPerfil = { foto: null, faixa: null, removerFoto: false, removerFaixa: false, urls: [] };
+
+function imagemDoPerfil(campo) {
+  const escolhida = edicaoDoPerfil[campo];
+  if (escolhida) return escolhida.url;
+  if (campo === "foto" ? edicaoDoPerfil.removerFoto : edicaoDoPerfil.removerFaixa) return null;
+  return perfilDe(eu())[campo];
+}
+
+function desenharPreviaDoPerfil() {
+  const form = $("#form-perfil");
+  const conta = estado.dados.conta;
+  const apelido = form.elements.apelido.value.replace(/\s+/g, " ").trim();
+  const perfil = {
+    apelido,
+    foto: imagemDoPerfil("foto"),
+    faixa: imagemDoPerfil("faixa"),
+    cor: form.elements.cor.value || corDaConta(eu()),
+    frase: form.elements.frase.value.replace(/\s+/g, " ").trim(),
+    sobre: form.elements.sobre.value.trim(),
+  };
+  const persona = { tipo: "conta", id: eu(), nome: apelido || conta.nome, imagem: perfil.foto, fonte: null };
+  const caixa = criar("div", "card-pessoa card-pessoa--previa");
+  caixa.append(cardDaConta(eu(), { perfil, persona, previa: true }));
+  $("#perfil-previa").replaceChildren(caixa);
+  $("#perfil-foto-remover").disabled = !perfil.foto;
+  $("#perfil-faixa-remover").disabled = !perfil.faixa;
+}
+
+function limparEdicaoDoPerfil() {
+  for (const url of edicaoDoPerfil.urls) URL.revokeObjectURL(url);
+  Object.assign(edicaoDoPerfil, { foto: null, faixa: null, removerFoto: false, removerFaixa: false, urls: [] });
+}
+
+function abrirPerfil() {
+  const form = $("#form-perfil");
+  const perfil = perfilDe(eu());
+  limparEdicaoDoPerfil();
+  form.elements.apelido.value = perfil.apelido;
+  form.elements.apelido.placeholder = estado.dados.conta.nome;
+  form.elements.cor.value = perfil.cor;
+  form.elements.frase.value = perfil.frase;
+  form.elements.sobre.value = perfil.sobre;
+  $("#erro-perfil").hidden = true;
+  desenharPreviaDoPerfil();
+  $("#dialogo-perfil").showModal();
+}
+
+function escolherImagemDoPerfil(campo, arquivo) {
+  if (!arquivo) return;
+  const erro = $("#erro-perfil");
+  if (!CONFIG.tiposDeImagem.includes(arquivo.type)) {
+    erro.textContent = "Use imagens PNG, JPG, WEBP, GIF ou AVIF.";
+    erro.hidden = false;
+    return;
+  }
+  if (arquivo.size > CONFIG.maxImagem) {
+    erro.textContent = "Cada imagem pode ter no máximo 10 MB.";
+    erro.hidden = false;
+    return;
+  }
+  erro.hidden = true;
+  const url = URL.createObjectURL(arquivo);
+  edicaoDoPerfil.urls.push(url);
+  edicaoDoPerfil[campo] = { arquivo, url };
+  if (campo === "foto") edicaoDoPerfil.removerFoto = false;
+  else edicaoDoPerfil.removerFaixa = false;
+  desenharPreviaDoPerfil();
+}
+
+function removerImagemDoPerfil(campo) {
+  edicaoDoPerfil[campo] = null;
+  if (campo === "foto") edicaoDoPerfil.removerFoto = true;
+  else edicaoDoPerfil.removerFaixa = true;
+  desenharPreviaDoPerfil();
+}
+
+async function salvarPerfil() {
+  const form = $("#form-perfil");
+  const erro = $("#erro-perfil");
+  const salvar = $("#perfil-salvar");
+  const envio = new FormData();
+  envio.append("apelido", form.elements.apelido.value);
+  envio.append("cor", form.elements.cor.value);
+  envio.append("frase", form.elements.frase.value);
+  envio.append("sobre", form.elements.sobre.value);
+  for (const campo of ["foto", "faixa"]) {
+    const escolhida = edicaoDoPerfil[campo];
+    const remover = campo === "foto" ? edicaoDoPerfil.removerFoto : edicaoDoPerfil.removerFaixa;
+    if (escolhida) envio.append(campo, escolhida.arquivo);
+    else if (remover) envio.append(`remover_${campo}`, "1");
+  }
+  erro.hidden = true;
+  salvar.disabled = true;
+  try {
+    const { perfil } = await api.mudarPerfil(envio);
+    aplicarPerfil(eu(), perfil);
+    $("#dialogo-perfil").close();
+    avisoRapido("Perfil salvo.");
+  } catch (falha) {
+    erro.textContent = falha.message;
+    erro.hidden = false;
+  } finally {
+    salvar.disabled = false;
+  }
+}
+
+function configurarPerfil() {
+  const dialogo = $("#dialogo-perfil");
+  const form = $("#form-perfil");
+  form.addEventListener("input", (evento) => {
+    if (evento.target.type !== "file") desenharPreviaDoPerfil();
+  });
+  form.addEventListener("submit", (evento) => {
+    evento.preventDefault();
+    salvarPerfil();
+  });
+  for (const campo of ["foto", "faixa"]) {
+    const arquivo = $(`#perfil-${campo}`);
+    $(`#perfil-${campo}-escolher`).addEventListener("click", () => arquivo.click());
+    $(`#perfil-${campo}-remover`).addEventListener("click", () => removerImagemDoPerfil(campo));
+    arquivo.addEventListener("change", () => {
+      escolherImagemDoPerfil(campo, arquivo.files[0]);
+      arquivo.value = "";
+    });
+  }
+  $("#perfil-cancelar").addEventListener("click", () => dialogo.close());
+  // As imagens escolhidas só valem enquanto o diálogo está aberto
+  dialogo.addEventListener("close", limparEdicaoDoPerfil);
 }
 
 /* =================================================================
@@ -2487,7 +3066,7 @@ async function recarregarEstado() {
   const dados = await api.estado();
   if (!estado.dados) return;
   estado.dados = dados;
-  $("#nome-conta").textContent = dados.conta.nome;
+  $("#nome-conta").textContent = apelidoDe(eu());
   // O alvo aberto sumiu (canal apagado, mesa sem acesso): volta ao padrão
   const alvo = estado.alvo;
   if (alvo && !alvoDoHash(alvo.tipo === "privada" ? `#privada-${alvo.usuario}` : `#canal-${alvo.id}`)) {
@@ -2570,10 +3149,14 @@ function tratarEvento(tipo, corpo) {
     for (const conta of estado.dados.contas) conta.noChat = noChat.has(conta.usuario);
     desenharLista();
     desenharMembros();
+    redesenharCard();
   } else if (tipo === "voz") {
     estado.dados.voz = { ...(estado.dados.voz ?? {}), salas: corpo.salas ?? {} };
     desenharLista();
     ganchosDaVoz.mudou?.();
+    redesenharCard();
+  } else if (tipo === "perfil" && corpo.usuario && corpo.perfil) {
+    aplicarPerfil(corpo.usuario, corpo.perfil);
   } else if (tipo === "recarregar") {
     recarregarTudo().catch(() => {});
   }
@@ -2592,11 +3175,32 @@ function tratarEvento(tipo, corpo) {
 const temAvisos = () => typeof Notification === "function";
 const somLigado = () => lerLocal("chat:som") !== "nao";
 
+// O app novo mostra a notificação do Windows (o navegador embutido recusa as do site)
+const appAvisa = () => typeof window.cronicasEternasApp?.avisar === "function";
+const avisosDoAppLigados = () => lerLocal("chat:avisos-app") !== "nao";
+
 function itemDosAvisos() {
+  if (appAvisa()) {
+    const ligados = avisosDoAppLigados();
+    return {
+      texto: ligados ? "Avisos do app: ligados" : "Avisos do app: desligados",
+      atual: ligados,
+      acao: () => {
+        gravarLocal("chat:avisos-app", ligados ? "nao" : "sim");
+        avisoRapido(ligados ? "Avisos do app desligados." : "Avisos do app ligados.");
+      },
+    };
+  }
   if (!temAvisos()) return { texto: "Este navegador não mostra avisos", desligado: true };
   if (Notification.permission === "granted") return { texto: "Avisos ativados", desligado: true, atual: true };
   if (Notification.permission === "denied") {
-    return { texto: "Avisos bloqueados", acao: () => avisoRapido("Os avisos estão bloqueados para este endereço. Libere nas configurações do site, no navegador.") };
+    // O site não consegue desbloquear sozinho: o item explica o caminho
+    const explicacao = window.cronicasEternasApp
+      ? "Atualize o app para receber avisos."
+      : "Os avisos estão bloqueados neste navegador. Clique no cadeado à esquerda do endereço, ponha Notificações em Permitir e recarregue a página.";
+    const conteudo = criar("span", "menu-chat__explicacao");
+    conteudo.append(criar("strong", null, "Avisos bloqueados"), criar("span", null, explicacao));
+    return { conteudo, desligado: true };
   }
   return { texto: "Ativar avisos", acao: ativarAvisos };
 }
@@ -2677,7 +3281,7 @@ function textoDoAviso(m, categoria) {
   const nomeDe = (usuario) => {
     if (usuario === "todos") return "todos";
     const persona = categoria && estado.dados.personasDosMembros?.[categoria.id]?.[usuario];
-    return persona?.nome ?? contaPorUsuario(usuario)?.nome ?? usuario;
+    return persona?.nome ?? apelidoDe(usuario);
   };
   let texto = String(m.texto || "")
     .replace(/<@([a-z0-9_-]{2,30}|todos)>/g, (_, usuario) => `@${nomeDe(usuario)}`)
@@ -2710,6 +3314,15 @@ function avisarChegada(m) {
   }
 
   if (somLigado()) tocarSom();
+  if (appAvisa()) {
+    if (!avisosDoAppLigados()) return;
+    try {
+      window.cronicasEternasApp.avisar(titulo, textoDoAviso(m, categoria));
+    } catch {
+      // o app não mostrou: fica o som
+    }
+    return;
+  }
   if (!temAvisos() || Notification.permission !== "granted") return;
   try {
     const aviso = new Notification(titulo, { body: textoDoAviso(m, categoria), tag: m.canal });
@@ -2780,6 +3393,8 @@ async function iniciar() {
   configurarRolagem();
   configurarDialogos();
   configurarSimulacao();
+  configurarCard();
+  configurarPerfil();
   $("#link-portal").href = enderecoDoPortal();
   $("#botao-sair").addEventListener("click", sair);
   $("#botao-configuracoes").addEventListener("click", abrirConfiguracoes);
