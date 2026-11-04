@@ -202,7 +202,15 @@ function conexoesDoLivekit() {
 const CSP = montarCsp();
 // Só o html do chat: a voz (o LiveKit) e o áudio e o vídeo das chamadas
 const CSP_CHAT = montarCsp({ conexoes: conexoesDoLivekit(), midia: true });
-const HTML_DO_CHAT = path.join(PASTA_PUBLICA, "chat", "index.html");
+const PASTA_DO_CHAT = path.join(PASTA_PUBLICA, "chat");
+const HTML_DO_CHAT = path.join(PASTA_DO_CHAT, "index.html");
+// Os arquivos de publico/chat/ (sem o index.html), que no endereço do chat são pedidos na raiz
+// (o index.html os pede por caminho relativo). A lista é lida uma vez, quando o portal liga.
+const ARQUIVOS_DO_CHAT = new Set(
+  fs.readdirSync(PASTA_DO_CHAT, { withFileTypes: true })
+    .filter((item) => item.isFile() && item.name !== "index.html")
+    .map((item) => item.name)
+);
 
 /* ---------- O endereço do chat ---------- */
 
@@ -264,8 +272,9 @@ async function servirArquivo(req, res, url) {
   if (decodificado.includes("\0")) return naoEncontrado(res);
 
   let caminho = path.join(base, decodificado);
-  if (base === PASTA_PUBLICA && decodificado === "/" && CONFIG.hostChat && hostDoPedido(req) === CONFIG.hostChat) {
-    caminho = HTML_DO_CHAT;
+  if (base === PASTA_PUBLICA && CONFIG.hostChat && hostDoPedido(req) === CONFIG.hostChat) {
+    if (decodificado === "/") caminho = HTML_DO_CHAT;
+    else if (ARQUIVOS_DO_CHAT.has(decodificado.slice(1))) caminho = path.join(PASTA_DO_CHAT, decodificado.slice(1));
   }
   if (caminho !== base && !caminho.startsWith(base + path.sep)) return naoEncontrado(res);
 
