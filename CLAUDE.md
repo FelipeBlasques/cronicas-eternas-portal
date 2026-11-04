@@ -104,6 +104,9 @@ portal/
     caderno/                     index.html, caderno.js, caderno.css (carrega também ../marcas.js e ../marcas.css)
     ler/                         index.html, ler.js, ler.css: a leitura pública de uma nota do Caderno (/ler/#<token>),
                                  sem login e sem a barra lateral; carrega também ../marcas.js e ../marcas.css
+    chat/                        index.html, chat.js (texto: lista, mensagens, privadas, eventos, administração e
+                                 prévia), chat.css: a página do chat, com login próprio, sem a barra lateral e sem as
+                                 cinzas; voz.js e livekit-client.js chegam na sessão 11.4
 planejamento/       especificações e roteiro das sessões; referencias/ com o Atlas de Tyrenar
 ```
 
