@@ -10,7 +10,9 @@
   <link rel="stylesheet" href="../style.css">
   <link rel="stylesheet" href="chat.css">
   <script src="../comum.js" defer></script>
+  <script src="livekit-client.js" defer></script>
   <script src="chat.js" defer></script>
+  <script src="voz.js" defer></script>
 </head>
 <body class="chat" data-pagina="chat" data-raiz="../">
 
@@ -34,6 +36,14 @@
       <symbol id="icone-membros" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.8 2.9-6.5 6.5-6.5s6.5 2.7 6.5 6.5M16 4.8a3.4 3.4 0 0 1 0 6.4M18 13.8c2.2.8 3.5 3 3.5 6.2"/></symbol>
       <symbol id="icone-fechar" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
       <symbol id="icone-privada" viewBox="0 0 24 24"><path d="M4 5.5h16v10.5H10l-4.5 3.5V16H4Z"/></symbol>
+      <symbol id="icone-microfone" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5v3.5M8.5 21h7"/></symbol>
+      <symbol id="icone-microfone-mudo" viewBox="0 0 24 24"><path d="M15 10V6a3 3 0 0 0-5.6-1.5M9 9v2a3 3 0 0 0 4.6 2.5M5.5 11a6.5 6.5 0 0 0 10.4 5.2M18.5 11a6.4 6.4 0 0 1-.6 2.7M12 17.5v3.5M8.5 21h7M4 4l16 16"/></symbol>
+      <symbol id="icone-fone" viewBox="0 0 24 24"><path d="M4 15v-3a8 8 0 0 1 16 0v3"/><rect x="3.5" y="14" width="4" height="6.5" rx="1.5"/><rect x="16.5" y="14" width="4" height="6.5" rx="1.5"/></symbol>
+      <symbol id="icone-fone-mudo" viewBox="0 0 24 24"><path d="M4 15v-3a8 8 0 0 1 12.7-6.5M19.4 9.2A8 8 0 0 1 20 12v3"/><rect x="3.5" y="14" width="4" height="6.5" rx="1.5"/><rect x="16.5" y="14" width="4" height="6.5" rx="1.5"/><path d="M3.5 3.5l17 17"/></symbol>
+      <symbol id="icone-camera" viewBox="0 0 24 24"><rect x="3" y="6.5" width="12.5" height="11" rx="1.5"/><path d="M15.5 10.5l5.5-3.5v10l-5.5-3.5Z"/></symbol>
+      <symbol id="icone-camera-desligada" viewBox="0 0 24 24"><path d="M9 6.5h5a1.5 1.5 0 0 1 1.5 1.5v4M15.5 15.5V16A1.5 1.5 0 0 1 14 17.5H4.5A1.5 1.5 0 0 1 3 16V8a1.5 1.5 0 0 1 1.5-1.5M15.5 10.5l5.5-3.5v10l-3-1.9M3.5 3.5l17 17"/></symbol>
+      <symbol id="icone-tela" viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="12" rx="1.5"/><path d="M8.5 20.5h7M12 16.5v4M12 13.5V8M9.5 10.5L12 8l2.5 2.5"/></symbol>
+      <symbol id="icone-desligar" viewBox="0 0 24 24"><path d="M3 13.5c5-4.6 13-4.6 18 0l-2.2 2.6-3.6-1.4v-2.6a12 12 0 0 0-6.4 0v2.6l-3.6 1.4Z"/></symbol>
     </defs>
   </svg>
 
@@ -97,7 +107,7 @@
         <a id="link-portal" class="lado__portal" href="../">← Portal</a>
       </div>
       <nav id="lista" class="lista-canais" aria-label="Canais"></nav>
-      <div id="painel-voz" class="painel-voz" hidden></div>
+      <div id="painel-voz" class="painel-voz" aria-label="Voz" hidden></div>
       <div class="faixa-conta">
         <span id="nome-conta" class="faixa-conta__nome"></span>
         <button id="botao-configuracoes" class="icone-botao" type="button" title="Configurações" aria-label="Configurações" hidden>
@@ -203,6 +213,62 @@
       </div>
     </form>
   </dialog>
+
+  <!-- ============ Configurações de voz ============ -->
+  <dialog id="dialogo-voz" class="dialogo dialogo--largo">
+    <form id="form-voz" class="dialogo__form" method="dialog" novalidate>
+      <h2 class="dialogo__titulo">Configurações de voz</h2>
+      <label class="campo">
+        <span class="campo__rotulo">Microfone</span>
+        <select id="voz-microfone"></select>
+      </label>
+      <div class="voz-teste">
+        <button id="voz-testar" class="botao botao--leve botao--pequeno" type="button">Testar o microfone</button>
+        <div class="voz-teste__barra" aria-hidden="true"><span id="voz-nivel" class="voz-teste__nivel"></span></div>
+      </div>
+      <label class="campo">
+        <span class="campo__rotulo">Saída de som</span>
+        <select id="voz-saida"></select>
+      </label>
+      <p id="voz-saida-aviso" class="dica" hidden>Este navegador não deixa escolher a saída de som: vale a do sistema.</p>
+      <label class="campo">
+        <span class="campo__rotulo">Câmera</span>
+        <select id="voz-camera"></select>
+      </label>
+      <label class="caixa">
+        <input id="voz-ruido" type="checkbox" checked>
+        <span class="caixa__marca" aria-hidden="true"></span>
+        <span>Supressão de ruído</span>
+      </label>
+      <label class="caixa">
+        <input id="voz-eco" type="checkbox" checked>
+        <span class="caixa__marca" aria-hidden="true"></span>
+        <span>Cancelamento de eco</span>
+      </label>
+      <p id="voz-aparelhos-aviso" class="dica" hidden></p>
+      <div class="dialogo__acoes">
+        <button class="botao botao--principal" value="fechar">Fechar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- ============ Volume de uma pessoa (clique direito) ============ -->
+  <div id="volume-pessoa" class="volume-pessoa" role="dialog" aria-labelledby="volume-nome" hidden>
+    <p id="volume-nome" class="volume-pessoa__nome"></p>
+    <label class="volume-pessoa__linha">
+      <span class="campo__rotulo">Volume</span>
+      <input id="volume-barra" type="range" min="0" max="100" step="1">
+      <output id="volume-valor" class="volume-pessoa__valor" for="volume-barra"></output>
+    </label>
+    <label class="caixa">
+      <input id="volume-silenciar" type="checkbox">
+      <span class="caixa__marca" aria-hidden="true"></span>
+      <span>Silenciar só para mim</span>
+    </label>
+  </div>
+
+  <!-- O som de quem está na sala -->
+  <div id="audios-da-voz" hidden></div>
 
   <div id="aviso-rapido" class="aviso-rapido" role="status" aria-live="polite" hidden></div>
 

@@ -186,22 +186,22 @@ function montarCsp({ conexoes = [], midia = false } = {}) {
   ].join("; ");
 }
 
-// O host público do LiveKit, para a CSP do chat deixar a voz conectar
-function hostDoLivekit() {
+// O LiveKit público, para a CSP do chat deixar a voz conectar: a sinalização (wss) e a
+// conferência quando ela falha (https). Com ws:// (o LiveKit local, no teste), ws e http.
+function conexoesDoLivekit() {
+  if (!CONFIG.livekitUrl) return [];
   try {
-    return CONFIG.livekitUrl ? new URL(CONFIG.livekitUrl).host : "";
+    const { protocol, host } = new URL(CONFIG.livekitUrl);
+    return protocol === "ws:" || protocol === "http:" ? [`ws://${host}`, `http://${host}`] : [`wss://${host}`, `https://${host}`];
   } catch {
     console.error(`LIVEKIT_URL inválido: ${CONFIG.livekitUrl}`);
-    return "";
+    return [];
   }
 }
 
 const CSP = montarCsp();
-// Só o html do chat: a voz (wss e https do LiveKit) e o áudio e o vídeo das chamadas
-const CSP_CHAT = (() => {
-  const host = hostDoLivekit();
-  return montarCsp({ conexoes: host ? [`wss://${host}`, `https://${host}`] : [], midia: true });
-})();
+// Só o html do chat: a voz (o LiveKit) e o áudio e o vídeo das chamadas
+const CSP_CHAT = montarCsp({ conexoes: conexoesDoLivekit(), midia: true });
 const HTML_DO_CHAT = path.join(PASTA_PUBLICA, "chat", "index.html");
 
 /* ---------- O endereço do chat ---------- */

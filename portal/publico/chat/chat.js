@@ -16,8 +16,8 @@
    (arquivo no PC ou prévia), usa um chat de exemplo na memória, com
    uma mensagem nova a cada 20 segundos.
 
-   A voz e o vídeo ficam no voz.js (sessão 11.4), que usa o "estado"
-   e os "ganchosDaVoz" daqui.
+   A voz e o vídeo ficam no voz.js, que usa o "estado" e os
+   "ganchosDaVoz" daqui.
 
    Usa o comum.js, carregado antes: pedir(), criar(), botao(),
    imagem(), simbolo(), perguntar(), avisos, normalizar(), fontes.
@@ -386,8 +386,27 @@ function criarApiDePrevia() {
       personas,
       membros,
       personasDosMembros,
-      voz: { configurada: false, salas: {} },
+      voz: { configurada: true, salas: salasDaPrevia(visiveis) },
     };
+  }
+
+  // Quem está nas salas de voz de exemplo (sem a conta que está vendo, só nas salas que ela vê)
+  function salasDaPrevia(visiveis) {
+    const naSala = (usuario, chave, estados = {}) => {
+      const p = personaNo(usuario, chave);
+      return { usuario, nome: p.nome, imagem: p.imagem, fonte: p.fonte, mudo: false, ensurdecido: false, camera: false, tela: false, ...estados };
+    };
+    const exemplo = {
+      "canal-sala01": [naSala("neia", "canal-sala01"), naSala("takezo", "canal-sala01", { mudo: true })],
+      "canal-ode02": [naSala("neia", "canal-ode02", { camera: true })],
+    };
+    const salas = {};
+    for (const [id, pessoas] of Object.entries(exemplo)) {
+      if (!visiveis.some((c) => c.id === canalDe(id)?.categoria)) continue;
+      const outras = pessoas.filter((p) => p.usuario !== eu);
+      if (outras.length) salas[id] = outras;
+    }
+    return salas;
   }
 
   function chaveDoAlvo(alvo) {
@@ -614,10 +633,13 @@ const estado = {
   enviando: false,
 };
 
-// O voz.js (sessão 11.4) preenche estes ganchos
+// O voz.js preenche estes ganchos
 const ganchosDaVoz = {
-  abrirSala: null, // (canal) → mostra a sala no centro
-  mudou: null, // () → as salas mudaram (evento "voz")
+  abrirSala: null, // (canal, categoria) → mostra a sala no centro
+  mudou: null, // () → as salas ou a estrutura mudaram
+  ajustarPessoas: null, // (id da sala, pessoas) → a lista com o seu estado de agora
+  salaConectada: null, // () → o id da sala em que você está, ou null
+  encerrar: null, // () → sai da sala (saiu da conta)
 };
 
 const eu = () => estado.dados?.conta.usuario;
@@ -865,6 +887,7 @@ const mesmoDia = (a, b) => dataDe(a).toDateString() === dataDe(b).toDateString()
    ================================================================= */
 
 function mostrarEntrada(mensagem = "") {
+  ganchosDaVoz.encerrar?.();
   fecharEventos();
   for (const dialogo of document.querySelectorAll("dialog[open]")) dialogo.close();
   limparAnexos();
@@ -1000,14 +1023,25 @@ function itemDoCanal(canal, categoria) {
     item.append(menu);
   }
 
-  // Quem está numa sala de voz (o voz.js desenha o resto na sessão 11.4)
+  // Quem está numa sala de voz, com os ícones de mudo, ensurdecido, câmera e tela
   if (canal.tipo === "voz") {
-    const pessoas = estado.dados.voz?.salas?.[canal.id] ?? [];
+    if (ganchosDaVoz.salaConectada?.() === canal.id) item.classList.add("item-canal--conectado");
+    let pessoas = estado.dados.voz?.salas?.[canal.id] ?? [];
+    if (ganchosDaVoz.ajustarPessoas) pessoas = ganchosDaVoz.ajustarPessoas(canal.id, pessoas);
     if (pessoas.length) {
       const lista = criar("ul", "item-canal__sala");
       for (const pessoa of pessoas) {
         const linha = criar("li");
-        linha.append(retratoDe(pessoa, categoria, "item-canal__retrato"), nomeDaPersona(pessoa));
+        linha.dataset.usuario = pessoa.usuario;
+        const conta = contaPorUsuario(pessoa.usuario);
+        if (conta) linha.title = `por ${conta.nome}`;
+        linha.append(retratoDe(pessoa, categoria, "item-canal__retrato"), nomeDaPersona(pessoa, "item-canal__pessoa"));
+        const icones = criar("span", "item-canal__estados");
+        if (pessoa.ensurdecido) icones.append(simbolo("icone-fone-mudo", "estado-voz estado-voz--desligado"));
+        else if (pessoa.mudo) icones.append(simbolo("icone-microfone-mudo", "estado-voz estado-voz--desligado"));
+        if (pessoa.camera) icones.append(simbolo("icone-camera", "estado-voz"));
+        if (pessoa.tela) icones.append(simbolo("icone-tela", "estado-voz"));
+        linha.append(icones);
         lista.append(linha);
       }
       item.append(lista);
@@ -2428,6 +2462,7 @@ async function recarregarEstado() {
   const alvo = estado.alvo;
   if (alvo && !alvoDoHash(alvo.tipo === "privada" ? `#privada-${alvo.usuario}` : `#canal-${alvo.id}`)) {
     estado.historicos.delete(alvo.chave);
+    ganchosDaVoz.mudou?.();
     return irPara("");
   }
   // Canais apagados levam o histórico guardado
@@ -2440,9 +2475,8 @@ async function recarregarEstado() {
   if (alvo && !alvo.voz) {
     desenharEscrever();
     desenharMensagens();
-  } else if (alvo?.voz) {
-    ganchosDaVoz.mudou?.();
   }
+  ganchosDaVoz.mudou?.(); // a sala conectada pode ter sumido; a aberta, mudado
 }
 
 // "recarregar": o portal perdeu os eventos que faltavam; pede tudo de novo
@@ -2521,12 +2555,14 @@ function tratarEvento(tipo, corpo) {
 function configurarSimulacao() {
   if (!MODO_PREVIA) return;
   $("#sim-conta").addEventListener("change", async (evento) => {
+    ganchosDaVoz.encerrar?.();
     api.trocarConta(evento.target.value);
     estado.historicos.clear();
     estado.alvo = null;
     await abrirChat();
   });
   $("#sim-restaurar").addEventListener("click", async () => {
+    ganchosDaVoz.encerrar?.();
     api.restaurar();
     api.trocarConta($("#sim-conta").value);
     estado.historicos.clear();
