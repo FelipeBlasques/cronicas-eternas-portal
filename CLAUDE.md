@@ -113,7 +113,9 @@ portal/
                                  "Seu perfil", o card de quem fala, os avisos do navegador por canal e os do
                                  app (cronicasEternasApp.avisar), o som e a prévia), chat.css: a página do chat, com
                                  login próprio, sem a barra lateral e sem as cinzas; voz.js (voz e vídeo: o painel, a sala, as configurações de aparelhos, o volume
-                                 por pessoa e a voz simulada da prévia; usa o estado e os ganchosDaVoz do chat.js);
+                                 por pessoa (voz e tela), o "mover" do administrador, os sons da chamada e a voz
+                                 simulada da prévia; usa o estado e os ganchosDaVoz do chat.js); portao-de-ruido.js
+                                 (o AudioWorklet do noise gate, carregado pelo voz.js com audioWorklet.addModule);
                                  livekit-client.js (a cópia fixa do LiveKit) e LICENCA-livekit.txt (versão e licença);
                                  extras.js (o seletor de emojis, o ":" no campo, as reações, o painel de GIFs, o GIF na
                                  mensagem e as fixadas; usa o estado do chat.js e preenche os ganchosDosExtras);

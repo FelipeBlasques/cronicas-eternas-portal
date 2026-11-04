@@ -1801,23 +1801,112 @@ button.seletor-persona:focus-visible {
 }
 
 .voz-teste__barra {
+  position: relative;
   flex: 1;
-  height: 8px;
-  overflow: hidden;
+  height: 14px;
   background: rgba(0, 0, 0, 0.4);
   border: 1px solid var(--ferro-fraco);
   border-radius: 4px;
 }
 
+/* O nível, na escala de −80 a 0 dB: cinza abaixo do corte, verde acima */
 .voz-teste__nivel {
   --nivel: 0;
+  position: absolute;
+  inset: 0;
   display: block;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, #6f8a52, #9bb27a 70%, var(--alerta));
+  border-radius: 3px;
+  background: var(--ferro);
   transform: scaleX(var(--nivel));
   transform-origin: left center;
   transition: transform 0.06s linear;
+}
+
+.voz-teste__barra--passa .voz-teste__nivel {
+  background: linear-gradient(90deg, #6f8a52, #9bb27a);
+}
+
+/* A linha do corte: um range transparente por cima da barra, com o polegar como linha */
+.voz-teste__corte {
+  position: absolute;
+  inset: -4px 0;
+  width: 100%;
+  height: calc(100% + 8px);
+  margin: 0;
+  background: none;
+  cursor: ew-resize;
+  appearance: none;
+}
+
+.voz-teste__corte::-webkit-slider-runnable-track {
+  height: 100%;
+  background: none;
+}
+
+.voz-teste__corte::-moz-range-track {
+  height: 100%;
+  background: none;
+}
+
+.voz-teste__corte::-webkit-slider-thumb {
+  width: 4px;
+  height: 22px;
+  background: var(--pergaminho);
+  border: 0;
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6);
+  appearance: none;
+}
+
+.voz-teste__corte::-moz-range-thumb {
+  width: 4px;
+  height: 22px;
+  background: var(--pergaminho);
+  border: 0;
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6);
+}
+
+.voz-teste__corte:focus-visible {
+  outline: 2px solid var(--pergaminho-apagado);
+  outline-offset: 2px;
+}
+
+.voz-teste__corte:disabled {
+  cursor: default;
+  opacity: 0.35;
+}
+
+/* A sensibilidade do microfone (o portão de ruído) */
+.voz-portao {
+  margin: 0 0 1rem;
+  padding: 0;
+  border: 0;
+}
+
+.voz-portao legend {
+  margin-bottom: 0.3rem;
+}
+
+.voz-portao .voz-teste {
+  margin: 0.4rem 0 0.3rem;
+}
+
+.voz-portao__linha {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.7rem;
+}
+
+.voz-portao__linha .caixa {
+  margin: 0;
+}
+
+.voz-portao__valor {
+  font-size: 0.9rem;
+  color: var(--pergaminho-apagado);
+  font-variant-numeric: tabular-nums;
 }
 
 /* O volume de uma pessoa (clique direito) */
@@ -1866,6 +1955,72 @@ button.seletor-persona:focus-visible {
   font-size: 0.9rem;
   text-align: right;
   color: var(--pergaminho-apagado);
+}
+
+/* Mover para… (só o administrador) */
+.volume-pessoa__mover {
+  margin-top: 0.4rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--ferro-fraco);
+}
+
+#volume-controles[hidden] + .volume-pessoa__mover {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.volume-pessoa__mover[hidden],
+#volume-controles[hidden] {
+  display: none;
+}
+
+.volume-pessoa__salas {
+  display: grid;
+  gap: 0.1rem;
+  margin-top: 0.2rem;
+}
+
+.volume-pessoa__sala {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  padding: 0.3rem 0.5rem;
+  font: inherit;
+  font-size: 0.95rem;
+  color: var(--pergaminho);
+  text-align: left;
+  background: none;
+  border: 0;
+  border-radius: var(--raio);
+  cursor: pointer;
+}
+
+.volume-pessoa__sala:hover,
+.volume-pessoa__sala:focus-visible {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.volume-pessoa__sala-categoria {
+  font-size: 0.82rem;
+  color: var(--pergaminho-apagado);
+}
+
+.volume-pessoa__vazio {
+  margin: 0.2rem 0 0;
+  font-size: 0.9rem;
+  color: var(--pergaminho-apagado);
+}
+
+/* Arrastar quem está numa sala para outra (só o administrador) */
+.item-canal__sala li[draggable="true"] {
+  cursor: grab;
+}
+
+.item-canal--alvo > .item-canal__link {
+  outline: 1px dashed var(--pergaminho-apagado);
+  outline-offset: -1px;
+  background: rgba(255, 255, 255, 0.06);
 }
 
 /* =================================================================

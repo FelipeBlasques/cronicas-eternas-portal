@@ -293,10 +293,25 @@
         <span class="campo__rotulo">Microfone</span>
         <select id="voz-microfone"></select>
       </label>
-      <div class="voz-teste">
-        <button id="voz-testar" class="botao botao--leve botao--pequeno" type="button">Testar o microfone</button>
-        <div class="voz-teste__barra" aria-hidden="true"><span id="voz-nivel" class="voz-teste__nivel"></span></div>
-      </div>
+      <fieldset class="voz-portao">
+        <legend class="campo__rotulo">Sensibilidade do microfone</legend>
+        <div class="voz-portao__linha">
+          <label class="caixa">
+            <input id="voz-portao" type="checkbox" checked>
+            <span class="caixa__marca" aria-hidden="true"></span>
+            <span>Cortar o som abaixo do limite</span>
+          </label>
+          <output id="voz-corte-valor" class="voz-portao__valor" for="voz-corte">−50 dB</output>
+        </div>
+        <div class="voz-teste">
+          <button id="voz-testar" class="botao botao--leve botao--pequeno" type="button">Testar o microfone</button>
+          <div id="voz-barra" class="voz-teste__barra">
+            <span id="voz-nivel" class="voz-teste__nivel" aria-hidden="true"></span>
+            <input id="voz-corte" class="voz-teste__corte" type="range" min="-80" max="0" step="1" value="-50" aria-label="Limite do corte, em decibéis">
+          </div>
+        </div>
+        <p class="dica">Arraste a linha: abaixo dela, o microfone fica calado. A barra fica verde quando sua voz passa.</p>
+      </fieldset>
       <label class="campo">
         <span class="campo__rotulo">Saída de som</span>
         <select id="voz-saida"></select>
@@ -307,14 +322,25 @@
         <select id="voz-camera"></select>
       </label>
       <label class="caixa">
-        <input id="voz-ruido" type="checkbox" checked>
-        <span class="caixa__marca" aria-hidden="true"></span>
-        <span>Supressão de ruído</span>
-      </label>
-      <label class="caixa">
-        <input id="voz-eco" type="checkbox" checked>
+        <input id="voz-eco" type="checkbox">
         <span class="caixa__marca" aria-hidden="true"></span>
         <span>Cancelamento de eco</span>
+      </label>
+      <label class="caixa">
+        <input id="voz-ruido" type="checkbox">
+        <span class="caixa__marca" aria-hidden="true"></span>
+        <span>Supressão de ruído do navegador</span>
+      </label>
+      <label class="caixa">
+        <input id="voz-ganho" type="checkbox" checked>
+        <span class="caixa__marca" aria-hidden="true"></span>
+        <span>Ganho automático</span>
+      </label>
+      <p class="dica">Sem fone, ligue o cancelamento de eco: senão os outros ouvem a própria voz de volta.</p>
+      <label class="caixa">
+        <input id="voz-sons" type="checkbox" checked>
+        <span class="caixa__marca" aria-hidden="true"></span>
+        <span>Sons da chamada</span>
       </label>
       <p id="voz-aparelhos-aviso" class="dica" hidden></p>
       <div class="dialogo__acoes">
@@ -326,16 +352,27 @@
   <!-- ============ Volume de uma pessoa (clique direito) ============ -->
   <div id="volume-pessoa" class="volume-pessoa" role="dialog" aria-labelledby="volume-nome" hidden>
     <p id="volume-nome" class="volume-pessoa__nome"></p>
-    <label class="volume-pessoa__linha">
-      <span class="campo__rotulo">Volume</span>
-      <input id="volume-barra" type="range" min="0" max="100" step="1">
-      <output id="volume-valor" class="volume-pessoa__valor" for="volume-barra"></output>
-    </label>
-    <label class="caixa">
-      <input id="volume-silenciar" type="checkbox">
-      <span class="caixa__marca" aria-hidden="true"></span>
-      <span>Silenciar só para mim</span>
-    </label>
+    <div id="volume-controles">
+      <label class="volume-pessoa__linha">
+        <span class="campo__rotulo">Volume</span>
+        <input id="volume-barra" type="range" min="0" max="100" step="1">
+        <output id="volume-valor" class="volume-pessoa__valor" for="volume-barra"></output>
+      </label>
+      <label class="volume-pessoa__linha">
+        <span class="campo__rotulo">Volume da tela</span>
+        <input id="volume-tela" type="range" min="0" max="100" step="1">
+        <output id="volume-tela-valor" class="volume-pessoa__valor" for="volume-tela"></output>
+      </label>
+      <label class="caixa">
+        <input id="volume-silenciar" type="checkbox">
+        <span class="caixa__marca" aria-hidden="true"></span>
+        <span>Silenciar só para mim</span>
+      </label>
+    </div>
+    <div id="volume-mover" class="volume-pessoa__mover" hidden>
+      <span class="campo__rotulo">Mover para…</span>
+      <div id="volume-salas" class="volume-pessoa__salas"></div>
+    </div>
   </div>
 
   <!-- O som de quem está na sala -->
