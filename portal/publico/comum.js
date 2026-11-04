@@ -186,11 +186,14 @@ function marcarNaBarra(id, quantas, explicacao = "") {
 }
 
 // Os números da barra em qualquer página: as regras da casa novas ou alteradas desde a
-// última visita e, para o administrador, os pedidos dos editores na Linha do Tempo.
+// última visita, para o administrador os pedidos dos editores na Linha do Tempo e as não
+// lidas do chat no botão Chat do topo.
 // Fora da prévia e em silêncio: sem sessão ou sem conexão, a barra só fica sem números.
 // Uma página sem a barra (a leitura pública do Caderno, que abre sem login) não pede nada.
 async function atualizarBarra() {
-  if (MODO_PREVIA || !document.querySelector(".barra-lateral")) return;
+  if (!document.querySelector(".barra-lateral")) return;
+  // Na prévia, a marca do Chat com um exemplo, para ver como fica
+  if (MODO_PREVIA) return marcarChat({ naoLidas: 5, mencoes: 2 });
   let barra;
   try {
     barra = await pedir("GET", "/api/barra", undefined, { silencioso: true });
@@ -203,6 +206,60 @@ async function atualizarBarra() {
   }
   const novas = barra.novidadesRegras ?? 0;
   marcarNaBarra("regras", novas, novas === 1 ? "1 regra nova" : `${novas} regras novas`);
+  marcarChat(barra.chat);
+}
+
+/* =================================================================
+   O botão Chat no topo
+   -----------------------------------------------------------------
+   À esquerda do nome da conta, em toda página que tem #nome-conta
+   (menos o próprio chat). A marca mostra as não lidas do chat: um
+   ponto, ou o número de menções quando há (veja atualizarBarra).
+   ================================================================= */
+
+const ICONE_DO_CHAT = "M4 5.5h16a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-9l-4.5 3.5v-3.5H4a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1zM7.5 10h9M7.5 13h6"; // balão de fala
+
+// No servidor, o chat tem endereço próprio (chat.<domínio>); em localhost e como arquivo, é a pasta chat/
+function enderecoDoChat() {
+  if (!MODO_PREVIA && location.hostname !== "localhost" && location.hostname !== "127.0.0.1") {
+    return `https://chat.${location.hostname}/`;
+  }
+  return COMO_ARQUIVO ? `${RAIZ}chat/index.html` : `${RAIZ}chat/`;
+}
+
+function montarBotaoDoChat() {
+  const nome = document.getElementById("nome-conta");
+  if (PAGINA_ATUAL === "chat" || !nome || !nome.closest(".topo__conta")) return;
+  const link = criar("a", "topo__chat");
+  link.id = "botao-chat";
+  link.href = enderecoDoChat();
+  link.title = "Chat";
+  link.setAttribute("aria-label", "Chat");
+  // No navegador, clicar de novo volta para a mesma aba; no app, a janela do chat é dele
+  if (!window.cronicasEternasApp) link.target = "cronicas-chat";
+  const marca = criar("span", "topo__chat-marca");
+  marca.id = "marca-chat";
+  marca.setAttribute("aria-hidden", "true");
+  marca.hidden = true;
+  link.append(desenhoDaBarra(ICONE_DO_CHAT), marca);
+  nome.before(link);
+}
+
+// { naoLidas, mencoes } do /api/barra: com menções, o número; só com não lidas, um ponto
+function marcarChat(chat) {
+  const link = document.getElementById("botao-chat");
+  const marca = document.getElementById("marca-chat");
+  if (!link || !marca) return;
+  const naoLidas = chat?.naoLidas ?? 0;
+  const mencoes = chat?.mencoes ?? 0;
+  marca.hidden = !naoLidas && !mencoes;
+  marca.classList.toggle("topo__chat-marca--numero", mencoes > 0);
+  marca.textContent = mencoes > 0 ? String(mencoes > 99 ? "99+" : mencoes) : "";
+  let rotulo = "Chat";
+  if (mencoes > 0) rotulo = `Chat: ${mencoes === 1 ? "1 menção" : `${mencoes} menções`}`;
+  else if (naoLidas > 0) rotulo = "Chat: mensagens não lidas";
+  link.title = rotulo;
+  link.setAttribute("aria-label", rotulo);
 }
 
 /* =================================================================
@@ -638,11 +695,12 @@ function iniciarCinzas(quantas = 34) {
 }
 
 /* =================================================================
-   Ao carregar: monta a barra lateral, acende os números dela e
+   Ao carregar: monta a barra lateral e o botão Chat, acende os números deles e
    acerta os links de pasta
    ================================================================= */
 
 montarBarraLateral();
+montarBotaoDoChat();
 atualizarBarra();
 
 if (COMO_ARQUIVO) {
