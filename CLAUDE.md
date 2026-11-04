@@ -76,7 +76,9 @@ portal/
                     exporta podeLer)
     chat.js         /api/chat/... (Chat: canais, privadas, lidas, personas e eventos SSE; a estrutura em
                     dados.chat e as mensagens em chat/canais/*.jsonl e chat/privadas/*.jsonl, fora do
-                    dados.json; exporta resumoDoChat, que o /api/barra usa)
+                    dados.json; as imagens em chat/imagens/, pela rota protegida; a voz: o passe JWT do
+                    LiveKit e quem está nas salas pelas chamadas Twirp; exporta resumoDoChat, que o
+                    /api/barra usa)
     caderno.js      /api/caderno/... (Caderno: notas e pastas de cada conta, em cadernos/<usuario>/caderno.json,
                     fora do dados.json, e as imagens em cadernos/<usuario>/imagens/; os ganchos de conta
                     renomeiam e apagam essas pastas. Links, embutidas, etiquetas, busca, citáveis, imagens

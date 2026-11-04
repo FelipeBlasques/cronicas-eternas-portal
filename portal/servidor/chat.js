@@ -13,7 +13,10 @@
    administrador e quem tem personagem do portal nela; uma privada,
    só as duas contas (o administrador não lê as dos outros).
 
-   O tempo real sai por /api/chat/eventos (Server-Sent Events).
+   O tempo real sai por /api/chat/eventos (Server-Sent Events). As
+   imagens das mensagens ficam em chat/imagens/ e saem só para quem
+   vê a mensagem. A voz e o vídeo são do LiveKit: o portal dá o passe
+   de entrada e conta quem está em cada sala.
    ================================================================= */
 
 const fs = require("node:fs");
@@ -28,6 +31,9 @@ const {
   ErroHttp,
   enviarJson,
   lerJson,
+  lerFormulario,
+  arquivoEnviado,
+  TIPOS_IMAGEM,
   texto,
   FONTES,
   FONTE_PADRAO,
@@ -46,7 +52,12 @@ const LIMITES = {
   eventosGuardados: 500,
   conexoesPorConta: 5,
   trecho: 100, // caracteres do trecho de uma resposta
+  imagens: 4, // imagens por mensagem
 };
+const INTERVALO_DA_VOZ = 3 * 1000; // quem está nas salas, consultado no LiveKit só enquanto alguém tem o chat aberto
+const ESPERA_DO_LIVEKIT = 2500; // tempo máximo de cada chamada ao LiveKit
+const DURACAO_DO_PASSE = 6 * 60 * 60; // segundos do passe de entrada numa sala
+const DURACAO_DO_PASSE_DO_PORTAL = 60; // segundos do passe das consultas do portal
 const INTERVALO_DO_PING = 25 * 1000;
 const INTERVALO_DO_ESTADO = 2 * 1000; // o estado.json é gravado no máximo a cada 2 segundos
 
@@ -242,6 +253,15 @@ function veChave(conta, chave) {
 
 const historicos = new Map(); // chave → { chave, arquivo, mensagens, fila, semQuebra }
 const ondeEsta = new Map(); // id da mensagem → chave, para as rotas de editar e apagar
+const imagemDe = new Map(); // arquivo de uma imagem → id da mensagem dona dela, para a rota protegida
+
+function registrarImagens(m) {
+  for (const arquivo of m.imagens) imagemDe.set(arquivo, m.id);
+}
+
+function esquecerImagens(m) {
+  for (const arquivo of m.imagens) if (imagemDe.get(arquivo) === m.id) imagemDe.delete(arquivo);
+}
 
 function arquivoDa(chave) {
   if (ehPrivada(chave)) return path.join(PASTA_PRIVADAS, `${participantes(chave).join("~")}.jsonl`);
@@ -299,6 +319,7 @@ function lerHistorico(chave, arquivo) {
     if (ondeEsta.has(m.id)) return console.error(`Chat: a linha ${i + 1} de ${arquivo} repete o id ${m.id} e foi pulada.`);
     h.mensagens.push(m);
     ondeEsta.set(m.id, chave);
+    registrarImagens(m);
   });
   // Uma última linha sem quebra (gravação interrompida): a próxima mensagem começa numa linha nova
   h.semQuebra = conteudo.length > 0 && !conteudo.endsWith("\n");
@@ -355,6 +376,7 @@ function apagarHistorico(chave) {
   if (h) {
     for (const m of h.mensagens) {
       ondeEsta.delete(m.id);
+      esquecerImagens(m);
       imagens.push(...m.imagens);
     }
     historicos.delete(chave);
@@ -767,7 +789,7 @@ function estadoInicial(conta) {
     personas,
     membros,
     personasDosMembros,
-    voz: { configurada: vozConfigurada(), salas: {} },
+    voz: { configurada: vozConfigurada(), salas: salasQueVe(conta) },
   };
 }
 
@@ -863,7 +885,9 @@ function abrirEventos(req, res, conta) {
   const daConta = [...conexoes].filter((c) => c.usuario === conta.usuario).sort((a, b) => a.desde - b.desde);
   while (daConta.length >= LIMITES.conexoesPorConta) fecharConexao(daConta.shift());
 
+  const primeira = !conexoes.size;
   conexoes.add(con);
+  if (primeira) consultarVoz().catch(logErro("consulta da voz")); // sem esperar os 3 segundos
   const terminar = () => fecharConexao(con);
   req.on("close", terminar);
   res.on("close", terminar);
@@ -883,6 +907,221 @@ function pingar() {
 }
 
 const avisarCanais = () => emitir("canais", () => ({}));
+
+/* =================================================================
+   Voz e vídeo (o LiveKit, um servidor de mídia à parte)
+   -----------------------------------------------------------------
+   O portal não carrega mídia nenhuma: dá o passe de entrada numa
+   sala (um JWT HS256 assinado com o segredo do LiveKit) e, enquanto
+   alguém tem o chat aberto, pergunta ao LiveKit quem está em cada
+   sala. Cada canal de voz é a sala "ce-<id do canal>".
+   ================================================================= */
+
+const salaDoCanal = (id) => `ce-${id}`;
+const canalDaSala = (nome) => (typeof nome === "string" && nome.startsWith("ce-") ? canalDe(nome.slice(3)) : null);
+const vozNaoConfigurada = () => new ErroHttp(503, "A voz ainda não está configurada no servidor.", "voz-desligada");
+
+// O JWT do LiveKit, feito com node:crypto: iss = a chave, nbf 10 s antes, exp "segundos" depois
+function passeDoLivekit(campos, segundos) {
+  const agora = Math.floor(Date.now() / 1000);
+  const parte = (valor) => Buffer.from(JSON.stringify(valor)).toString("base64url");
+  const cabecalho = parte({ alg: "HS256", typ: "JWT" });
+  const corpo = parte({ iss: CONFIG.livekitChave, ...campos, nbf: agora - 10, exp: agora + segundos });
+  const assinatura = crypto.createHmac("sha256", CONFIG.livekitSegredo).update(`${cabecalho}.${corpo}`).digest("base64url");
+  return `${cabecalho}.${corpo}.${assinatura}`;
+}
+
+// Uma chamada Twirp ao RoomService do LiveKit, com um passe de 1 minuto só com o que ela pede
+async function chamarLivekit(metodo, corpo, video) {
+  const base = CONFIG.livekitInterno.replace(/\/+$/, "");
+  const resposta = await fetch(`${base}/twirp/livekit.RoomService/${metodo}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${passeDoLivekit({ video }, DURACAO_DO_PASSE_DO_PORTAL)}`,
+    },
+    body: JSON.stringify(corpo),
+    signal: AbortSignal.timeout(ESPERA_DO_LIVEKIT),
+  });
+  const lido = await resposta.json().catch(() => ({}));
+  if (!resposta.ok) {
+    const erro = new Error(`${metodo} respondeu ${resposta.status} ${lido?.code ?? ""} ${lido?.msg ?? ""}`.trim());
+    erro.codigo = lido?.code;
+    throw erro;
+  }
+  return objeto(lido) ? lido : {};
+}
+
+// O JSON do Twirp pode vir com os nomes em snake_case ou em camelCase, e omite os valores padrão
+function campo(obj, ...nomes) {
+  for (const nome of nomes) if (obj && obj[nome] !== undefined) return obj[nome];
+  return undefined;
+}
+
+// Os enums também podem vir como texto ou como número
+const TIPOS_DE_FAIXA = { 0: "AUDIO", 1: "VIDEO", 2: "DATA" };
+const FONTES_DE_FAIXA = { 0: "UNKNOWN", 1: "CAMERA", 2: "MICROPHONE", 3: "SCREEN_SHARE", 4: "SCREEN_SHARE_AUDIO" };
+const enumDe = (valor, nomes, padrao) =>
+  valor === undefined || valor === null ? padrao : typeof valor === "number" ? nomes[valor] ?? padrao : String(valor).toUpperCase();
+
+function fonteDaFaixa(faixa) {
+  const tipo = enumDe(campo(faixa, "type"), TIPOS_DE_FAIXA, "AUDIO");
+  const fonte = enumDe(campo(faixa, "source"), FONTES_DE_FAIXA, "UNKNOWN");
+  if (fonte === "MICROPHONE" || (fonte === "UNKNOWN" && tipo === "AUDIO")) return "microfone";
+  if (fonte === "CAMERA" || (fonte === "UNKNOWN" && tipo === "VIDEO")) return "camera";
+  if (fonte === "SCREEN_SHARE") return "tela";
+  return null;
+}
+
+// Um participante como a página recebe: a persona vem do metadata (que só o portal assina)
+function participanteDaSala(p) {
+  const usuario = campo(p, "identity");
+  if (typeof usuario !== "string" || !REGEX_USUARIO.test(usuario)) return null;
+  const situacao = campo(p, "state");
+  if (situacao === 3 || situacao === "DISCONNECTED") return null;
+  let meta = {};
+  try {
+    meta = JSON.parse(campo(p, "metadata") || "{}");
+  } catch {
+    meta = {};
+  }
+  const persona = objeto(meta?.persona) ? meta.persona : {};
+  const faixas = Array.isArray(campo(p, "tracks")) ? campo(p, "tracks") : [];
+  const ligada = (fonte) => faixas.some((f) => fonteDaFaixa(f) === fonte && !campo(f, "muted"));
+  const nome = typeof persona.nome === "string" ? persona.nome : campo(p, "name");
+  return {
+    usuario,
+    nome: typeof nome === "string" && nome ? nome : usuario,
+    imagem: typeof persona.imagem === "string" ? persona.imagem : null,
+    fonte: typeof persona.fonte === "string" ? persona.fonte : null,
+    mudo: !ligada("microfone"),
+    camera: ligada("camera"),
+    tela: ligada("tela"),
+  };
+}
+
+let salasDoLivekit = {}; // id do canal → participantes, como o LiveKit disse na última consulta
+const ensurdecidos = new Set(); // o LiveKit não sabe: a página avisa
+let consultandoVoz = false;
+let livekitFalhou = false; // o problema vai para o log uma vez, não a cada 3 segundos
+let ultimaVoz = "{}";
+
+// Quem está em cada sala, com o ensurdecido; só os canais de voz que ainda existem
+function salasDaVoz() {
+  const salas = {};
+  for (const [id, lista] of Object.entries(salasDoLivekit)) {
+    if (canalDe(id)?.tipo !== "voz") continue;
+    salas[id] = lista.map((p) => {
+      const { usuario, nome, imagem, fonte, mudo, camera, tela } = p;
+      return { usuario, nome, imagem, fonte, mudo, ensurdecido: ensurdecidos.has(usuario), camera, tela };
+    });
+  }
+  return salas;
+}
+
+// Só as salas que a conta vê
+function salasQueVe(conta, salas = salasDaVoz()) {
+  return Object.fromEntries(Object.entries(salas).filter(([id]) => veCanal(conta, canalDe(id))));
+}
+
+function avisarVoz() {
+  const salas = salasDaVoz();
+  const assinatura = JSON.stringify(salas);
+  if (assinatura === ultimaVoz) return;
+  ultimaVoz = assinatura;
+  emitir("voz", (conta) => ({ salas: salasQueVe(conta) }));
+}
+
+async function consultarVoz() {
+  if (consultandoVoz || !vozConfigurada() || !conexoes.size) return;
+  consultandoVoz = true;
+  try {
+    const { rooms } = await chamarLivekit("ListRooms", {}, { roomList: true });
+    const novas = {};
+    for (const sala of Array.isArray(rooms) ? rooms : []) {
+      const nome = campo(sala, "name");
+      const canal = canalDaSala(nome);
+      if (canal?.tipo !== "voz") continue;
+      if (!(Number(campo(sala, "num_participants", "numParticipants")) > 0)) continue;
+      const { participants } = await chamarLivekit("ListParticipants", { room: nome }, { roomAdmin: true, room: nome });
+      const lista = (Array.isArray(participants) ? participants : []).map(participanteDaSala).filter(Boolean);
+      if (lista.length) novas[canal.id] = lista;
+    }
+    salasDoLivekit = novas;
+    // Quem saiu de todas as salas deixa de estar ensurdecido
+    const presentes = new Set(Object.values(novas).flatMap((lista) => lista.map((p) => p.usuario)));
+    for (const usuario of [...ensurdecidos]) if (!presentes.has(usuario)) ensurdecidos.delete(usuario);
+    if (livekitFalhou) console.log("Chat: o LiveKit voltou a responder.");
+    livekitFalhou = false;
+  } catch (erro) {
+    if (!livekitFalhou) {
+      console.error(`Chat: não foi possível consultar o LiveKit (${erro.message}); as salas ficam vazias até ele voltar.`);
+    }
+    livekitFalhou = true;
+    salasDoLivekit = {};
+  } finally {
+    consultandoVoz = false;
+  }
+  avisarVoz();
+}
+
+// A cada 3 segundos, só enquanto alguém tem o chat aberto
+function vigiarVoz() {
+  if (conexoes.size) return void consultarVoz().catch(logErro("consulta da voz"));
+  salasDoLivekit = {};
+  ultimaVoz = JSON.stringify(salasDaVoz());
+}
+
+// Uma sala de voz apagada: o LiveKit fecha a sala e todos saem
+function fecharSala(canal) {
+  if (canal.tipo !== "voz") return;
+  delete salasDoLivekit[canal.id];
+  if (!vozConfigurada()) return;
+  const sala = salaDoCanal(canal.id);
+  chamarLivekit("DeleteRoom", { room: sala }, { roomCreate: true, room: sala }).catch((erro) => {
+    if (erro.codigo !== "not_found") console.error(`Chat: não foi possível fechar a sala ${sala} no LiveKit: ${erro.message}`);
+  });
+}
+
+// POST /api/chat/voz/entrar { canal, persona? } → { url, token }
+async function entrarNaVoz(req, res, conta) {
+  const { canal: idCanal, persona: pedida } = await lerJson(req);
+  const canal = typeof idCanal === "string" ? canalDe(idCanal) : null;
+  if (!canal || !veCanal(conta, canal)) throw new ErroHttp(404, "Sala não encontrada.");
+  if (canal.tipo !== "voz") throw new ErroHttp(400, "Esse canal não é uma sala de voz.");
+  if (!vozConfigurada()) throw vozNaoConfigurada();
+  const persona = personaParaFalar(conta, canal.id, pedida);
+  const { tipo, id, nome, imagem, fonte } = persona;
+  const token = passeDoLivekit(
+    {
+      sub: conta.usuario,
+      name: nome,
+      metadata: JSON.stringify({ usuario: conta.usuario, persona: { tipo, id, nome, imagem, fonte } }),
+      video: {
+        room: salaDoCanal(canal.id),
+        roomJoin: true,
+        canPublish: true,
+        canSubscribe: true,
+        canPublishData: false,
+        canUpdateOwnMetadata: false,
+      },
+    },
+    DURACAO_DO_PASSE,
+  );
+  // Entra com o microfone ligado: não está ensurdecido
+  if (ensurdecidos.delete(conta.usuario)) avisarVoz();
+  return enviarJson(res, 200, { url: CONFIG.livekitUrl, token });
+}
+
+// POST /api/chat/voz/estado { ensurdecido }
+async function mudarEstadoDaVoz(req, res, conta) {
+  const { ensurdecido } = await lerJson(req);
+  if (typeof ensurdecido !== "boolean") throw new ErroHttp(400, "Diga se você está ensurdecido.");
+  if (ensurdecido) ensurdecidos.add(conta.usuario);
+  else ensurdecidos.delete(conta.usuario);
+  avisarVoz();
+  return enviarJson(res, 200, { ensurdecido });
+}
 
 /* =================================================================
    Rotas das mensagens
@@ -928,13 +1167,73 @@ function marcarLida(usuario, chave, id) {
   emitir("lida", (conta) => (conta.usuario === usuario ? { canal: chave, ate: id } : null));
 }
 
+// O envio: JSON { texto, resposta?, persona? }, ou formulário com texto, resposta,
+// persona (JSON) e imagem1 a imagem4
+async function lerEnvio(req) {
+  const tipo = req.headers["content-type"] || "";
+  if (!tipo.startsWith("multipart/form-data")) {
+    const corpo = await lerJson(req);
+    return { texto: corpo.texto, resposta: corpo.resposta, persona: corpo.persona, arquivos: [] };
+  }
+  const form = await lerFormulario(req, LIMITES.imagens * CONFIG.maxImagem + CONFIG.maxJson);
+  const campo = (nome) => {
+    const valor = form.get(nome);
+    return typeof valor === "string" ? valor : undefined;
+  };
+  let persona;
+  const personaEnviada = campo("persona");
+  if (personaEnviada) {
+    try {
+      persona = JSON.parse(personaEnviada);
+    } catch {
+      throw new ErroHttp(400, "A persona enviada não está num formato válido.");
+    }
+  }
+  for (const nome of form.keys()) {
+    const numero = /^imagem(\d+)$/.exec(nome);
+    if (numero && (Number(numero[1]) < 1 || Number(numero[1]) > LIMITES.imagens)) {
+      throw new ErroHttp(400, "Cada mensagem pode ter no máximo 4 imagens.");
+    }
+  }
+  const arquivos = [];
+  for (let i = 1; i <= LIMITES.imagens; i++) {
+    const enviados = form.getAll(`imagem${i}`).filter(arquivoEnviado);
+    if (enviados.length > 1) throw new ErroHttp(400, "Cada mensagem pode ter no máximo 4 imagens.");
+    const arquivo = enviados[0];
+    if (!arquivo) continue;
+    if (!TIPOS_IMAGEM[arquivo.type]) throw new ErroHttp(400, "Use imagens PNG, JPG, WEBP, GIF ou AVIF.");
+    if (arquivo.size > CONFIG.maxImagem) throw new ErroHttp(413, "Cada imagem pode ter no máximo 10 MB.");
+    arquivos.push(arquivo);
+  }
+  return { texto: campo("texto"), resposta: campo("resposta"), persona, arquivos };
+}
+
+// Grava as imagens de uma mensagem em chat/imagens/, com nome sorteado. Se uma falhar, nenhuma fica.
+async function guardarImagensDoChat(arquivos) {
+  const nomes = [];
+  try {
+    for (const arquivo of arquivos) {
+      let nome;
+      do nome = `img-${sorteio(12)}${TIPOS_IMAGEM[arquivo.type]}`;
+      while (imagemDe.has(nome));
+      await fsp.writeFile(path.join(PASTA_IMAGENS, nome), Buffer.from(await arquivo.arrayBuffer()), { mode: 0o600 });
+      nomes.push(nome);
+    }
+  } catch (erro) {
+    await apagarImagensDoChat(nomes);
+    throw erro;
+  }
+  return nomes;
+}
+
 async function enviarMensagem(req, res, conta, chave) {
-  const corpo = await lerJson(req);
-  const textoNovo = textoDaMensagem(corpo.texto);
+  const corpo = await lerEnvio(req);
+  const textoNovo = textoDaMensagem(corpo.texto, corpo.arquivos.length > 0);
   const persona = personaParaFalar(conta, chave, corpo.persona);
   const resposta = respostaValida(chave, corpo.resposta);
   conferirLimite(conta.usuario);
 
+  const imagens = await guardarImagensDoChat(corpo.arquivos);
   const h = historicoDe(chave);
   const m = {
     id: novoIdDeMensagem(),
@@ -943,17 +1242,20 @@ async function enviarMensagem(req, res, conta, chave) {
     autor: conta.usuario,
     persona,
     texto: textoNovo,
-    imagens: [],
+    imagens,
     resposta,
   };
   h.mensagens.push(m);
   ondeEsta.set(m.id, chave);
+  registrarImagens(m);
   try {
     await acrescentar(h, m);
   } catch (erro) {
     const i = indiceDe(h.mensagens, m.id);
     if (i >= 0) h.mensagens.splice(i, 1);
     ondeEsta.delete(m.id);
+    esquecerImagens(m);
+    await apagarImagensDoChat(imagens);
     throw erro;
   }
 
@@ -1032,16 +1334,43 @@ async function apagarMensagem(res, conta, id) {
   if (!podeApagar) throw new ErroHttp(403, "Você não pode apagar essa mensagem.");
   h.mensagens.splice(indice, 1);
   ondeEsta.delete(m.id);
+  esquecerImagens(m);
   try {
     await regravar(h);
   } catch (erro) {
     h.mensagens.splice(Math.min(indice, h.mensagens.length), 0, m);
     ondeEsta.set(m.id, chave);
+    registrarImagens(m);
     throw erro;
   }
   await apagarImagensDoChat(m.imagens);
   emitir("apagada", paraQuemVe(chave, () => ({ id: m.id, canal: chave })));
   return enviarJson(res, 200, { ok: true });
+}
+
+/* ---------- As imagens das mensagens ---------- */
+
+const TIPO_DA_EXTENSAO = Object.fromEntries(Object.entries(TIPOS_IMAGEM).map(([tipo, extensao]) => [extensao, tipo]));
+const CACHE_DA_IMAGEM = "private, max-age=31536000, immutable";
+
+// A imagem sai só para quem vê a mensagem dona dela; para os outros, é como se não existisse
+async function verImagem(res, conta, arquivo) {
+  const naoEncontrada = () => new ErroHttp(404, "Imagem não encontrada.");
+  const tipo = REGEX_IMAGEM.test(arquivo) ? TIPO_DA_EXTENSAO[path.extname(arquivo)] : null;
+  const id = tipo ? imagemDe.get(arquivo) : null;
+  const achada = id ? acharMensagem(id) : null;
+  if (!achada || !veChave(conta, achada.chave) || !achada.m.imagens.includes(arquivo)) throw naoEncontrada();
+  const caminho = path.join(PASTA_IMAGENS, arquivo);
+  let info;
+  try {
+    info = await fsp.stat(caminho);
+  } catch {
+    throw naoEncontrada();
+  }
+  res.writeHead(200, { "Content-Type": tipo, "Content-Length": info.size, "Cache-Control": CACHE_DA_IMAGEM });
+  fs.createReadStream(caminho)
+    .on("error", () => res.destroy())
+    .pipe(res);
 }
 
 /* ---------- Canais e privadas pelo endereço ---------- */
@@ -1176,6 +1505,8 @@ function tirarCanais(canais) {
   const saem = new Set(canais.map((c) => c.id));
   dados.chat.canais = dados.chat.canais.filter((c) => !saem.has(c.id));
   for (const id of saem) apagarHistorico(id);
+  for (const canal of canais) fecharSala(canal);
+  avisarVoz();
 }
 
 async function apagarCanal(res, conta, id) {
@@ -1233,6 +1564,11 @@ async function tratarChat(req, res, rota, metodo, conta) {
 
   if (!recurso && metodo === "GET") return enviarJson(res, 200, estadoInicial(conta));
   if (recurso === "eventos" && !id && metodo === "GET") return abrirEventos(req, res, conta);
+  if (recurso === "imagens" && id && !acao && metodo === "GET") return verImagem(res, conta, id);
+  if (recurso === "voz" && !acao && metodo === "POST") {
+    if (id === "entrar") return entrarNaVoz(req, res, conta);
+    if (id === "estado") return mudarEstadoDaVoz(req, res, conta);
+  }
 
   if (recurso === "canais") {
     if (!id && metodo === "POST") return criarCanal(req, res, conta);
@@ -1346,6 +1682,7 @@ function renomearNoChat(antigo, novo) {
     envios.set(novo, envios.get(antigo));
     envios.delete(antigo);
   }
+  if (ensurdecidos.delete(antigo)) ensurdecidos.add(novo);
   // As conexões da conta fecham sozinhas (a versão da conta muda) e a página conecta de novo
 }
 
@@ -1354,6 +1691,7 @@ function excluirDoChat(conta) {
   delete estado[conta.usuario];
   marcarEstado();
   envios.delete(conta.usuario);
+  ensurdecidos.delete(conta.usuario);
   for (const con of [...conexoes]) if (con.usuario === conta.usuario) fecharConexao(con);
 }
 
@@ -1394,6 +1732,7 @@ function iniciarChat() {
   const mudou = garantirChat();
   lerHistoricos();
   setInterval(pingar, INTERVALO_DO_PING).unref();
+  setInterval(vigiarVoz, INTERVALO_DA_VOZ).unref();
   return mudou;
 }
 
