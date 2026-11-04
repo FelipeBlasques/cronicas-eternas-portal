@@ -36,6 +36,7 @@ const {
 } = require("./base");
 const { estadoAtual, mundoExiste, pedirTroca } = require("./foundry");
 const { contarNovidades } = require("./regras");
+const { resumoDoChat } = require("./chat");
 
 // Só entram as mesas marcadas para a página Mesas, para todo mundo. Delas, todo mundo vê
 // as que têm personagens, e todos os personagens delas (o administrador vê todas).
@@ -70,9 +71,9 @@ function dadosDoPortal(conta) {
 
 // Os números da barra lateral, que todas as páginas pedem ao carregar: as regras da casa
 // novas ou alteradas desde a última visita e, só para o administrador, os pedidos dos
-// editores esperando por ele na Linha do Tempo
+// editores esperando por ele na Linha do Tempo. Também as não lidas do chat, para o botão Chat.
 function dadosDaBarra(conta) {
-  const barra = { novidadesRegras: contarNovidades(conta) };
+  const barra = { novidadesRegras: contarNovidades(conta), chat: resumoDoChat(conta) };
   if (conta.admin) barra.pendenciasLinha = dados.linha?.pendencias?.length ?? 0;
   return barra;
 }

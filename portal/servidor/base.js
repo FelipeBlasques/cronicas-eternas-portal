@@ -30,6 +30,14 @@ const CONFIG = {
   maxImagem: 10 * 1024 * 1024, // 10 MB por imagem
   maxMapa: 25 * 1024 * 1024, // 25 MB: só a imagem de um mapa, na página Mapas
   maxJson: 64 * 1024,
+  // O chat (chat.cronicaseternas.com) e a voz (o LiveKit, servidor de mídia à parte).
+  // Sem hostChat, nada muda; sem dominioCookie (no PC), o cookie continua "sessao", sem Domain.
+  hostChat: (process.env.HOST_CHAT || "").trim().toLowerCase(),
+  dominioCookie: (process.env.DOMINIO_COOKIE || "").trim().toLowerCase(),
+  livekitUrl: (process.env.LIVEKIT_URL || "").trim(),
+  livekitInterno: (process.env.LIVEKIT_INTERNO || "http://127.0.0.1:7880").trim(),
+  livekitChave: process.env.LIVEKIT_CHAVE || "",
+  livekitSegredo: process.env.LIVEKIT_SEGREDO || "",
 };
 
 const PASTA_PUBLICA = path.join(__dirname, "..", "publico");
@@ -236,17 +244,50 @@ function lerCookies(req) {
   return cookies;
 }
 
+// Com dominioCookie, o login vale no domínio e nos subdomínios (o chat): o cookie se chama
+// "ce_sessao" e leva Domain. Sem ele, continua "sessao", só no endereço da página.
+const NOME_COOKIE = CONFIG.dominioCookie ? "ce_sessao" : "sessao";
+
+// O token da sessão: o cookie novo e, se não houver, o antigo
+function tokenDaSessao(req) {
+  const cookies = lerCookies(req);
+  return cookies.ce_sessao || cookies.sessao || "";
+}
+
+// A sessão veio do cookie antigo, que precisa passar para o nome novo
+function sessaoDoCookieAntigo(req) {
+  const cookies = lerCookies(req);
+  return Boolean(CONFIG.dominioCookie && !cookies.ce_sessao && cookies.sessao);
+}
+
 // Sem "segundos", o cookie vale só até fechar o app ou o navegador
 function cookieSessao(valor, segundos) {
-  const partes = [`sessao=${valor}`, "Path=/", "HttpOnly", "SameSite=Lax"];
+  const partes = [`${NOME_COOKIE}=${valor}`, "Path=/", "HttpOnly", "SameSite=Lax"];
+  if (CONFIG.dominioCookie) partes.push(`Domain=${CONFIG.dominioCookie}`);
   if (segundos !== undefined) partes.push(`Max-Age=${segundos}`);
   if (CONFIG.cookieSeguro) partes.push("Secure");
   return partes.join("; ");
 }
 
+// Apaga o cookie "sessao" de antes do chat (sem Domain, como ele foi criado)
+function cookieAntigoApagado() {
+  const partes = ["sessao=", "Path=/", "HttpOnly", "SameSite=Lax", "Max-Age=0"];
+  if (CONFIG.cookieSeguro) partes.push("Secure");
+  return partes.join("; ");
+}
+
+// Os cookies de quem sai: o da sessão e, com dominioCookie, também o antigo
+function cookiesDeSair() {
+  const cookies = [cookieSessao("", 0)];
+  if (CONFIG.dominioCookie) cookies.push(cookieAntigoApagado());
+  return { "Set-Cookie": cookies };
+}
+
+// Com dominioCookie, toda sessão nova ou renovada apaga também o cookie antigo
 function cookieDaConta(conta, lembrar) {
   const token = criarToken(conta, lembrar);
-  return { "Set-Cookie": cookieSessao(token, lembrar ? CONFIG.duracaoLembrar / 1000 : undefined) };
+  const cookie = cookieSessao(token, lembrar ? CONFIG.duracaoLembrar / 1000 : undefined);
+  return { "Set-Cookie": CONFIG.dominioCookie ? [cookie, cookieAntigoApagado()] : cookie };
 }
 
 /* ---------- Login do Foundry guardado com cada personagem ---------- */
@@ -544,7 +585,10 @@ module.exports = {
   gerarSenhaLegivel,
   sessaoDoToken,
   lerCookies,
+  tokenDaSessao,
+  sessaoDoCookieAntigo,
   cookieSessao,
+  cookiesDeSair,
   cookieDaConta,
   cifrar,
   decifrar,

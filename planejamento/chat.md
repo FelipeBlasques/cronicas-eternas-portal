@@ -300,6 +300,9 @@ O `mesas.js` (no `dadosDaBarra`) chama `resumoDoChat(conta)`, que o `chat.js` ex
     }
   },
   "membros": { "<id da categoria>": ["neia", "mestre"] },
+  "personasDosMembros": {
+    "<id da categoria>": { "neia": { "tipo": "personagem", "id": "…", "nome": "…", "imagem": "…", "fonte": "…" } }
+  },
   "voz": { "configurada": true, "salas": { "canal-…": [{ "usuario": "…", "nome": "…", "imagem": "…", "fonte": "…", "mudo": false, "ensurdecido": false, "camera": false, "tela": false }] } }
 }
 ```
@@ -319,6 +322,10 @@ Uma mensagem, como a página recebe:
   "podeApagar": true
 }
 ```
+
+`personasDosMembros` traz a persona de cada membro em cada categoria (na Geral, a conta; na mesa, a escolhida por ele, ou a primeira; o administrador, Mestre), para as menções e a coluna da direita. Quando alguém troca de persona, quem vê a mesa recebe o evento `canais`.
+
+O histórico (`GET .../mensagens`) responde `{ mensagens, maisAntigas }` (para trás) ou `{ mensagens, maisNovas }` (com `depois`, até 500 de uma vez).
 
 `resposta` é `null` quando não há, e `{ "id": "m-…", "apagada": true }` quando a original foi apagada.
 

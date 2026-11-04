@@ -18,6 +18,7 @@
      mapas.js     Mapas
      memorias.js  Memórias de Draevor
      caderno.js   Caderno (cada conta tem o seu, fora do dados.json)
+     chat.js      Chat (canais, privadas e eventos; as mensagens ficam fora do dados.json)
 
    Comandos:
      node servidor.js                     inicia o portal
@@ -41,8 +42,9 @@ const {
   gerarHash,
   gerarSenhaLegivel,
   sessaoDoToken,
-  lerCookies,
-  cookieSessao,
+  tokenDaSessao,
+  sessaoDoCookieAntigo,
+  cookiesDeSair,
   cookieDaConta,
   ErroHttp,
   enviarJson,
@@ -71,6 +73,7 @@ const PAGINAS = [
   require("./servidor/mapas"),
   require("./servidor/memorias"),
   require("./servidor/caderno"),
+  require("./servidor/chat"),
 ];
 
 /* =================================================================
@@ -100,7 +103,7 @@ async function tratarApi(req, res, url) {
   if (metodo === "GET") {
     const publica = PAGINAS.find((p) => p.prefixoPublico && rota.startsWith(`${p.prefixoPublico}/`));
     if (publica) {
-      const logada = sessaoDoToken(lerCookies(req).sessao)?.conta ?? null;
+      const logada = sessaoDoToken(tokenDaSessao(req))?.conta ?? null;
       return publica.tratarPublico(req, res, rota, metodo, logada);
     }
   }
@@ -109,13 +112,18 @@ async function tratarApi(req, res, url) {
 
   if (rota === "/api/entrar" && metodo === "POST") return entrar(req, res);
   if (rota === "/api/sair" && metodo === "POST") {
-    return enviarJson(res, 200, { ok: true }, { "Set-Cookie": cookieSessao("", 0) });
+    return enviarJson(res, 200, { ok: true }, cookiesDeSair());
   }
 
-  const sessao = sessaoDoToken(lerCookies(req).sessao);
+  const sessao = sessaoDoToken(tokenDaSessao(req));
   if (!sessao) throw new ErroHttp(401, "Entre na sua conta para continuar.", "sem-sessao");
   const { conta } = sessao;
   req.lembrar = sessao.lembrar;
+
+  // Migração sozinha: quem entrou antes do chat tem o cookie antigo, só do portal. A resposta
+  // leva o cookie novo, que vale também no chat, e apaga o antigo. Uma rota que manda o próprio
+  // cookie da conta (renovar, trocar a senha) passa por cima deste, com o mesmo efeito.
+  if (sessaoDoCookieAntigo(req)) res.setHeader("Set-Cookie", cookieDaConta(conta, sessao.lembrar)["Set-Cookie"]);
 
   if (rota === "/api/sessao" && metodo === "GET") {
     // Com "lembrar login", cada vez que o portal abre o prazo recomeça
@@ -164,16 +172,73 @@ const TIPOS_ARQUIVO = {
   ".woff2": "font/woff2",
 };
 
-const CSP = [
-  "default-src 'self'",
-  "script-src 'self'",
-  "style-src 'self' https://fonts.googleapis.com",
-  "font-src https://fonts.gstatic.com",
-  "img-src 'self' data: blob:",
-  "connect-src 'self'",
-  "frame-ancestors 'self'",
-  "base-uri 'self'",
-].join("; ");
+function montarCsp({ conexoes = [], midia = false } = {}) {
+  return [
+    "default-src 'self'",
+    "script-src 'self'",
+    "style-src 'self' https://fonts.googleapis.com",
+    "font-src https://fonts.gstatic.com",
+    "img-src 'self' data: blob:",
+    ["connect-src 'self'", ...conexoes].join(" "),
+    ...(midia ? ["media-src 'self' blob: mediastream:"] : []),
+    "frame-ancestors 'self'",
+    "base-uri 'self'",
+  ].join("; ");
+}
+
+// O host público do LiveKit, para a CSP do chat deixar a voz conectar
+function hostDoLivekit() {
+  try {
+    return CONFIG.livekitUrl ? new URL(CONFIG.livekitUrl).host : "";
+  } catch {
+    console.error(`LIVEKIT_URL inválido: ${CONFIG.livekitUrl}`);
+    return "";
+  }
+}
+
+const CSP = montarCsp();
+// Só o html do chat: a voz (wss e https do LiveKit) e o áudio e o vídeo das chamadas
+const CSP_CHAT = (() => {
+  const host = hostDoLivekit();
+  return montarCsp({ conexoes: host ? [`wss://${host}`, `https://${host}`] : [], midia: true });
+})();
+const HTML_DO_CHAT = path.join(PASTA_PUBLICA, "chat", "index.html");
+
+/* ---------- O endereço do chat ---------- */
+
+// O domínio principal é o do chat sem o primeiro rótulo (chat.cronicaseternas.com → cronicaseternas.com)
+const DOMINIO_PRINCIPAL = CONFIG.hostChat.split(".").slice(1).join(".");
+
+function hostDoPedido(req) {
+  return String(req.headers.host || "").toLowerCase().replace(/:\d+$/, "");
+}
+
+function redirecionar(res, destino) {
+  res.writeHead(302, { Location: destino, "Cache-Control": "no-store" });
+  res.end();
+}
+
+// No endereço do chat, "/" é a página do chat e as outras páginas voltam ao portal.
+// No portal, /chat/ vai para o endereço do chat, para ele ter uma origem só (avisos do
+// navegador e permissão do microfone valem por origem). Devolve true se já respondeu.
+function tratarEnderecoDoChat(req, res, url) {
+  if (!CONFIG.hostChat || (req.method !== "GET" && req.method !== "HEAD")) return false;
+  const caminho = url.pathname;
+  if (caminho === "/api" || caminho.startsWith("/api/")) return false;
+  if (hostDoPedido(req) === CONFIG.hostChat) {
+    if (caminho === "/") return false; // o servirArquivo serve o html do chat
+    if (caminho.endsWith("/") && DOMINIO_PRINCIPAL) {
+      redirecionar(res, `https://${DOMINIO_PRINCIPAL}${caminho}${url.search}`);
+      return true;
+    }
+    return false;
+  }
+  if (caminho === "/chat" || caminho === "/chat/") {
+    redirecionar(res, `https://${CONFIG.hostChat}/`);
+    return true;
+  }
+  return false;
+}
 
 function naoEncontrado(res) {
   res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
@@ -199,6 +264,9 @@ async function servirArquivo(req, res, url) {
   if (decodificado.includes("\0")) return naoEncontrado(res);
 
   let caminho = path.join(base, decodificado);
+  if (base === PASTA_PUBLICA && decodificado === "/" && CONFIG.hostChat && hostDoPedido(req) === CONFIG.hostChat) {
+    caminho = HTML_DO_CHAT;
+  }
   if (caminho !== base && !caminho.startsWith(base + path.sep)) return naoEncontrado(res);
 
   let info;
@@ -219,7 +287,7 @@ async function servirArquivo(req, res, url) {
     "Last-Modified": modificado,
     "Cache-Control": cacheLongo ? "public, max-age=31536000, immutable" : "no-cache",
   };
-  if (tipo.startsWith("text/html")) cabecalhos["Content-Security-Policy"] = CSP;
+  if (tipo.startsWith("text/html")) cabecalhos["Content-Security-Policy"] = caminho === HTML_DO_CHAT ? CSP_CHAT : CSP;
 
   if (req.headers["if-modified-since"] === modificado) {
     res.writeHead(304, cabecalhos);
@@ -247,6 +315,7 @@ const servidor = http.createServer(async (req, res) => {
   try {
     if (url.pathname === "/api" || url.pathname.startsWith("/api/")) return await tratarApi(req, res, url);
     if (req.method !== "GET" && req.method !== "HEAD") throw new ErroHttp(405, "Método não permitido.");
+    if (tratarEnderecoDoChat(req, res, url)) return;
     return await servirArquivo(req, res, url);
   } catch (erro) {
     const conhecido = erro instanceof ErroHttp;
