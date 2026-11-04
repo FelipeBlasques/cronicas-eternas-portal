@@ -172,13 +172,13 @@ const TIPOS_ARQUIVO = {
   ".woff2": "font/woff2",
 };
 
-function montarCsp({ conexoes = [], midia = false } = {}) {
+function montarCsp({ conexoes = [], midia = false, imagens = [] } = {}) {
   return [
     "default-src 'self'",
     "script-src 'self'",
     "style-src 'self' https://fonts.googleapis.com",
     "font-src https://fonts.gstatic.com",
-    "img-src 'self' data: blob:",
+    ["img-src 'self' data: blob:", ...imagens].join(" "),
     ["connect-src 'self'", ...conexoes].join(" "),
     ...(midia ? ["media-src 'self' blob: mediastream:"] : []),
     "frame-ancestors 'self'",
@@ -200,8 +200,12 @@ function conexoesDoLivekit() {
 }
 
 const CSP = montarCsp();
-// Só o html do chat: a voz (o LiveKit) e o áudio e o vídeo das chamadas
-const CSP_CHAT = montarCsp({ conexoes: conexoesDoLivekit(), midia: true });
+// Só o html do chat: a voz (o LiveKit), o áudio e o vídeo das chamadas e as imagens dos GIFs (a Klipy)
+const CSP_CHAT = montarCsp({
+  conexoes: conexoesDoLivekit(),
+  midia: true,
+  imagens: CONFIG.klipyMidia.map((host) => `https://${host}`),
+});
 const PASTA_DO_CHAT = path.join(PASTA_PUBLICA, "chat");
 const HTML_DO_CHAT = path.join(PASTA_DO_CHAT, "index.html");
 // Os arquivos de publico/chat/ (sem o index.html), que no endereço do chat são pedidos na raiz

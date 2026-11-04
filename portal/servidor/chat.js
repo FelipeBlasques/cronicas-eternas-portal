@@ -7,7 +7,10 @@
    canais) fica em dados.chat; as mensagens, fora do dados.json, em
    chat/canais/<canal>.jsonl e chat/privadas/<a>~<b>.jsonl, uma por
    linha. As lidas, os avisos, as personas escolhidas e as privadas
-   ocultas de cada conta ficam em chat/estado.json.
+   ocultas de cada conta ficam em chat/estado.json; as reações, em
+   chat/reacoes.json; as mensagens fixadas, em chat/fixadas.json. O
+   perfil de cada conta (apelido, foto, faixa...) fica em
+   dados.chat.perfis e vale na Geral e nas privadas.
 
    Quem vê: a Geral, todo mundo; a categoria de uma mesa, o
    administrador e quem tem personagem do portal nela; uma privada,
@@ -16,7 +19,8 @@
    O tempo real sai por /api/chat/eventos (Server-Sent Events). As
    imagens das mensagens ficam em chat/imagens/ e saem só para quem
    vê a mensagem. A voz e o vídeo são do LiveKit: o portal dá o passe
-   de entrada e conta quem está em cada sala.
+   de entrada e conta quem está em cada sala. Os GIFs vêm da Klipy,
+   pelo portal, que guarda as buscas por 15 minutos.
    ================================================================= */
 
 const fs = require("node:fs");
@@ -34,10 +38,14 @@ const {
   lerFormulario,
   arquivoEnviado,
   TIPOS_IMAGEM,
+  guardarImagem,
+  apagarImagens,
+  codigoDaConta,
   texto,
   FONTES,
   FONTE_PADRAO,
   REGEX_USUARIO,
+  REGEX_COR,
 } = require("./base");
 
 const LIMITES = {
@@ -53,19 +61,36 @@ const LIMITES = {
   conexoesPorConta: 5,
   trecho: 100, // caracteres do trecho de uma resposta
   imagens: 4, // imagens por mensagem
+  apelido: 32,
+  frase: 80,
+  sobre: 300,
+  emojisPorMensagem: 20, // emojis diferentes nas reações de uma mensagem
+  emoji: 32, // unidades de código de uma reação
+  fixadas: 50, // por canal
+  gifsPorPagina: 24,
+  gifsGuardados: 300, // buscas guardadas na memória
+  validadeDosGifs: 15 * 60 * 1000,
+  buscasDeGifs: 20, // buscas por conta...
+  janelaDasBuscas: 60 * 1000, // ...por minuto
+  textoDaBusca: 100,
+  paginaDosGifs: 100,
 };
 const INTERVALO_DA_VOZ = 3 * 1000; // quem está nas salas, consultado no LiveKit só enquanto alguém tem o chat aberto
 const ESPERA_DO_LIVEKIT = 2500; // tempo máximo de cada chamada ao LiveKit
 const DURACAO_DO_PASSE = 6 * 60 * 60; // segundos do passe de entrada numa sala
 const DURACAO_DO_PASSE_DO_PORTAL = 60; // segundos do passe das consultas do portal
 const INTERVALO_DO_PING = 25 * 1000;
-const INTERVALO_DO_ESTADO = 2 * 1000; // o estado.json é gravado no máximo a cada 2 segundos
+const INTERVALO_DO_ESTADO = 2 * 1000; // o estado.json (e o reacoes.json e o fixadas.json) é gravado no máximo a cada 2 segundos
+const ESPERA_DA_KLIPY = 5000; // tempo máximo de cada chamada à Klipy
+const LOCALE_DOS_GIFS = "br"; // o país (ISO 3166-1), para a Klipy dar preferência ao que é daqui
 
 const PASTA_CHAT = path.join(CONFIG.pastaDados, "chat");
 const PASTA_CANAIS = path.join(PASTA_CHAT, "canais");
 const PASTA_PRIVADAS = path.join(PASTA_CHAT, "privadas");
 const PASTA_IMAGENS = path.join(PASTA_CHAT, "imagens");
 const ARQ_ESTADO = path.join(PASTA_CHAT, "estado.json");
+const ARQ_REACOES = path.join(PASTA_CHAT, "reacoes.json");
+const ARQ_FIXADAS = path.join(PASTA_CHAT, "fixadas.json");
 
 const ID_GERAL = "geral";
 const PREFIXO_PRIVADA = "privada:";
@@ -77,6 +102,14 @@ const REGEX_ID_MENSAGEM = /^m-([0-9a-z]{1,12})-[0-9a-z]{1,20}$/;
 const REGEX_ARQUIVO_CANAL = /^(canal-[0-9a-z]{4,40})\.jsonl$/;
 const REGEX_ARQUIVO_PRIVADA = /^([a-z0-9_-]{2,30})~([a-z0-9_-]{2,30})\.jsonl$/;
 const REGEX_IMAGEM = /^img-[0-9a-z-]{1,60}\.[a-z0-9]{2,5}$/;
+const REGEX_ID_GIF = /^[A-Za-z0-9_-]{1,120}$/;
+// Uma reação: um emoji só. Um keycap (1️⃣), uma bandeira (dois Regional_Indicator) ou um
+// pictograma com o seletor de variação e o tom de pele, que o ZWJ pode juntar a outros (🏳️‍🌈)
+const PICTOGRAMA = "\\p{Extended_Pictographic}\\uFE0F?\\p{Emoji_Modifier}?";
+const REGEX_EMOJI = new RegExp(
+  `^(?:[0-9#*]\\uFE0F?\\u20E3|\\p{Regional_Indicator}{2}|${PICTOGRAMA}(?:\\u200D${PICTOGRAMA})*)$`,
+  "u",
+);
 
 const carimbo = () => new Date().toISOString();
 const sorteio = (bytes) => crypto.randomBytes(bytes).toString("hex");
@@ -118,7 +151,7 @@ function criarCategoriaDaMesa(chat, idMesa, ordem) {
 
 // Na primeira vez: a Geral e uma categoria para cada mesa da página Mesas com personagem do portal
 function chatInicial() {
-  const chat = { formato: 1, categorias: [{ id: ID_GERAL, mesa: null, ordem: 0 }], canais: [] };
+  const chat = { formato: 1, categorias: [{ id: ID_GERAL, mesa: null, ordem: 0 }], canais: [], perfis: {} };
   dados.chat = chat; // o novoIdDeCanal confere os ids já usados
   novoCanal(chat, ID_GERAL, "texto", "geral");
   novoCanal(chat, ID_GERAL, "voz", "Sala comum");
@@ -168,6 +201,10 @@ function garantirChat() {
   }
   if (!Array.isArray(chat.canais)) {
     chat.canais = [];
+    mudou = true;
+  }
+  if (!objeto(chat.perfis)) {
+    chat.perfis = {};
     mudou = true;
   }
   if (!chat.categorias.some((c) => c.id === ID_GERAL)) {
@@ -298,6 +335,21 @@ function conferirMensagem(m) {
     texto: m.texto,
     imagens: Array.isArray(m.imagens) ? m.imagens.filter((a) => typeof a === "string" && REGEX_IMAGEM.test(a)) : [],
     resposta: typeof m.resposta === "string" ? m.resposta : null,
+    gif: gifGuardado(m.gif),
+  };
+}
+
+// O GIF de uma mensagem (a cópia do que a Klipy entregou), ou null
+function gifGuardado(g) {
+  if (!objeto(g) || typeof g.id !== "string" || typeof g.url !== "string" || !g.url.startsWith("https://")) return null;
+  const largura = Number(g.largura);
+  const altura = Number(g.altura);
+  return {
+    id: g.id,
+    url: g.url,
+    largura: Number.isFinite(largura) && largura > 0 ? largura : null,
+    altura: Number.isFinite(altura) && altura > 0 ? altura : null,
+    titulo: typeof g.titulo === "string" ? g.titulo : "",
   };
 }
 
@@ -378,8 +430,13 @@ function apagarHistorico(chave) {
       ondeEsta.delete(m.id);
       esquecerImagens(m);
       imagens.push(...m.imagens);
+      tirarReacoes(m.id);
     }
     historicos.delete(chave);
+  }
+  if (chave in fixadas.conteudo) {
+    delete fixadas.conteudo[chave];
+    marcarArquivo(fixadas);
   }
   const apagar = async () => {
     await fsp.rm(arquivo, { force: true });
@@ -528,17 +585,94 @@ function gravarEstado() {
     .catch(logErro(`não foi possível gravar ${ARQ_ESTADO}`));
 }
 
+/* ---------- Outros arquivos gravados como o estado.json ---------- */
+
+// O reacoes.json e o fixadas.json: lidos uma vez, mudados na memória e gravados
+// no máximo a cada 2 segundos, com arquivo temporário e troca de nome
+function arquivoJson(arquivo) {
+  return { arquivo, conteudo: {}, espera: null, ultima: 0, fila: Promise.resolve() };
+}
+
+function lerArquivoJson(a) {
+  try {
+    const lido = JSON.parse(fs.readFileSync(a.arquivo, "utf8"));
+    a.conteudo = objeto(lido) ? lido : {};
+  } catch (erro) {
+    if (erro.code !== "ENOENT") console.error(`Chat: não foi possível ler ${a.arquivo}; ele começa vazio.`, erro);
+    a.conteudo = {};
+  }
+}
+
+function marcarArquivo(a) {
+  if (a.espera) return;
+  const espera = Math.max(0, a.ultima + INTERVALO_DO_ESTADO - Date.now());
+  a.espera = setTimeout(() => gravarArquivoJson(a), espera);
+}
+
+function gravarArquivoJson(a) {
+  a.espera = null;
+  a.ultima = Date.now();
+  const conteudo = JSON.stringify(a.conteudo);
+  a.fila = a.fila
+    .catch(() => {})
+    .then(() => gravarInteiro(a.arquivo, conteudo))
+    .catch(logErro(`não foi possível gravar ${a.arquivo}`));
+}
+
+const reacoes = arquivoJson(ARQ_REACOES); // { idMensagem: { emoji: [usuarios] } }, os emojis na ordem em que apareceram
+const fixadas = arquivoJson(ARQ_FIXADAS); // { chave: [{ id, por, em }] }, da mais antiga para a mais nova
+
 const nivelDeAviso = (usuario, idCanal) => {
   const nivel = estadoLido(usuario).avisos[idCanal];
   return NIVEIS_DE_AVISO.has(nivel) ? nivel : "tudo";
 };
 
 /* =================================================================
+   Os perfis (em dados.chat.perfis): valem na Geral e nas privadas
+   ================================================================= */
+
+// As cores do selo das contas, as mesmas (e na mesma conta) do chat.js da página
+const CORES_DAS_CONTAS = ["#7a4a2e", "#4d5b37", "#3e4a66", "#6b3a4c", "#5e5130", "#365c5c", "#5a3f6b", "#6e4f3a"];
+
+function corDaConta(usuario) {
+  let soma = 0;
+  for (const letra of String(usuario)) soma = (soma * 31 + letra.codePointAt(0)) >>> 0;
+  return CORES_DAS_CONTAS[soma % CORES_DAS_CONTAS.length];
+}
+
+const perfilGuardado = (usuario) => {
+  const p = dados.chat?.perfis?.[usuario];
+  return objeto(p) ? p : null;
+};
+
+const textoOuVazio = (valor) => (typeof valor === "string" ? valor : "");
+
+// O perfil como a página recebe; uma conta que nunca mexeu nele tem o perfil padrão
+function perfilPublico(usuario) {
+  const p = perfilGuardado(usuario) ?? {};
+  return {
+    apelido: textoOuVazio(p.apelido),
+    foto: typeof p.foto === "string" ? p.foto : null,
+    faixa: typeof p.faixa === "string" ? p.faixa : null,
+    cor: typeof p.cor === "string" && REGEX_COR.test(p.cor) ? p.cor : corDaConta(usuario),
+    frase: textoOuVazio(p.frase),
+    sobre: textoOuVazio(p.sobre),
+    alteradoEm: typeof p.alteradoEm === "string" ? p.alteradoEm : null,
+  };
+}
+
+/* =================================================================
    As personas: o nome e a imagem de quem fala
    ================================================================= */
 
-// A imagem da conta é um selo com a inicial, que a página desenha: aqui vai null
-const personaDaConta = (conta) => ({ tipo: "conta", id: conta.usuario, nome: conta.nome, imagem: null, fonte: null });
+// A conta fala com o apelido e a foto do perfil. Sem foto, a imagem é um selo com a
+// inicial, que a página desenha: aqui vai null.
+function personaDaConta(conta) {
+  const p = perfilGuardado(conta.usuario);
+  const apelido = typeof p?.apelido === "string" ? p.apelido.trim() : "";
+  const foto = typeof p?.foto === "string" ? p.foto : null;
+  return { tipo: "conta", id: conta.usuario, nome: apelido || conta.nome, imagem: foto, fonte: null };
+}
 const personaDoPersonagem = (p) => ({ tipo: "personagem", id: p.id, nome: p.nome, imagem: p.retrato || null, fonte: fonteDe(p) });
 const personaDoOutro = (p) => ({ tipo: "outro", id: p.id, nome: p.nome, imagem: p.retrato || null, fonte: fonteDe(p) });
 // O Mestre de uma mesa: a imagem é o logo da mesa (sem logo, a página desenha o selo "M")
@@ -614,6 +748,8 @@ function personaAtual(copia) {
   } else if (copia.tipo === "conta") {
     const conta = contaDe(copia.id);
     if (conta) return personaDaConta(conta);
+    // A foto de uma conta excluída saiu com o perfil
+    return { tipo: "conta", id: copia.id, nome: copia.nome, imagem: null, fonte: null };
   }
   return { tipo: copia.tipo, id: copia.id, nome: copia.nome, imagem: copia.imagem, fonte: copia.fonte };
 }
@@ -646,7 +782,12 @@ function mensagemPublica(m, chave, conta) {
   if (m.resposta) {
     const original = acharMensagem(m.resposta);
     resposta = original
-      ? { id: original.m.id, nome: personaAtual(original.m.persona).nome, trecho: trechoDe(original.m.texto) }
+      ? {
+          id: original.m.id,
+          nome: personaAtual(original.m.persona).nome,
+          trecho: trechoDe(original.m.texto),
+          gif: Boolean(original.m.gif),
+        }
       : { id: m.resposta, apagada: true };
   }
   const privada = ehPrivada(chave);
@@ -662,7 +803,10 @@ function mensagemPublica(m, chave, conta) {
     persona: personaAtual(m.persona),
     texto: m.texto,
     imagens: m.imagens.map((arquivo) => `/api/chat/imagens/${arquivo}`),
+    gif: m.gif ? { ...m.gif } : null,
     resposta,
+    reacoes: reacoesPublicas(m.id),
+    fixada: estaFixada(chave, m.id),
     mencionaVoce: menciona(m, conta.usuario),
     podeEditar: m.autor === conta.usuario,
     podeApagar: m.autor === conta.usuario || (Boolean(conta.admin) && !privada),
@@ -780,6 +924,12 @@ function estadoInicial(conta) {
     );
   }
 
+  // Quantas fixadas há em cada canal de texto e privada que a conta vê (só os que têm alguma)
+  const quantasFixadas = {};
+  for (const [chave, lista] of Object.entries(fixadas.conteudo)) {
+    if (Array.isArray(lista) && lista.length && veChave(conta, chave)) quantasFixadas[chave] = lista.length;
+  }
+
   const online = usuariosNoChat();
   return {
     conta: { usuario, nome: conta.nome, admin: Boolean(conta.admin) },
@@ -789,6 +939,9 @@ function estadoInicial(conta) {
     personas,
     membros,
     personasDosMembros,
+    perfis: Object.fromEntries(dados.contas.map((c) => [c.usuario, perfilPublico(c.usuario)])),
+    gifs: gifsLigados(),
+    fixadas: quantasFixadas,
     voz: { configurada: vozConfigurada(), salas: salasQueVe(conta) },
   };
 }
@@ -1123,6 +1276,35 @@ async function mudarEstadoDaVoz(req, res, conta) {
   return enviarJson(res, 200, { ensurdecido });
 }
 
+// A sala de voz em que a pessoa está, pelo que o LiveKit disse na última consulta
+function salaDe(usuario) {
+  for (const [id, lista] of Object.entries(salasDoLivekit)) {
+    if (canalDe(id)?.tipo === "voz" && lista.some((p) => p.usuario === usuario)) return id;
+  }
+  return null;
+}
+
+// POST /api/chat/voz/mover { usuario, canal } (só o administrador). O evento "mover" vai só para
+// as conexões da pessoa, e não fica guardado: numa reconexão mais tarde, ele não volta.
+async function moverNaVoz(req, res, conta) {
+  exigirAdmin(conta);
+  const { usuario, canal: idCanal } = await lerJson(req);
+  const pessoa = typeof usuario === "string" ? contaDe(usuario) : null;
+  if (!pessoa) throw new ErroHttp(404, "Conta não encontrada.");
+  const canal = typeof idCanal === "string" ? canalDe(idCanal) : null;
+  if (!canal) throw new ErroHttp(404, "Sala não encontrada.");
+  if (canal.tipo !== "voz") throw new ErroHttp(400, "Esse canal não é uma sala de voz.");
+  const atual = salaDe(pessoa.usuario);
+  if (!atual) throw new ErroHttp(409, "Essa pessoa não está numa sala de voz.", "fora-da-voz");
+  if (!veCanal(pessoa, canal)) throw new ErroHttp(403, "Essa pessoa não vê essa sala.");
+  if (atual === canal.id) return enviarJson(res, 200, { ok: true, movida: false });
+  const dela = [...conexoes].filter((con) => con.usuario === pessoa.usuario && contaDaConexao(con));
+  if (!dela.length) throw new ErroHttp(409, "Essa pessoa não está com o chat aberto.", "sem-conexao");
+  const evento = { n: ++contador, tipo: "mover", para: (c) => (c.usuario === pessoa.usuario ? { canal: canal.id } : null) };
+  for (const con of dela) entregar(con, evento);
+  return enviarJson(res, 200, { ok: true, movida: true });
+}
+
 /* =================================================================
    Rotas das mensagens
    ================================================================= */
@@ -1167,13 +1349,13 @@ function marcarLida(usuario, chave, id) {
   emitir("lida", (conta) => (conta.usuario === usuario ? { canal: chave, ate: id } : null));
 }
 
-// O envio: JSON { texto, resposta?, persona? }, ou formulário com texto, resposta,
-// persona (JSON) e imagem1 a imagem4
+// O envio: JSON { texto, resposta?, persona?, gif? }, ou formulário com texto, resposta,
+// persona (JSON) e imagem1 a imagem4. O gif é o id de um GIF que o portal entregou.
 async function lerEnvio(req) {
   const tipo = req.headers["content-type"] || "";
   if (!tipo.startsWith("multipart/form-data")) {
     const corpo = await lerJson(req);
-    return { texto: corpo.texto, resposta: corpo.resposta, persona: corpo.persona, arquivos: [] };
+    return { texto: corpo.texto, resposta: corpo.resposta, persona: corpo.persona, gif: corpo.gif, arquivos: [] };
   }
   const form = await lerFormulario(req, LIMITES.imagens * CONFIG.maxImagem + CONFIG.maxJson);
   const campo = (nome) => {
@@ -1228,10 +1410,12 @@ async function guardarImagensDoChat(arquivos) {
 
 async function enviarMensagem(req, res, conta, chave) {
   const corpo = await lerEnvio(req);
-  const textoNovo = textoDaMensagem(corpo.texto, corpo.arquivos.length > 0);
+  const comGif = corpo.gif !== undefined && corpo.gif !== null && corpo.gif !== "";
+  const textoNovo = textoDaMensagem(corpo.texto, corpo.arquivos.length > 0 || comGif);
   const persona = personaParaFalar(conta, chave, corpo.persona);
   const resposta = respostaValida(chave, corpo.resposta);
   conferirLimite(conta.usuario);
+  const gif = comGif ? await gifDoEnvio(corpo.gif) : null;
 
   const imagens = await guardarImagensDoChat(corpo.arquivos);
   const h = historicoDe(chave);
@@ -1244,6 +1428,7 @@ async function enviarMensagem(req, res, conta, chave) {
     texto: textoNovo,
     imagens,
     resposta,
+    gif,
   };
   h.mensagens.push(m);
   ondeEsta.set(m.id, chave);
@@ -1314,7 +1499,7 @@ async function editarMensagem(req, res, conta, id) {
   const { chave, h, m } = mensagemVisivel(conta, id);
   if (m.autor !== conta.usuario) throw new ErroHttp(403, "Só quem escreveu a mensagem pode editá-la.");
   const corpo = await lerJson(req);
-  const textoNovo = textoDaMensagem(corpo.texto, m.imagens.length > 0);
+  const textoNovo = textoDaMensagem(corpo.texto, m.imagens.length > 0 || Boolean(m.gif));
   const antes = { texto: m.texto, editadaEm: m.editadaEm };
   m.texto = textoNovo;
   m.editadaEm = carimbo();
@@ -1344,7 +1529,9 @@ async function apagarMensagem(res, conta, id) {
     throw erro;
   }
   await apagarImagensDoChat(m.imagens);
+  tirarReacoes(m.id);
   emitir("apagada", paraQuemVe(chave, () => ({ id: m.id, canal: chave })));
+  if (desafixar(chave, m.id)) avisarFixadas(chave, m.id, false);
   return enviarJson(res, 200, { ok: true });
 }
 
@@ -1452,6 +1639,391 @@ function ocultarPrivada(res, conta, outro) {
     marcarEstado();
   }
   return enviarJson(res, 200, { ok: true });
+}
+
+/* =================================================================
+   Reações (chat/reacoes.json)
+   ================================================================= */
+
+const reacoesPublicas = (id) =>
+  Object.entries(objeto(reacoes.conteudo[id]) ? reacoes.conteudo[id] : {}).map(([emoji, usuarios]) => ({
+    emoji,
+    usuarios: [...usuarios],
+  }));
+
+function tirarReacoes(id) {
+  if (!(id in reacoes.conteudo)) return;
+  delete reacoes.conteudo[id];
+  marcarArquivo(reacoes);
+}
+
+function emojiValido(valor) {
+  if (typeof valor !== "string" || !valor || valor.length > LIMITES.emoji || !REGEX_EMOJI.test(valor)) {
+    throw new ErroHttp(400, "A reação precisa ser um emoji.", "emoji");
+  }
+  return valor;
+}
+
+const avisarReacoes = (chave, id) => emitir("reacoes", paraQuemVe(chave, () => ({ id, canal: chave, reacoes: reacoesPublicas(id) })));
+
+// Uma privada com uma conta excluída fica só para ler
+function exigirPrivadaAtiva(chave) {
+  if (ehPrivada(chave) && participantes(chave).some((u) => !contaDe(u))) {
+    throw new ErroHttp(409, "Essa conta não existe mais.", "conta-excluida");
+  }
+}
+
+// PUT /api/chat/mensagens/:id/reacoes { emoji, ligado } → { reacoes }
+async function mudarReacao(req, res, conta, id) {
+  const { chave, m } = mensagemVisivel(conta, id);
+  exigirPrivadaAtiva(chave);
+  const corpo = await lerJson(req);
+  const emoji = emojiValido(corpo.emoji);
+  if (typeof corpo.ligado !== "boolean") throw new ErroHttp(400, "Diga se a reação fica ou sai.");
+  const daMensagem = objeto(reacoes.conteudo[m.id]) ? reacoes.conteudo[m.id] : {};
+  const usuarios = Array.isArray(daMensagem[emoji]) ? daMensagem[emoji] : [];
+  let mudou = false;
+  if (corpo.ligado && !usuarios.includes(conta.usuario)) {
+    if (!usuarios.length && Object.keys(daMensagem).length >= LIMITES.emojisPorMensagem) {
+      throw new ErroHttp(400, "Uma mensagem pode ter no máximo 20 reações diferentes.", "reacoes-demais");
+    }
+    daMensagem[emoji] = [...usuarios, conta.usuario];
+    mudou = true;
+  } else if (!corpo.ligado && usuarios.includes(conta.usuario)) {
+    const ficam = usuarios.filter((u) => u !== conta.usuario);
+    if (ficam.length) daMensagem[emoji] = ficam;
+    else delete daMensagem[emoji];
+    mudou = true;
+  }
+  if (mudou) {
+    if (Object.keys(daMensagem).length) reacoes.conteudo[m.id] = daMensagem;
+    else delete reacoes.conteudo[m.id];
+    marcarArquivo(reacoes);
+    avisarReacoes(chave, m.id);
+  }
+  return enviarJson(res, 200, { reacoes: reacoesPublicas(m.id) });
+}
+
+/* =================================================================
+   Mensagens fixadas (chat/fixadas.json)
+   ================================================================= */
+
+const fixadasDe = (chave) => (Array.isArray(fixadas.conteudo[chave]) ? fixadas.conteudo[chave] : []);
+const estaFixada = (chave, id) => fixadasDe(chave).some((f) => f.id === id);
+
+// Tira a mensagem das fixadas do canal; devolve true se ela estava lá
+function desafixar(chave, id) {
+  const lista = fixadasDe(chave);
+  const ficam = lista.filter((f) => f.id !== id);
+  if (ficam.length === lista.length) return false;
+  if (ficam.length) fixadas.conteudo[chave] = ficam;
+  else delete fixadas.conteudo[chave];
+  marcarArquivo(fixadas);
+  return true;
+}
+
+// { canal, quantas }, e qual mensagem mudou ({ id, fixada }), para a página acertar o alfinete
+const avisarFixadas = (chave, id, fixada) =>
+  emitir("fixadas", paraQuemVe(chave, () => ({ canal: chave, quantas: fixadasDe(chave).length, id, fixada })));
+
+// GET .../fixadas → { fixadas: [{ mensagem, por, em }] }, da mais recente para a mais antiga
+function listarFixadas(res, conta, chave) {
+  const lista = [];
+  for (const f of [...fixadasDe(chave)].reverse()) {
+    const achada = acharMensagem(f.id);
+    if (!achada || achada.chave !== chave) continue;
+    lista.push({ mensagem: mensagemPublica(achada.m, chave, conta), por: f.por, em: f.em });
+  }
+  return enviarJson(res, 200, { fixadas: lista });
+}
+
+// PUT /api/chat/mensagens/:id/fixada { fixada } → { fixada, quantas }
+async function mudarFixada(req, res, conta, id) {
+  const { chave, m } = mensagemVisivel(conta, id);
+  const { fixada } = await lerJson(req);
+  if (typeof fixada !== "boolean") throw new ErroHttp(400, "Diga se a mensagem fica fixada.");
+  let mudou = false;
+  if (fixada && !estaFixada(chave, m.id)) {
+    const lista = fixadasDe(chave);
+    if (lista.length >= LIMITES.fixadas) throw new ErroHttp(400, "Desafixe uma antes.", "fixadas-demais");
+    fixadas.conteudo[chave] = [...lista, { id: m.id, por: conta.usuario, em: carimbo() }];
+    marcarArquivo(fixadas);
+    mudou = true;
+  } else if (!fixada) {
+    mudou = desafixar(chave, m.id);
+  }
+  if (mudou) avisarFixadas(chave, m.id, fixada);
+  return enviarJson(res, 200, { fixada, quantas: fixadasDe(chave).length });
+}
+
+// Na partida: some o que é de mensagem ou canal que já não existe
+function limparReacoesEFixadas() {
+  let mudouReacoes = false;
+  for (const [id, daMensagem] of Object.entries(reacoes.conteudo)) {
+    if (!ondeEsta.has(id) || !objeto(daMensagem)) {
+      delete reacoes.conteudo[id];
+      mudouReacoes = true;
+      continue;
+    }
+    for (const [emoji, usuarios] of Object.entries(daMensagem)) {
+      const validos = Array.isArray(usuarios) ? [...new Set(usuarios.filter((u) => typeof u === "string"))] : [];
+      const emojiBom = emoji.length <= LIMITES.emoji && REGEX_EMOJI.test(emoji);
+      if (!emojiBom || !validos.length) {
+        delete daMensagem[emoji];
+        mudouReacoes = true;
+      } else if (validos.length !== usuarios.length) {
+        daMensagem[emoji] = validos;
+        mudouReacoes = true;
+      }
+    }
+    if (!Object.keys(daMensagem).length) {
+      delete reacoes.conteudo[id];
+      mudouReacoes = true;
+    }
+  }
+  if (mudouReacoes) marcarArquivo(reacoes);
+
+  let mudouFixadas = false;
+  for (const [chave, lista] of Object.entries(fixadas.conteudo)) {
+    const vistas = new Set();
+    const validas = (Array.isArray(lista) ? lista : []).filter((f) => {
+      const boa = objeto(f) && typeof f.id === "string" && ondeEsta.get(f.id) === chave && !vistas.has(f.id);
+      if (boa) vistas.add(f.id);
+      return boa && typeof f.por === "string" && typeof f.em === "string";
+    });
+    if (!validas.length) {
+      delete fixadas.conteudo[chave];
+      mudouFixadas = true;
+    } else if (validas.length !== lista.length) {
+      fixadas.conteudo[chave] = validas;
+      mudouFixadas = true;
+    }
+  }
+  if (mudouFixadas) marcarArquivo(fixadas);
+}
+
+/* =================================================================
+   O perfil (PUT /api/chat/perfil)
+   ================================================================= */
+
+const CAMPOS_IMAGEM_DO_PERFIL = ["foto", "faixa"];
+
+// Formulário com apelido, cor, frase, sobre, foto, faixa, remover_foto e remover_faixa.
+// Um campo que não veio fica como está. Trocar ou remover uma imagem apaga a anterior.
+async function mudarPerfil(req, res, conta) {
+  const form = await lerFormulario(req, CAMPOS_IMAGEM_DO_PERFIL.length * CONFIG.maxImagem + CONFIG.maxJson);
+  const campo = (nome) => {
+    const valor = form.get(nome);
+    return typeof valor === "string" ? valor : undefined;
+  };
+  const novo = { ...(perfilGuardado(conta.usuario) ?? {}) };
+
+  const apelido = campo("apelido");
+  if (apelido !== undefined) {
+    const limpo = apelido.replace(/\s+/g, " ").trim();
+    if (limpo.length > LIMITES.apelido) throw new ErroHttp(400, "O apelido pode ter no máximo 32 caracteres.");
+    novo.apelido = limpo;
+  }
+  const cor = campo("cor");
+  if (cor !== undefined) {
+    const limpa = cor.trim().toLowerCase();
+    if (limpa && !REGEX_COR.test(limpa)) throw new ErroHttp(400, "Escolha uma cor válida.");
+    novo.cor = limpa || null;
+  }
+  const frase = campo("frase");
+  if (frase !== undefined) {
+    const limpa = frase.replace(/\s+/g, " ").trim();
+    if (limpa.length > LIMITES.frase) throw new ErroHttp(400, "A frase pode ter no máximo 80 caracteres.");
+    novo.frase = limpa;
+  }
+  const sobre = campo("sobre");
+  if (sobre !== undefined) {
+    const limpo = sobre.replace(/\r\n?/g, "\n").trim();
+    if (limpo.length > LIMITES.sobre) throw new ErroHttp(400, "O \"Sobre mim\" pode ter no máximo 300 caracteres.");
+    novo.sobre = limpo;
+  }
+
+  const enviadas = {};
+  for (const nome of CAMPOS_IMAGEM_DO_PERFIL) {
+    const arquivo = form.get(nome);
+    if (!arquivoEnviado(arquivo)) continue;
+    if (!TIPOS_IMAGEM[arquivo.type]) throw new ErroHttp(400, "Use imagens PNG, JPG, WEBP, GIF ou AVIF.");
+    if (arquivo.size > CONFIG.maxImagem) throw new ErroHttp(413, "Cada imagem pode ter no máximo 10 MB.");
+    enviadas[nome] = arquivo;
+  }
+
+  const gravadas = [];
+  const antigas = [];
+  const antes = perfilGuardado(conta.usuario);
+  try {
+    for (const nome of CAMPOS_IMAGEM_DO_PERFIL) {
+      const anterior = typeof novo[nome] === "string" ? novo[nome] : null;
+      if (enviadas[nome]) {
+        novo[nome] = await guardarImagem(enviadas[nome]);
+        gravadas.push(novo[nome]);
+      } else if (form.get(`remover_${nome}`) === "1") {
+        novo[nome] = null;
+      } else {
+        continue;
+      }
+      if (anterior) antigas.push(anterior);
+    }
+    novo.alteradoEm = carimbo();
+    dados.chat.perfis[conta.usuario] = novo;
+    await salvarDados();
+  } catch (erro) {
+    if (antes) dados.chat.perfis[conta.usuario] = antes;
+    else delete dados.chat.perfis[conta.usuario];
+    await apagarImagens(gravadas);
+    throw erro;
+  }
+  await apagarImagens(antigas);
+  const perfil = perfilPublico(conta.usuario);
+  emitir("perfil", () => ({ usuario: conta.usuario, perfil }));
+  return enviarJson(res, 200, { perfil });
+}
+
+/* =================================================================
+   GIFs (a Klipy)
+   -----------------------------------------------------------------
+   A página nunca fala com a Klipy: pede ao portal, que busca com a
+   chave e guarda cada busca por 15 minutos. Numa mensagem, só vale
+   um GIF que o portal entregou (ou que ele confere na Klipy pelo id),
+   com a imagem num host da Klipy.
+   ================================================================= */
+
+const gifsLigados = () => Boolean(CONFIG.klipyChave);
+const gifsIndisponiveis = () => new ErroHttp(503, "Os GIFs não estão disponíveis agora.", "gifs");
+
+const buscasGuardadas = new Map(); // "texto\npágina" → { em, gifs, maisPaginas }, a mais antiga primeiro
+const buscasDaConta = new Map(); // usuario → os tempos das buscas no último minuto
+let klipyFalhou = false; // o problema vai para o log uma vez, não a cada busca
+
+// Uma chamada à Klipy. O endereço leva a chave: ele nunca vai para o log.
+async function chamarKlipy(caminho, parametros) {
+  const url = new URL(`${CONFIG.klipyBase}/${encodeURIComponent(CONFIG.klipyChave)}/gifs/${caminho}`);
+  for (const [nome, valor] of Object.entries(parametros)) url.searchParams.set(nome, String(valor));
+  let lido = null;
+  let problema = "";
+  try {
+    const resposta = await fetch(url, { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(ESPERA_DA_KLIPY) });
+    lido = await resposta.json().catch(() => null);
+    if (!resposta.ok) problema = `respondeu ${resposta.status}`;
+    else if (!objeto(lido) || lido.result === false) problema = "mandou uma resposta que não deu para ler";
+  } catch (erro) {
+    problema = erro.name === "TimeoutError" ? "não respondeu a tempo" : `não respondeu (${erro.code || erro.name})`;
+  }
+  if (problema) {
+    if (!klipyFalhou) console.error(`Chat: a Klipy (gifs/${caminho}) ${problema}; os GIFs ficam indisponíveis até ela voltar.`);
+    klipyFalhou = true;
+    throw gifsIndisponiveis();
+  }
+  if (klipyFalhou) console.log("Chat: a Klipy voltou a responder.");
+  klipyFalhou = false;
+  return lido;
+}
+
+// Um tamanho de um GIF ({ url, width, height }), só com https e num host da Klipy
+function midiaDaKlipy(r) {
+  if (!objeto(r) || typeof r.url !== "string") return null;
+  let url;
+  try {
+    url = new URL(r.url);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== "https:" || !CONFIG.klipyMidia.includes(url.host)) return null;
+  const largura = Number(r.width);
+  const altura = Number(r.height);
+  if (!(largura > 0) || !(altura > 0)) return null;
+  return { url: url.href, largura: Math.round(largura), altura: Math.round(altura) };
+}
+
+// Um item da Klipy como a página recebe. Anúncios e outros tipos ficam de fora (null).
+// A prévia é o tamanho pequeno (WebP, se houver); a imagem da mensagem é o médio.
+function gifDaKlipy(item) {
+  if (!objeto(item) || item.type !== "gif") return null;
+  const id = typeof item.slug === "string" ? item.slug : null;
+  if (!id || !REGEX_ID_GIF.test(id)) return null;
+  const f = objeto(item.file) ? item.file : {};
+  const previa = midiaDaKlipy(f.sm?.webp) ?? midiaDaKlipy(f.sm?.gif) ?? midiaDaKlipy(f.xs?.webp) ?? midiaDaKlipy(f.xs?.gif);
+  const medio = midiaDaKlipy(f.md?.gif) ?? midiaDaKlipy(f.md?.webp) ?? midiaDaKlipy(f.hd?.gif) ?? midiaDaKlipy(f.hd?.webp);
+  if (!previa || !medio) return null;
+  const titulo = typeof item.title === "string" ? item.title.replace(/\s+/g, " ").trim().slice(0, 200) : "";
+  return { id, titulo, previa, ...medio };
+}
+
+// A lista de uma resposta: { result, data: { data: [...], has_next, ... } }
+function gifsDaResposta(lido) {
+  const corpo = objeto(lido.data) ? lido.data : lido;
+  const itens = Array.isArray(corpo.data) ? corpo.data : [];
+  return { gifs: itens.map(gifDaKlipy).filter(Boolean), maisPaginas: corpo.has_next === true };
+}
+
+function conferirBuscas(usuario) {
+  const agora = Date.now();
+  const recentes = (buscasDaConta.get(usuario) ?? []).filter((t) => agora - t < LIMITES.janelaDasBuscas);
+  if (recentes.length >= LIMITES.buscasDeGifs) {
+    buscasDaConta.set(usuario, recentes);
+    throw new ErroHttp(429, "Calma: espere um pouco antes de buscar mais GIFs.", "limite");
+  }
+  recentes.push(agora);
+  buscasDaConta.set(usuario, recentes);
+}
+
+function guardarBusca(chave, resultado) {
+  buscasGuardadas.delete(chave);
+  buscasGuardadas.set(chave, { em: Date.now(), ...resultado });
+  while (buscasGuardadas.size > LIMITES.gifsGuardados) buscasGuardadas.delete(buscasGuardadas.keys().next().value);
+}
+
+// GET /api/chat/gifs?q=<texto>&pagina=<n> → { gifs, maisPaginas }; sem q, os em alta
+async function buscarGifs(req, res, conta) {
+  if (!gifsLigados()) throw gifsIndisponiveis();
+  const parametros = new URL(req.url, "http://portal.local").searchParams;
+  const q = (parametros.get("q") ?? "").replace(/\s+/g, " ").trim().toLowerCase();
+  if (q.length > LIMITES.textoDaBusca) throw new ErroHttp(400, "A busca pode ter no máximo 100 caracteres.");
+  const paginaPedida = parametros.get("pagina");
+  const pagina = paginaPedida === null || paginaPedida === "" ? 1 : Number(paginaPedida);
+  if (!Number.isInteger(pagina) || pagina < 1 || pagina > LIMITES.paginaDosGifs) {
+    throw new ErroHttp(400, "A página precisa ser um número inteiro de 1 a 100.");
+  }
+  conferirBuscas(conta.usuario);
+
+  const chave = `${q}\n${pagina}`;
+  const guardada = buscasGuardadas.get(chave);
+  if (guardada && Date.now() - guardada.em < LIMITES.validadeDosGifs) {
+    return enviarJson(res, 200, { gifs: guardada.gifs, maisPaginas: guardada.maisPaginas });
+  }
+  const pedido = {
+    ...(q ? { q } : {}),
+    page: pagina,
+    per_page: LIMITES.gifsPorPagina,
+    customer_id: codigoDaConta(conta.usuario),
+    locale: LOCALE_DOS_GIFS,
+    content_filter: "off", // sem filtro de classificação
+  };
+  const resultado = gifsDaResposta(await chamarKlipy(q ? "search" : "trending", pedido));
+  guardarBusca(chave, resultado);
+  return enviarJson(res, 200, resultado);
+}
+
+// O GIF de uma mensagem: primeiro no que o portal entregou; senão, pedido à Klipy pelo id
+async function gifDoEnvio(valor) {
+  if (typeof valor !== "string" || !REGEX_ID_GIF.test(valor)) throw new ErroHttp(400, "O GIF enviado não está num formato válido.");
+  if (!gifsLigados()) throw gifsIndisponiveis();
+  let achado = null;
+  for (const busca of buscasGuardadas.values()) {
+    achado = busca.gifs.find((g) => g.id === valor);
+    if (achado) break;
+  }
+  if (!achado) {
+    const { gifs } = gifsDaResposta(await chamarKlipy("items", { slugs: valor }));
+    achado = gifs.find((g) => g.id === valor);
+  }
+  if (!achado) throw new ErroHttp(400, "Esse GIF não foi encontrado.", "gif");
+  const { id, url, largura, altura, titulo } = achado;
+  return { id, url, largura, altura, titulo };
 }
 
 /* =================================================================
@@ -1568,7 +2140,10 @@ async function tratarChat(req, res, rota, metodo, conta) {
   if (recurso === "voz" && !acao && metodo === "POST") {
     if (id === "entrar") return entrarNaVoz(req, res, conta);
     if (id === "estado") return mudarEstadoDaVoz(req, res, conta);
+    if (id === "mover") return moverNaVoz(req, res, conta);
   }
+  if (recurso === "perfil" && !id && metodo === "PUT") return mudarPerfil(req, res, conta);
+  if (recurso === "gifs" && !id && metodo === "GET") return buscarGifs(req, res, conta);
 
   if (recurso === "canais") {
     if (!id && metodo === "POST") return criarCanal(req, res, conta);
@@ -1577,6 +2152,7 @@ async function tratarChat(req, res, rota, metodo, conta) {
       if (metodo === "GET") return listarMensagens(req, res, conta, canal.id);
       if (metodo === "POST") return enviarMensagem(req, res, conta, canal.id);
     }
+    if (id && acao === "fixadas" && metodo === "GET") return listarFixadas(res, conta, canalDeTexto(conta, id).id);
     if (id && !acao && metodo === "PUT") return alterarCanal(req, res, conta, id);
     if (id && !acao && metodo === "DELETE") return apagarCanal(res, conta, id);
   }
@@ -1590,12 +2166,17 @@ async function tratarChat(req, res, rota, metodo, conta) {
         return enviarMensagem(req, res, conta, chave);
       }
     }
+    if (acao === "fixadas" && metodo === "GET") return listarFixadas(res, conta, privadaCom(conta, id));
     if (acao === "ocultar" && metodo === "POST") return ocultarPrivada(res, conta, id);
   }
 
   if (recurso === "mensagens" && id && !acao) {
     if (metodo === "PUT") return editarMensagem(req, res, conta, id);
     if (metodo === "DELETE") return apagarMensagem(res, conta, id);
+  }
+  if (recurso === "mensagens" && id && metodo === "PUT") {
+    if (acao === "reacoes") return mudarReacao(req, res, conta, id);
+    if (acao === "fixada") return mudarFixada(req, res, conta, id);
   }
 
   if (!id) {
@@ -1667,6 +2248,30 @@ function renomearNoChat(antigo, novo) {
     );
   }
 
+  // O perfil (o dados.json é salvo por quem renomeou a conta)
+  if (perfilGuardado(antigo)) {
+    dados.chat.perfis[novo] = dados.chat.perfis[antigo];
+    delete dados.chat.perfis[antigo];
+  }
+  // Quem reagiu e quem fixou; as fixadas de uma privada mudam de chave (e se juntam, se preciso)
+  let mudouReacoes = false;
+  for (const daMensagem of Object.values(reacoes.conteudo)) {
+    for (const [emoji, usuarios] of Object.entries(daMensagem)) {
+      if (!usuarios.includes(antigo)) continue;
+      daMensagem[emoji] = [...new Set(usuarios.map((u) => (u === antigo ? novo : u)))];
+      mudouReacoes = true;
+    }
+  }
+  if (mudouReacoes) marcarArquivo(reacoes);
+  const fixadasNovas = {};
+  for (const [chave, lista] of Object.entries(fixadas.conteudo)) {
+    const destino = trocarChave(chave, antigo, novo);
+    const juntas = [...(fixadasNovas[destino] ?? []), ...lista.map((f) => (f.por === antigo ? { ...f, por: novo } : f))];
+    fixadasNovas[destino] = juntas.filter((f, i) => juntas.findIndex((g) => g.id === f.id) === i).slice(-LIMITES.fixadas);
+  }
+  fixadas.conteudo = fixadasNovas;
+  marcarArquivo(fixadas);
+
   if (objeto(estado[antigo])) {
     estado[novo] = estado[antigo];
     delete estado[antigo];
@@ -1690,6 +2295,28 @@ function renomearNoChat(antigo, novo) {
 function excluirDoChat(conta) {
   delete estado[conta.usuario];
   marcarEstado();
+  // O perfil e as imagens dele (o dados.json é salvo por quem excluiu a conta)
+  const perfil = perfilGuardado(conta.usuario);
+  if (perfil) {
+    delete dados.chat.perfis[conta.usuario];
+    apagarImagens([perfil.foto, perfil.faixa]).catch(logErro("não foi possível apagar as imagens do perfil"));
+  }
+  // As reações da conta saem
+  for (const [id, daMensagem] of Object.entries(reacoes.conteudo)) {
+    let mudou = false;
+    for (const [emoji, usuarios] of Object.entries(daMensagem)) {
+      if (!usuarios.includes(conta.usuario)) continue;
+      const ficam = usuarios.filter((u) => u !== conta.usuario);
+      if (ficam.length) daMensagem[emoji] = ficam;
+      else delete daMensagem[emoji];
+      mudou = true;
+    }
+    if (!mudou) continue;
+    if (!Object.keys(daMensagem).length) delete reacoes.conteudo[id];
+    marcarArquivo(reacoes);
+    const chave = ondeEsta.get(id);
+    if (chave) avisarReacoes(chave, id);
+  }
   envios.delete(conta.usuario);
   ensurdecidos.delete(conta.usuario);
   for (const con of [...conexoes]) if (con.usuario === conta.usuario) fecharConexao(con);
@@ -1729,8 +2356,11 @@ function iniciarChat() {
     fs.mkdirSync(pasta, { recursive: true, mode: 0o700 });
   }
   lerEstado();
+  lerArquivoJson(reacoes);
+  lerArquivoJson(fixadas);
   const mudou = garantirChat();
   lerHistoricos();
+  limparReacoesEFixadas();
   setInterval(pingar, INTERVALO_DO_PING).unref();
   setInterval(vigiarVoz, INTERVALO_DA_VOZ).unref();
   return mudou;
