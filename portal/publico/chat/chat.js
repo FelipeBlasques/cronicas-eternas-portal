@@ -32,7 +32,15 @@ const CONFIG = {
   maxTexto: 4000,
   esperaDaReconexao: 5000,
   tamanhoDoTrecho: 100,
+  tamanhoDoAviso: 120, // o texto do aviso do navegador
 };
+
+// Os avisos de cada canal de texto (as privadas avisam sempre)
+const NIVEIS_DE_AVISO = [
+  ["tudo", "Tudo"],
+  ["mencoes", "Só menções"],
+  ["nada", "Nada"],
+];
 
 // As cores do selo das contas (a inicial do nome), sempre a mesma para a mesma conta
 const CORES_DAS_CONTAS = ["#7a4a2e", "#4d5b37", "#3e4a66", "#6b3a4c", "#5e5130", "#365c5c", "#5a3f6b", "#6e4f3a"];
@@ -71,6 +79,7 @@ const apiDoServidor = {
   apagar: (id) => pedir("DELETE", caminhoDe("/api/chat/mensagens", id)),
   ocultar: (usuario) => pedir("POST", `/api/chat/privadas/${encodeURIComponent(usuario)}/ocultar`),
   lida: (canal, ate) => pedir("POST", "/api/chat/lida", { canal, ate }, { silencioso: true }),
+  mudarAviso: (canal, nivel) => pedir("PUT", "/api/chat/avisos", { canal, nivel }),
   escolherPersona: (mesa, persona) => pedir("PUT", "/api/chat/personas", { mesa, persona }),
   criarCanal: (categoria, tipo, nome) => pedir("POST", "/api/chat/canais", { categoria, tipo, nome }),
   alterarCanal: (id, mudancas) => pedir("PUT", caminhoDe("/api/chat/canais", id), mudancas),
@@ -346,7 +355,7 @@ function criarApiDePrevia() {
         canais: mundo.canais
           .filter((c) => c.categoria === categoria.id)
           .sort((a, b) => a.ordem - b.ordem)
-          .map((c) => (c.tipo === "texto" ? { id: c.id, tipo: c.tipo, nome: c.nome, ...contar(c.id, eu), aviso: "tudo" } : { id: c.id, tipo: c.tipo, nome: c.nome })),
+          .map((c) => (c.tipo === "texto" ? { id: c.id, tipo: c.tipo, nome: c.nome, ...contar(c.id, eu), aviso: mundo.avisos?.[eu]?.[c.id] ?? "tudo" } : { id: c.id, tipo: c.tipo, nome: c.nome })),
       };
     });
     const ocultas = mundo.ocultas[eu] ?? [];
@@ -510,6 +519,11 @@ function criarApiDePrevia() {
       const chave = canal.startsWith("privada:") ? chaveDaPrivada(eu, canal.slice(8)) : canal;
       marcarLida(chave, ate);
       return { ok: true };
+    },
+    async mudarAviso(canal, nivel) {
+      await pausa();
+      ((mundo.avisos ??= {})[eu] ??= {})[canal] = nivel;
+      return { canal, nivel };
     },
     async escolherPersona(mesa, persona) {
       await pausa();
@@ -968,7 +982,6 @@ async function abrirChat() {
     $("#sim-conta").value = eu();
   }
   $("#nome-conta").textContent = estado.dados.conta.nome;
-  $("#botao-configuracoes").hidden = !estado.dados.conta.admin;
   desenharLista();
   abrirPeloEndereco();
   conectarEventos();
@@ -1010,7 +1023,7 @@ function itemDoCanal(canal, categoria) {
   }
   item.append(link);
 
-  if (estado.dados.conta.admin) {
+  if (estado.dados.conta.admin || canal.tipo === "texto") {
     const menu = criar("button", "icone-botao item-canal__menu");
     menu.type = "button";
     menu.title = "Opções do canal";
@@ -1148,12 +1161,17 @@ function fecharMenu() {
   ancoraDoMenu = null;
 }
 
-// "itens": [{ texto, acao, perigo?, desligado?, conteudo? (elemento no lugar do texto) }]
+// "itens": [{ texto, acao, perigo?, desligado?, atual?, conteudo? (elemento no lugar do texto) }],
+// ou { titulo } para um rótulo que separa um grupo de itens
 function abrirMenu(ancora, itens) {
   fecharMenu();
   const menu = criar("div", "menu-chat");
   menu.setAttribute("role", "menu");
   for (const item of itens) {
+    if (item.titulo) {
+      menu.append(criar("span", "menu-chat__titulo", item.titulo));
+      continue;
+    }
     const b = criar("button", `menu-chat__item${item.perigo ? " menu-chat__item--perigo" : ""}${item.atual ? " menu-chat__item--atual" : ""}`);
     b.type = "button";
     b.setAttribute("role", "menuitem");
@@ -1194,14 +1212,27 @@ window.addEventListener("resize", fecharMenu);
    Administração dos canais e das categorias
    ================================================================= */
 
+// Os avisos (de todos, nos canais de texto) e a administração (só o administrador)
 function abrirMenuDoCanal(ancora, canal, categoria) {
-  const indice = categoria.canais.indexOf(canal);
-  abrirMenu(ancora, [
-    { texto: "Renomear", acao: () => abrirDialogoDoCanal({ categoria, canal }) },
-    { texto: "Subir", desligado: indice <= 0, acao: () => moverCanal(canal, indice - 1) },
-    { texto: "Descer", desligado: indice >= categoria.canais.length - 1, acao: () => moverCanal(canal, indice + 1) },
-    { texto: "Apagar", perigo: true, acao: () => apagarCanal(canal) },
-  ]);
+  const itens = [];
+  if (canal.tipo === "texto") {
+    const nivel = canal.aviso || "tudo";
+    itens.push({ titulo: "Avisos" });
+    for (const [valor, texto] of NIVEIS_DE_AVISO) {
+      itens.push({ texto, atual: nivel === valor, acao: () => mudarAviso(canal, valor) });
+    }
+  }
+  if (estado.dados.conta.admin) {
+    const indice = categoria.canais.indexOf(canal);
+    if (itens.length) itens.push({ titulo: "Canal" });
+    itens.push(
+      { texto: "Renomear", acao: () => abrirDialogoDoCanal({ categoria, canal }) },
+      { texto: "Subir", desligado: indice <= 0, acao: () => moverCanal(canal, indice - 1) },
+      { texto: "Descer", desligado: indice >= categoria.canais.length - 1, acao: () => moverCanal(canal, indice + 1) },
+      { texto: "Apagar", perigo: true, acao: () => apagarCanal(canal) },
+    );
+  }
+  abrirMenu(ancora, itens);
 }
 
 async function moverCanal(canal, ordem) {
@@ -1277,9 +1308,9 @@ function configurarDialogoDoCanal() {
 }
 
 function abrirConfiguracoes() {
-  const itens = [];
-  if (estado.dados.conta.admin) itens.push({ texto: "Categorias das mesas", acao: abrirCategorias });
-  if (itens.length) abrirMenu($("#botao-configuracoes"), itens);
+  const itens = [{ titulo: "Avisos" }, itemDosAvisos(), itemDoSom()];
+  if (estado.dados.conta.admin) itens.push({ titulo: "Administração" }, { texto: "Categorias das mesas", acao: abrirCategorias });
+  abrirMenu($("#botao-configuracoes"), itens);
 }
 
 // As mesas na ordem da lista: primeiro as que têm categoria (na ordem delas), depois as outras
@@ -2457,7 +2488,6 @@ async function recarregarEstado() {
   if (!estado.dados) return;
   estado.dados = dados;
   $("#nome-conta").textContent = dados.conta.nome;
-  $("#botao-configuracoes").hidden = !dados.conta.admin;
   // O alvo aberto sumiu (canal apagado, mesa sem acesso): volta ao padrão
   const alvo = estado.alvo;
   if (alvo && !alvoDoHash(alvo.tipo === "privada" ? `#privada-${alvo.usuario}` : `#canal-${alvo.id}`)) {
@@ -2521,6 +2551,7 @@ function tratarEvento(tipo, corpo) {
       else agendarRecarga(); // conversa nova (ou oculta), mesmo que mandada por outra janela desta conta
     }
     contarChegada(m);
+    avisarChegada(m);
     desenharLista();
     if (estado.alvo?.chave === m.canal) desenharMensagens();
   } else if (tipo === "editada" && corpo.mensagem) {
@@ -2545,6 +2576,150 @@ function tratarEvento(tipo, corpo) {
     ganchosDaVoz.mudou?.();
   } else if (tipo === "recarregar") {
     recarregarTudo().catch(() => {});
+  }
+}
+
+/* =================================================================
+   Avisos do navegador e o som
+   -----------------------------------------------------------------
+   Enquanto o chat está aberto, mesmo noutra aba ou com a janela
+   minimizada. A permissão só é pedida pelo "Ativar avisos" das
+   configurações. Cada canal de texto avisa Tudo, Só menções ou
+   Nada; as privadas, sempre. Nada para as suas mensagens nem para
+   o canal aberto com a janela em foco.
+   ================================================================= */
+
+const temAvisos = () => typeof Notification === "function";
+const somLigado = () => lerLocal("chat:som") !== "nao";
+
+function itemDosAvisos() {
+  if (!temAvisos()) return { texto: "Este navegador não mostra avisos", desligado: true };
+  if (Notification.permission === "granted") return { texto: "Avisos ativados", desligado: true, atual: true };
+  if (Notification.permission === "denied") {
+    return { texto: "Avisos bloqueados", acao: () => avisoRapido("Os avisos estão bloqueados para este endereço. Libere nas configurações do site, no navegador.") };
+  }
+  return { texto: "Ativar avisos", acao: ativarAvisos };
+}
+
+function itemDoSom() {
+  const ligado = somLigado();
+  return {
+    texto: ligado ? "Som dos avisos: ligado" : "Som dos avisos: desligado",
+    atual: ligado,
+    acao: () => {
+      gravarLocal("chat:som", ligado ? "nao" : "sim");
+      if (!ligado) tocarSom(); // para ouvir como é
+      avisoRapido(ligado ? "Som dos avisos desligado." : "Som dos avisos ligado.");
+    },
+  };
+}
+
+async function ativarAvisos() {
+  let resposta;
+  try {
+    resposta = await Notification.requestPermission();
+  } catch {
+    resposta = Notification.permission;
+  }
+  if (resposta === "granted") avisoRapido("Avisos ativados.");
+  else if (resposta === "denied") avisoRapido("O navegador bloqueou os avisos. Libere nas configurações do site.");
+  else avisoRapido("Os avisos continuam desligados.");
+}
+
+async function mudarAviso(canal, nivel) {
+  try {
+    await api.mudarAviso(canal.id, nivel);
+    canal.aviso = nivel;
+    const texto = NIVEIS_DE_AVISO.find(([valor]) => valor === nivel)[1];
+    avisoRapido(`Avisos de #${canal.nome}: ${texto}.`);
+  } catch (falha) {
+    avisarFalha(falha);
+  }
+}
+
+// O toque: duas notas curtas, feitas na hora com Web Audio (sem arquivo)
+let contextoDoSom = null;
+
+function prepararSom() {
+  if (contextoDoSom || typeof AudioContext !== "function") return;
+  try {
+    contextoDoSom = new AudioContext();
+  } catch {
+    contextoDoSom = null;
+  }
+}
+
+function tocarSom() {
+  prepararSom();
+  const ctx = contextoDoSom;
+  if (!ctx) return;
+  if (ctx.state === "suspended") ctx.resume().catch(() => {});
+  const inicio = ctx.currentTime + 0.01;
+  [
+    [880, 0],
+    [1320, 0.09],
+  ].forEach(([frequencia, atraso]) => {
+    const nota = ctx.createOscillator();
+    const volume = ctx.createGain();
+    nota.type = "sine";
+    nota.frequency.value = frequencia;
+    volume.gain.setValueAtTime(0.0001, inicio + atraso);
+    volume.gain.exponentialRampToValueAtTime(0.12, inicio + atraso + 0.015);
+    volume.gain.exponentialRampToValueAtTime(0.0001, inicio + atraso + 0.22);
+    nota.connect(volume).connect(ctx.destination);
+    nota.start(inicio + atraso);
+    nota.stop(inicio + atraso + 0.25);
+  });
+}
+
+// O texto do aviso: as menções com o nome, os spoilers escondidos, até 120 caracteres
+function textoDoAviso(m, categoria) {
+  const nomeDe = (usuario) => {
+    if (usuario === "todos") return "todos";
+    const persona = categoria && estado.dados.personasDosMembros?.[categoria.id]?.[usuario];
+    return persona?.nome ?? contaPorUsuario(usuario)?.nome ?? usuario;
+  };
+  let texto = String(m.texto || "")
+    .replace(/<@([a-z0-9_-]{2,30}|todos)>/g, (_, usuario) => `@${nomeDe(usuario)}`)
+    .replace(/\|\|[\s\S]+?\|\|/g, "▒▒▒")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!texto && m.imagens?.length) texto = m.imagens.length === 1 ? "(uma imagem)" : `(${m.imagens.length} imagens)`;
+  const letras = [...texto];
+  return letras.length > CONFIG.tamanhoDoAviso ? `${letras.slice(0, CONFIG.tamanhoDoAviso - 1).join("")}…` : texto;
+}
+
+function avisarChegada(m) {
+  if (!estado.dados || m.autor.usuario === eu()) return;
+  if (estado.alvo?.chave === m.canal && !estado.alvo.voz && !document.hidden && document.hasFocus()) return;
+
+  let titulo;
+  let hash;
+  let categoria = null;
+  if (ehChaveDePrivada(m.canal)) {
+    titulo = `${m.persona?.nome || m.autor.nomeConta} (privada)`;
+    hash = `#privada-${outroDaChave(m.canal)}`;
+  } else {
+    const achado = acharCanal(m.canal);
+    if (!achado) return;
+    const nivel = achado.canal.aviso || "tudo";
+    if (nivel === "nada" || (nivel === "mencoes" && !m.mencionaVoce)) return;
+    categoria = achado.categoria;
+    titulo = `${m.persona?.nome || m.autor.nomeConta} em #${achado.canal.nome}`;
+    hash = `#canal-${achado.canal.id}`;
+  }
+
+  if (somLigado()) tocarSom();
+  if (!temAvisos() || Notification.permission !== "granted") return;
+  try {
+    const aviso = new Notification(titulo, { body: textoDoAviso(m, categoria), tag: m.canal });
+    aviso.addEventListener("click", () => {
+      window.focus();
+      irPara(hash);
+      aviso.close();
+    });
+  } catch {
+    // o navegador não deixou mostrar (em alguns, só pelo service worker): fica o som
   }
 }
 
@@ -2609,6 +2784,8 @@ async function iniciar() {
   $("#botao-sair").addEventListener("click", sair);
   $("#botao-configuracoes").addEventListener("click", abrirConfiguracoes);
   window.addEventListener("hashchange", abrirPeloEndereco);
+  // O navegador só deixa tocar som depois de um clique ou tecla na página
+  for (const tipo of ["pointerdown", "keydown"]) document.addEventListener(tipo, prepararSom, { once: true, capture: true });
 
   try {
     await abrirChat();

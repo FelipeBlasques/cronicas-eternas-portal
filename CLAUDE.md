@@ -30,7 +30,7 @@ O `unzip -o` só cria e substitui arquivos, nunca apaga. Se uma mudança tirar a
 ## Regras do código (obrigatórias)
 
 - **Sem bibliotecas externas**, nem no servidor nem nas páginas. Nada de npm, CDN ou framework.
-  - **A exceção única:** `publico/chat/livekit-client.js`, cópia do arquivo UMD do pacote npm `livekit-client` (Apache 2.0) numa versão fixa, com a licença e a versão em `publico/chat/LICENCA-livekit.txt`. Fica no repositório e é servido pelo portal, sem CDN. Ninguém o atualiza de passagem: só numa sessão que peça isso. No servidor do portal continua sem biblioteca nenhuma (o passe do LiveKit é um JWT feito com `node:crypto`).
+  - **A exceção única:** `publico/chat/livekit-client.js`, cópia do arquivo UMD do pacote npm `livekit-client` (Apache 2.0) numa versão fixa (hoje a **2.23.0**, `dist/livekit-client.umd.js`), com a licença e a versão em `publico/chat/LICENCA-livekit.txt`. Fica no repositório e é servido pelo portal, sem CDN. Ninguém o atualiza de passagem: só numa sessão que peça isso. No servidor do portal continua sem biblioteca nenhuma (o passe do LiveKit é um JWT feito com `node:crypto`).
 - **A CSP proíbe script e estilo inline.** Nada de `<script>` com código, atributo `style="..."` ou `<style>` no HTML. Tudo fica em arquivos `.js` e `.css`. Mudar estilo pelo JS com `elemento.style.setProperty(...)` pode.
 - **Nomes no código e textos da interface em português.**
 - Os scripts das páginas são clássicos (não módulos) e usam `defer`, para a prévia funcionar abrindo o arquivo direto no navegador.
@@ -45,7 +45,7 @@ O `unzip -o` só cria e substitui arquivos, nunca apaga. Se uma mudança tirar a
 
 ## Cargos
 
-- **Administrador** (`conta.admin`): faz tudo.
+- **Administrador** (`conta.admin`): faz tudo. No chat, só ele cria, renomeia, ordena e apaga canais e escolhe as categorias das mesas. A exceção a "faz tudo": **não lê as mensagens privadas entre outras contas**.
 - **Editor** (`conta.editor`): registra e altera acontecimentos na Linha do Tempo (apagar vira pedido aprovado pelo administrador); cadastra e altera qualquer personagem que vê na galeria (apagar e escolher quem vê ficam com o administrador); marca lugares nos mapas e altera só os que ele marcou.
 - **Jogador:** só a conta.
 
@@ -88,7 +88,9 @@ portal/
                     simbolo(), perguntar(), avisoRapido(), avisarFalha(), fecharAoClicarFora(),
                     mostrarStatus(), textoFormatado(), paragrafosDe(), resumoDe(), normalizar(),
                     corVisivel(), FONTES e aplicarFonte(), montarCardComMoldura(),
-                    iniciarCinzas(), irParaEntrada(), marcarNaBarra()
+                    iniciarCinzas(), irParaEntrada(), marcarNaBarra(); o botão Chat do topo
+                    (montarBotaoDoChat(), à esquerda do #nome-conta, com a marca de não lidas do
+                    /api/barra em marcarChat())
     calendario.js   o Ciclo de Sylara: MESES, textoDaData(), textoDoPeriodo(), faseDaLua()...
     marcas.js       as marcas do texto das notas do Caderno (tipo Markdown, com os links, as embutidas e as
                     imagens do portal): declara só desenharMarcas(texto, { links, embutidas, imagens }, opcoes),
@@ -104,9 +106,9 @@ portal/
     caderno/                     index.html, caderno.js, caderno.css (carrega também ../marcas.js e ../marcas.css)
     ler/                         index.html, ler.js, ler.css: a leitura pública de uma nota do Caderno (/ler/#<token>),
                                  sem login e sem a barra lateral; carrega também ../marcas.js e ../marcas.css
-    chat/                        index.html, chat.js (texto: lista, mensagens, privadas, eventos, administração e
-                                 prévia), chat.css: a página do chat, com login próprio, sem a barra lateral e sem as
-                                 cinzas; voz.js (voz e vídeo: o painel, a sala, as configurações de aparelhos, o volume
+    chat/                        index.html, chat.js (texto: lista, mensagens, privadas, eventos, administração,
+                                 os avisos do navegador por canal, o som e a prévia), chat.css: a página do chat, com
+                                 login próprio, sem a barra lateral e sem as cinzas; voz.js (voz e vídeo: o painel, a sala, as configurações de aparelhos, o volume
                                  por pessoa e a voz simulada da prévia; usa o estado e os ganchosDaVoz do chat.js);
                                  livekit-client.js (a cópia fixa do LiveKit) e LICENCA-livekit.txt (versão e licença)
 planejamento/       especificações e roteiro das sessões; referencias/ com o Atlas de Tyrenar

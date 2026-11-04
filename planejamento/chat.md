@@ -371,14 +371,17 @@ O histórico (`GET .../mensagens`) responde `{ mensagens, maisAntigas }` (para t
 
 Para mim, com uma conta de teste de jogador:
 
-- abrir o chat pelo botão do portal já logado, e numa janela anônima ver a tela de entrada;
+- abrir o chat pelo botão do portal já logado (quem entrou antes da atualização: usar uma página do portal uma vez, para o cookie `sessao` virar `ce_sessao`), e numa janela anônima ver a tela de entrada;
+- clicar no botão Chat de novo volta para a mesma aba;
+- a marca do botão Chat: o ponto com mensagem não lida num canal com aviso "Tudo", e o número com uma menção ou uma privada;
 - a conta de teste sem personagem numa mesa não vê a categoria; com personagem, vê;
 - a mensagem na mesa sai com o nome e o retrato do personagem; na Geral e nas privadas, com a conta;
-- o administrador não vê privadas entre duas outras contas;
+- o administrador não vê privadas entre duas outras contas, nem as imagens delas pelo endereço (404);
 - voz entre dois computadores, um deles no 4G do celular;
-- câmera, tela e quem está nas salas visto de fora;
-- avisos e som com o chat noutra aba;
-- no app, o chat em janela própria com o microfone funcionando;
+- câmera, tela e quem está nas salas visto de fora (a presença pelas chamadas ao LiveKit);
+- "Ativar avisos" nas configurações, e os avisos e o som com o chat noutra aba e com a janela minimizada; clicar no aviso abre o canal;
+- um canal em "Só menções" e outro em "Nada"; o som desligado nas configurações;
+- no app, o botão Chat abrindo a janela do chat, o chat em janela própria com o microfone funcionando e os avisos;
 - `free -h` durante uma sessão com Foundry e chamada.
 
 ## Sessões
