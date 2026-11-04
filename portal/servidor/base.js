@@ -38,6 +38,14 @@ const CONFIG = {
   livekitInterno: (process.env.LIVEKIT_INTERNO || "http://127.0.0.1:7880").trim(),
   livekitChave: process.env.LIVEKIT_CHAVE || "",
   livekitSegredo: process.env.LIVEKIT_SEGREDO || "",
+  // Os GIFs do chat (a Klipy). Sem chave, o chat fica sem GIFs. klipyMidia: os hosts das
+  // imagens da Klipy (separados por vírgula), os únicos aceitos numa mensagem e na CSP do chat.
+  klipyChave: (process.env.KLIPY_CHAVE || "").trim(),
+  klipyBase: (process.env.KLIPY_BASE || "https://api.klipy.com/api/v1").trim().replace(/\/+$/, ""),
+  klipyMidia: (process.env.KLIPY_MIDIA || "static.klipy.com")
+    .split(",")
+    .map((h) => h.trim().toLowerCase())
+    .filter((h) => /^[a-z0-9.-]+(?::\d{1,5})?$/.test(h)),
 };
 
 const PASTA_PUBLICA = path.join(__dirname, "..", "publico");
@@ -206,6 +214,11 @@ function gerarSenhaLegivel() {
 
 function assinar(texto) {
   return crypto.createHmac("sha256", segredo).update(texto).digest("base64url");
+}
+
+// Um código fixo e curto de uma conta, que não revela o usuário (o customer_id da Klipy)
+function codigoDaConta(usuario) {
+  return crypto.createHmac("sha256", segredo).update(usuario).digest("hex").slice(0, 16);
 }
 
 function iguais(a, b) {
@@ -590,6 +603,7 @@ module.exports = {
   cookieSessao,
   cookiesDeSair,
   cookieDaConta,
+  codigoDaConta,
   cifrar,
   decifrar,
   tentativas,
