@@ -2564,7 +2564,9 @@ button.seletor-persona:focus-visible {
 /* O GIF na mensagem: até 360 px, na proporção dele, com a altura reservada */
 .msg__gif {
   display: block;
+  width: min(360px, 100%, var(--largura, 360px));
   max-width: 100%;
+  aspect-ratio: var(--proporcao, auto);
   margin-top: 0.35rem;
   padding: 0;
   overflow: hidden;
@@ -2582,9 +2584,8 @@ button.seletor-persona:focus-visible {
 
 .msg__gif-imagem {
   display: block;
-  width: min(360px, 100%, var(--largura, 360px));
-  height: auto;
-  aspect-ratio: var(--proporcao, auto);
+  width: 100%;
+  height: 100%;
   object-fit: cover;
 }
 

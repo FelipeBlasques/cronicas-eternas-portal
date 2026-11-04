@@ -468,8 +468,8 @@ function gifDaMensagem(m) {
   if (g.largura > 0 && g.altura > 0) {
     img.width = g.largura;
     img.height = g.altura;
-    img.style.setProperty("--largura", `${g.largura}px`);
-    img.style.setProperty("--proporcao", `${g.largura} / ${g.altura}`);
+    abrir.style.setProperty("--largura", `${g.largura}px`);
+    abrir.style.setProperty("--proporcao", `${g.largura} / ${g.altura}`);
   }
   img.addEventListener("load", () => {
     if (estado.grudado) rolarParaOFim();
