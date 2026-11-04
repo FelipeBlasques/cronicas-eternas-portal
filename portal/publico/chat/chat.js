@@ -55,8 +55,8 @@ const caminhoDasMensagens = (alvo) =>
     ? `/api/chat/privadas/${encodeURIComponent(alvo.usuario)}/mensagens`
     : `/api/chat/canais/${encodeURIComponent(alvo.id)}/mensagens`;
 
-function corpoDoEnvio({ texto, resposta, persona, arquivos }) {
-  if (!arquivos?.length) return { texto, resposta: resposta || undefined, persona: persona || undefined };
+function corpoDoEnvio({ texto, resposta, persona, arquivos, gif }) {
+  if (!arquivos?.length) return { texto, resposta: resposta || undefined, persona: persona || undefined, gif: gif || undefined };
   const form = new FormData();
   form.append("texto", texto);
   if (resposta) form.append("resposta", resposta);
@@ -86,6 +86,14 @@ const apiDoServidor = {
   apagarCanal: (id) => pedir("DELETE", caminhoDe("/api/chat/canais", id)),
   categorias: (mesas) => pedir("PUT", "/api/chat/categorias", { mesas }),
   mudarPerfil: (form) => pedir("PUT", "/api/chat/perfil", form),
+  reagir: (id, emoji, ligado) => pedir("PUT", `${caminhoDe("/api/chat/mensagens", id)}/reacoes`, { emoji, ligado }),
+  fixar: (id, fixada) => pedir("PUT", `${caminhoDe("/api/chat/mensagens", id)}/fixada`, { fixada }),
+  fixadas: (alvo) => pedir("GET", caminhoDasMensagens(alvo).replace(/\/mensagens$/, "/fixadas")),
+  gifs: (q, pagina) => {
+    const parametros = new URLSearchParams({ pagina: String(pagina) });
+    if (q) parametros.set("q", q);
+    return pedir("GET", `/api/chat/gifs?${parametros}`);
+  },
   mesasDoAdmin: async () => (await pedir("GET", "/api/admin")).campanhas,
   entrar: (usuario, senha, lembrar) => pedir("POST", "/api/entrar", { usuario, senha, lembrar }),
   sair: () => pedir("POST", "/api/sair"),
@@ -114,7 +122,7 @@ const apiDoServidor = {
   },
 };
 
-const TIPOS_DE_EVENTO = ["mensagem", "editada", "apagada", "lida", "canais", "voz", "presenca", "perfil", "recarregar"];
+const TIPOS_DE_EVENTO = ["mensagem", "editada", "apagada", "lida", "canais", "voz", "presenca", "perfil", "reacoes", "fixadas", "recarregar"];
 
 /* =================================================================
    Prévia: um chat de mentira, só na memória do navegador
@@ -139,6 +147,53 @@ function mapaDeExemplo() {
     "<circle cx='210' cy='170' r='9' fill='#c46a35'/>" +
     "<text x='225' y='160' font-family='Georgia' font-size='20' fill='#e8ddc8'>Vau do Corvo</text></svg>";
   return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+}
+
+// Os GIFs de exemplo da prévia: desenhados num canvas, sem rede (uma vez só)
+let gifsDaPrevia = null;
+function gifsDeExemplo() {
+  if (gifsDaPrevia) return gifsDaPrevia;
+  const modelos = [
+    ["dado rolando um vinte", "#2e3756", "d20", 240, 180],
+    ["vitória da party", "#5a2a22", "Vitória!", 240, 240],
+    ["fogo na taverna", "#7a3a1e", "🔥", 240, 135],
+    ["dragão acordou", "#3b4a2e", "🐉", 200, 260],
+    ["risada do mestre", "#5e5130", "HAHA", 240, 160],
+    ["susto no escuro", "#1f1d2a", "!!!", 240, 200],
+    ["brinde na taverna", "#6b3a4c", "🍺", 240, 240],
+    ["magia arcana", "#24364a", "✦", 260, 180],
+    ["espada em punho", "#4d4a45", "⚔", 220, 220],
+    ["chuva sem fim", "#365c5c", "~ ~ ~", 240, 150],
+    ["festa no castelo", "#5a3f6b", "🎉", 240, 200],
+    ["dormindo na sessão", "#3e4a66", "zzz", 240, 170],
+  ];
+  gifsDaPrevia = modelos.map(([titulo, cor, texto, largura, altura], i) => {
+    const tela = document.createElement("canvas");
+    tela.width = largura;
+    tela.height = altura;
+    const ctx = tela.getContext("2d");
+    const fundo = ctx.createLinearGradient(0, 0, largura, altura);
+    fundo.addColorStop(0, cor);
+    fundo.addColorStop(1, "#14110e");
+    ctx.fillStyle = fundo;
+    ctx.fillRect(0, 0, largura, altura);
+    ctx.strokeStyle = "rgba(232, 221, 200, 0.35)";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(largura / 2, altura / 2, Math.min(largura, altura) / 2.6, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = "#e8ddc8";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = `${Math.round(Math.min(largura, altura) / 4.5)}px Georgia, serif`;
+    ctx.fillText(texto, largura / 2, altura / 2);
+    ctx.font = "13px Georgia, serif";
+    ctx.fillStyle = "rgba(232, 221, 200, 0.7)";
+    ctx.fillText("GIF de exemplo", largura / 2, altura - 14);
+    const url = tela.toDataURL("image/png");
+    return { id: `exemplo-${i + 1}`, titulo, previa: { url, largura, altura }, url, largura, altura };
+  });
+  return gifsDaPrevia;
 }
 
 function exemplosDaPrevia() {
@@ -196,7 +251,10 @@ function exemplosDaPrevia() {
   escrever("canal-geral01", 60 * 24, "mestre", conta("mestre"), "Continua, às 20h. <@todos> confirmem quando puderem.", { resposta: pergunta.id });
   escrever("canal-geral01", 50, "neia", conta("neia"), "Confirmado! Achei esse link do mapa: https://cronicaseternas.com/mapas/");
   escrever("canal-geral01", 48, "neia", conta("neia"), "> Quem não tem pressa chega inteiro.\nFrase do dia, <@takezo>.");
-  escrever("canal-geral01", 6, "takezo", conta("takezo"), "Spoiler do episódio de ontem: ||a ponte cai|| 😅");
+  const spoiler = escrever("canal-geral01", 6, "takezo", conta("takezo"), "Spoiler do episódio de ontem: ||a ponte cai|| 😅");
+  const soEmojis = escrever("canal-geral01", 5, "neia", conta("neia"), "😱🌉💥");
+  const gif = gifsDeExemplo()[2];
+  const comGif = escrever("canal-geral01", 4, "mestre", conta("mestre"), "", { gif: { id: gif.id, url: gif.url, largura: gif.largura, altura: gif.altura, titulo: gif.titulo } });
   escrever("canal-geral01", 3, "takezo", conta("takezo"), "Ei <@mestre>, posso levar o mapa impresso?");
   escrever("canal-geral02", 90, "neia", conta("neia"), "Alguém viu aquele filme novo?");
 
@@ -222,6 +280,20 @@ function exemplosDaPrevia() {
   escrever("privada:mestre~neia", 400, "neia", conta("neia"), "Mestre, posso mudar o antecedente da Aelin?");
   escrever("privada:mestre~neia", 380, "mestre", conta("mestre"), "Pode, me manda a ideia antes da sessão.");
   escrever("privada:mestre~neia", 4, "neia", conta("neia"), "Mandei no Caderno!");
+
+  // As reações ({ id: { emoji: [usuarios] } }) e as fixadas ({ chave: [{ id, por, em }] })
+  const reacoes = {
+    [spoiler.id]: { "😂": ["neia", "mestre"], "😭": ["neia"] },
+    [soEmojis.id]: { "😱": ["takezo"] },
+    [comGif.id]: { "🔥": ["neia", "takezo"], "👍": ["takezo"] },
+  };
+  const confirmacao = historicos["canal-geral01"][3];
+  const fixadas = {
+    "canal-geral01": [
+      { id: historicos["canal-geral01"][0].id, por: "mestre", em: new Date(minutosAtras(60 * 25)).toISOString() },
+      { id: confirmacao.id, por: "neia", em: new Date(minutosAtras(60 * 23)).toISOString() },
+    ],
+  };
 
   // O que cada conta já leu (a última vista de cada canal)
   const ultima = (chave, deTras = 0) => historicos[chave][historicos[chave].length - 1 - deTras].id;
@@ -253,7 +325,7 @@ function exemplosDaPrevia() {
     },
   };
 
-  return { contas, mesas, personagens, outros, categorias, canais, historicos, lidas, perfis, personas: {}, ocultas: {}, noChat: ["mestre", "neia"] };
+  return { contas, mesas, personagens, outros, categorias, canais, historicos, lidas, perfis, reacoes, fixadas, personas: {}, ocultas: {}, noChat: ["mestre", "neia"] };
 }
 
 function criarApiDePrevia() {
@@ -347,7 +419,7 @@ function criarApiDePrevia() {
     if (m.resposta) {
       const original = acharMensagem(m.resposta);
       resposta = original
-        ? { id: original.m.id, nome: personaCompleta(original.m.persona).nome, trecho: trechoDe(original.m.texto) }
+        ? { id: original.m.id, nome: personaCompleta(original.m.persona).nome, trecho: trechoDe(original.m.texto), gif: Boolean(original.m.gif) }
         : { id: m.resposta, apagada: true };
     }
     return {
@@ -359,11 +431,23 @@ function criarApiDePrevia() {
       persona: personaCompleta(m.persona),
       texto: m.texto,
       imagens: [...m.imagens],
+      gif: m.gif ? { ...m.gif } : null,
       resposta,
+      reacoes: reacoesPublicas(m.id),
+      fixada: (mundo.fixadas[chave] ?? []).some((f) => f.id === m.id),
       mencionaVoce: menciona(m, eu),
       podeEditar: m.autor === eu,
       podeApagar: m.autor === eu || (Boolean(contaDe(eu)?.admin) && !ehPrivada(chave)),
     };
+  }
+
+  const reacoesPublicas = (id) => Object.entries(mundo.reacoes[id] ?? {}).map(([emoji, usuarios]) => ({ emoji, usuarios: [...usuarios] }));
+
+  function tirarDasFixadas(chave, id) {
+    const lista = mundo.fixadas[chave] ?? [];
+    if (!lista.some((f) => f.id === id)) return false;
+    mundo.fixadas[chave] = lista.filter((f) => f.id !== id);
+    return true;
   }
 
   function contar(chave, usuario) {
@@ -438,6 +522,8 @@ function criarApiDePrevia() {
       personasDosMembros,
       perfis: Object.fromEntries(mundo.contas.map((c) => [c.usuario, perfilPublico(c.usuario)])),
       voz: { configurada: true, salas: salasDaPrevia(visiveis) },
+      gifs: true,
+      fixadas: Object.fromEntries(Object.entries(mundo.fixadas).filter(([chave, lista]) => lista.length && veChave(eu, chave)).map(([chave, lista]) => [chave, lista.length])),
     };
   }
 
@@ -512,11 +598,13 @@ function criarApiDePrevia() {
       const inicio = Math.max(0, fim - 50);
       return { mensagens: lista.slice(inicio, fim).map((m) => publica(m, chave)), maisAntigas: inicio > 0 };
     },
-    async enviar(alvo, { texto, resposta, persona, arquivos }) {
+    async enviar(alvo, { texto, resposta, persona, arquivos, gif }) {
       await pausa();
       const chave = chaveDoAlvo(alvo);
       if (alvo.tipo === "privada" && !contaDe(alvo.usuario)) throw falha("Essa conta não existe mais.");
-      if (!texto.trim() && !arquivos?.length) throw falha("Escreva alguma coisa antes de enviar.");
+      const achado = gif ? gifsDeExemplo().find((g) => g.id === gif) : null;
+      if (gif && !achado) throw falha("Esse GIF não foi encontrado.", "gif");
+      if (!texto.trim() && !arquivos?.length && !achado) throw falha("Escreva alguma coisa antes de enviar.");
       const propria = personaNo(eu, chave);
       const usada = persona ?? propria;
       const m = {
@@ -528,6 +616,7 @@ function criarApiDePrevia() {
         texto,
         imagens: (arquivos ?? []).map((arquivo) => URL.createObjectURL(arquivo)),
         resposta: resposta || null,
+        gif: achado ? { id: achado.id, url: achado.url, largura: achado.largura, altura: achado.altura, titulo: achado.titulo } : null,
       };
       (mundo.historicos[chave] ??= []).push(m);
       marcarLida(chave, m.id);
@@ -549,8 +638,65 @@ function criarApiDePrevia() {
       const achada = acharMensagem(id);
       if (!achada) throw falha("Mensagem não encontrada.");
       achada.lista.splice(achada.indice, 1);
+      delete mundo.reacoes[id];
+      if (tirarDasFixadas(achada.chave, id)) avisar("fixadas", { canal: achada.chave, quantas: mundo.fixadas[achada.chave].length, id, fixada: false });
       avisar("apagada", { id, canal: achada.chave });
       return { ok: true };
+    },
+    async reagir(id, emoji, ligado) {
+      await pausa();
+      const achada = acharMensagem(id);
+      if (!achada || !veChave(eu, achada.chave)) throw falha("Mensagem não encontrada.");
+      if (ehPrivada(achada.chave) && participantes(achada.chave).some((u) => !contaDe(u))) throw falha("Essa conta não existe mais.", "conta-excluida");
+      const daMensagem = (mundo.reacoes[id] ??= {});
+      const usuarios = daMensagem[emoji] ?? [];
+      if (ligado && !usuarios.includes(eu)) {
+        if (!usuarios.length && Object.keys(daMensagem).length >= 20) throw falha("Uma mensagem pode ter no máximo 20 reações diferentes.", "reacoes-demais");
+        daMensagem[emoji] = [...usuarios, eu];
+      } else if (!ligado && usuarios.includes(eu)) {
+        const ficam = usuarios.filter((u) => u !== eu);
+        if (ficam.length) daMensagem[emoji] = ficam;
+        else delete daMensagem[emoji];
+      }
+      avisar("reacoes", { id, canal: achada.chave, reacoes: reacoesPublicas(id) });
+      return { reacoes: reacoesPublicas(id) };
+    },
+    async fixar(id, fixada) {
+      await pausa();
+      const achada = acharMensagem(id);
+      if (!achada || !veChave(eu, achada.chave)) throw falha("Mensagem não encontrada.");
+      const chave = achada.chave;
+      const lista = (mundo.fixadas[chave] ??= []);
+      let mudou = false;
+      if (fixada && !lista.some((f) => f.id === id)) {
+        if (lista.length >= 50) throw falha("Desafixe uma antes.", "fixadas-demais");
+        lista.push({ id, por: eu, em: new Date().toISOString() });
+        mudou = true;
+      } else if (!fixada) {
+        mudou = tirarDasFixadas(chave, id);
+      }
+      const quantas = mundo.fixadas[chave].length;
+      if (mudou) avisar("fixadas", { canal: chave, quantas, id, fixada });
+      return { fixada, quantas };
+    },
+    async fixadas(alvo) {
+      await pausa();
+      const chave = chaveDoAlvo(alvo);
+      const lista = [...(mundo.fixadas[chave] ?? [])].reverse();
+      return {
+        fixadas: lista
+          .map((f) => ({ achada: acharMensagem(f.id), f }))
+          .filter(({ achada }) => achada)
+          .map(({ achada, f }) => ({ mensagem: publica(achada.m, chave), por: f.por, em: f.em })),
+      };
+    },
+    // Na prévia, 8 por página, para dar para ver o "mais ao rolar"
+    async gifs(q, pagina) {
+      await pausa();
+      const termo = normalizar(q || "");
+      const todos = gifsDeExemplo().filter((g) => !termo || normalizar(g.titulo).includes(termo));
+      const inicio = (pagina - 1) * 8;
+      return { gifs: todos.slice(inicio, inicio + 8), maisPaginas: inicio + 8 < todos.length };
     },
     async ocultar(usuario) {
       await pausa();
@@ -601,7 +747,9 @@ function criarApiDePrevia() {
     async apagarCanal(id) {
       await pausa();
       mundo.canais = mundo.canais.filter((c) => c.id !== id);
+      for (const m of mundo.historicos[id] ?? []) delete mundo.reacoes[m.id];
       delete mundo.historicos[id];
+      delete mundo.fixadas[id];
       avisar("canais", {});
       return { ok: true };
     },
@@ -732,6 +880,17 @@ const estado = {
   esperaDosCanais: null,
   esperaDaReconexao: null,
   enviando: false,
+};
+
+// O extras.js (emojis, reações, GIFs e fixadas) preenche estes ganchos
+const ganchosDosExtras = {
+  conteudo: null, // (m, categoria) → os elementos depois do texto: o GIF e as reações
+  acoes: null, // (m) → { antes: [botões], depois: [botões] } das ações da mensagem
+  soEmojis: null, // (texto) → true se o texto for só emojis (aparece maior)
+  cabeca: null, // () → o cabeçalho foi redesenhado (o botão das fixadas)
+  escrever: null, // (inativa) → os botões de emoji e de GIF do campo
+  evento: null, // (tipo, corpo) → os eventos "reacoes" e "fixadas"
+  fechar: null, // () → fecha os painéis (trocou de canal)
 };
 
 // O voz.js preenche estes ganchos
@@ -1661,6 +1820,7 @@ function abrirAlvo(alvo) {
   estado.alvo = alvo;
   fecharListaDeMencoes();
   fecharCard();
+  ganchosDosExtras.fechar?.();
   desenharLista();
   desenharCabeca();
   desenharMembros();
@@ -1789,6 +1949,7 @@ function desenharCabeca() {
   titulo.replaceChildren();
   falando.replaceChildren();
   falando.hidden = true;
+  ganchosDosExtras.cabeca?.();
   const alvo = estado.alvo;
   if (!alvo) return;
   if (alvo.tipo === "privada") {
@@ -1887,7 +2048,7 @@ function blocoDaResposta(m, categoria) {
   const original = estado.historicos.get(estado.alvo.chave)?.lista.find((x) => x.id === r.id);
   if (original) bloco.append(retratoDe(original.persona, categoria, "msg__resposta-retrato"));
   const nome = original ? nomeDaPersona(original.persona, "msg__resposta-nome") : criar("span", "msg__resposta-nome nome-persona", r.nome);
-  bloco.append(nome, criar("span", "msg__resposta-trecho", trechoLegivel(r.trecho)));
+  bloco.append(nome, criar("span", "msg__resposta-trecho", r.trecho || !r.gif ? trechoLegivel(r.trecho) : "(GIF)"));
   bloco.title = "Ir para a mensagem";
   bloco.addEventListener("click", () => irParaMensagem(r.id));
   return bloco;
@@ -1896,7 +2057,10 @@ function blocoDaResposta(m, categoria) {
 function acoesDaMensagem(m) {
   const acoes = criar("div", "msg__acoes");
   const privadaInativa = estado.alvo.tipo === "privada" && privadaDaLista(estado.alvo.chave)?.ativa === false;
+  const extras = ganchosDosExtras.acoes?.(m) ?? { antes: [], depois: [] };
+  acoes.append(...extras.antes);
   if (!privadaInativa) acoes.append(botaoDeIcone("icone-responder", "Responder", () => responderA(m)));
+  acoes.append(...extras.depois);
   if (m.podeEditar) acoes.append(botaoDeIcone("icone-lapis", "Editar", () => comecarEdicao(m)));
   if (m.podeApagar) acoes.append(botaoDeIcone("icone-lixeira", "Apagar", () => apagarMensagem(m), "icone-botao--perigo"));
   return acoes;
@@ -1943,6 +2107,15 @@ function edicaoDe(m) {
 // O card de quem mandou: na Geral e nas privadas, o perfil de agora
 const infoDaMensagem = (m, categoria) => ({ usuario: m.autor.usuario, persona: m.persona, categoria });
 
+// O alfinete pequeno de uma mensagem fixada, ao lado da hora
+function alfineteDaMensagem() {
+  const alfinete = simbolo("icone-alfinete", "msg__alfinete");
+  const caixa = criar("span", "msg__fixada");
+  caixa.title = "Mensagem fixada";
+  caixa.append(alfinete);
+  return caixa;
+}
+
 function elementoDaMensagem(m, continua, categoria) {
   const el = criar("article", "msg");
   el.dataset.id = m.id;
@@ -1976,13 +2149,17 @@ function elementoDaMensagem(m, continua, categoria) {
     hora.dateTime = m.em;
     hora.title = dataCompleta(m.em);
     cabeca.append(nome, hora);
+    if (m.fixada) cabeca.append(alfineteDaMensagem());
     corpo.append(cabeca);
+  } else if (m.fixada) {
+    lado.append(alfineteDaMensagem());
   }
 
   if (estado.editando?.id === m.id) {
     corpo.append(edicaoDe(m));
   } else if (m.texto) {
     const texto = criar("div", "msg__texto");
+    if (ganchosDosExtras.soEmojis?.(m.texto)) texto.classList.add("msg__texto--emojis");
     desenharTexto(texto, m.texto);
     if (m.editadaEm) {
       const marca = criar("span", "msg__editada", "(editada)");
@@ -2011,6 +2188,8 @@ function elementoDaMensagem(m, continua, categoria) {
     }
     corpo.append(imagens);
   }
+
+  corpo.append(...(ganchosDosExtras.conteudo?.(m, categoria) ?? []));
 
   el.append(lado, corpo, acoesDaMensagem(m));
   return el;
@@ -2297,6 +2476,7 @@ function desenharEscrever() {
   const inativa = alvo?.tipo === "privada" && (privadaDaLista(alvo.chave)?.ativa === false || !contaPorUsuario(alvo.usuario));
   campo.disabled = inativa;
   $("#botao-imagem").disabled = inativa;
+  ganchosDosExtras.escrever?.(inativa);
   aviso.hidden = !inativa;
   aviso.textContent = inativa ? "Essa conta não existe mais. A conversa fica só para leitura." : "";
   if (alvo && !inativa) {
@@ -3157,6 +3337,8 @@ function tratarEvento(tipo, corpo) {
     redesenharCard();
   } else if (tipo === "perfil" && corpo.usuario && corpo.perfil) {
     aplicarPerfil(corpo.usuario, corpo.perfil);
+  } else if (tipo === "reacoes" || tipo === "fixadas") {
+    ganchosDosExtras.evento?.(tipo, corpo);
   } else if (tipo === "recarregar") {
     recarregarTudo().catch(() => {});
   }
@@ -3289,6 +3471,7 @@ function textoDoAviso(m, categoria) {
     .replace(/\s+/g, " ")
     .trim();
   if (!texto && m.imagens?.length) texto = m.imagens.length === 1 ? "(uma imagem)" : `(${m.imagens.length} imagens)`;
+  if (!texto && m.gif) texto = "(GIF)";
   const letras = [...texto];
   return letras.length > CONFIG.tamanhoDoAviso ? `${letras.slice(0, CONFIG.tamanhoDoAviso - 1).join("")}…` : texto;
 }

@@ -11,7 +11,9 @@
   <link rel="stylesheet" href="chat.css">
   <script src="../comum.js" defer></script>
   <script src="livekit-client.js" defer></script>
+  <script src="emojis.js" defer></script>
   <script src="chat.js" defer></script>
+  <script src="extras.js" defer></script>
   <script src="voz.js" defer></script>
 </head>
 <body class="chat" data-pagina="chat" data-raiz="../">
@@ -43,6 +45,8 @@
       <symbol id="icone-camera" viewBox="0 0 24 24"><rect x="3" y="6.5" width="12.5" height="11" rx="1.5"/><path d="M15.5 10.5l5.5-3.5v10l-5.5-3.5Z"/></symbol>
       <symbol id="icone-camera-desligada" viewBox="0 0 24 24"><path d="M9 6.5h5a1.5 1.5 0 0 1 1.5 1.5v4M15.5 15.5V16A1.5 1.5 0 0 1 14 17.5H4.5A1.5 1.5 0 0 1 3 16V8a1.5 1.5 0 0 1 1.5-1.5M15.5 10.5l5.5-3.5v10l-3-1.9M3.5 3.5l17 17"/></symbol>
       <symbol id="icone-tela" viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="12" rx="1.5"/><path d="M8.5 20.5h7M12 16.5v4M12 13.5V8M9.5 10.5L12 8l2.5 2.5"/></symbol>
+      <symbol id="icone-emoji" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M8.5 14.2a4.2 4.2 0 0 0 7 0"/><circle cx="9.2" cy="9.8" r=".9"/><circle cx="14.8" cy="9.8" r=".9"/></symbol>
+      <symbol id="icone-alfinete" viewBox="0 0 24 24"><path d="M9 3.5h6M10 3.5v6l-3.5 4h11l-3.5-4v-6M12 13.5v7"/></symbol>
       <symbol id="icone-desligar" viewBox="0 0 24 24"><path d="M3 13.5c5-4.6 13-4.6 18 0l-2.2 2.6-3.6-1.4v-2.6a12 12 0 0 0-6.4 0v2.6l-3.6 1.4Z"/></symbol>
     </defs>
   </svg>
@@ -122,6 +126,10 @@
       <header class="centro__cabeca">
         <h1 id="titulo-canal" class="centro__titulo"></h1>
         <div id="falando-como" class="falando-como" hidden></div>
+        <button id="botao-fixadas" class="icone-botao botao-fixadas" type="button" title="Mensagens fixadas" aria-label="Mensagens fixadas" aria-haspopup="dialog" aria-expanded="false" hidden>
+          <svg aria-hidden="true"><use href="#icone-alfinete"/></svg>
+          <span id="fixadas-numero" class="botao-fixadas__numero" hidden></span>
+        </button>
         <button id="botao-membros" class="icone-botao" type="button" title="Quem vê este canal" aria-label="Quem vê este canal" aria-pressed="true">
           <svg aria-hidden="true"><use href="#icone-membros"/></svg>
         </button>
@@ -139,10 +147,15 @@
         </div>
         <div id="anexos" class="anexos" hidden></div>
         <div id="lista-mencoes" class="lista-mencoes" role="listbox" hidden></div>
+        <div id="lista-emojis" class="lista-mencoes lista-emojis" role="listbox" aria-label="Emojis" hidden></div>
         <div class="escrever__linha">
           <button id="botao-imagem" class="icone-botao" type="button" title="Enviar imagem" aria-label="Enviar imagem">
             <svg aria-hidden="true"><use href="#icone-imagem"/></svg>
           </button>
+          <button id="botao-emoji" class="icone-botao" type="button" title="Emojis" aria-label="Emojis" aria-haspopup="dialog" aria-expanded="false">
+            <svg aria-hidden="true"><use href="#icone-emoji"/></svg>
+          </button>
+          <button id="botao-gif" class="icone-botao botao-gif" type="button" title="GIFs" aria-label="GIFs" aria-haspopup="dialog" aria-expanded="false" hidden>GIF</button>
           <input id="arquivo-imagem" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/avif" multiple hidden>
           <textarea id="campo-texto" class="escrever__campo" rows="1" maxlength="4000" placeholder="Escreva uma mensagem" aria-label="Mensagem"></textarea>
         </div>
@@ -327,6 +340,27 @@
 
   <!-- O som de quem está na sala -->
   <div id="audios-da-voz" hidden></div>
+
+  <!-- ============ O seletor de emojis (escrever e reagir) ============ -->
+  <div id="painel-emojis" class="painel-flutuante painel-emojis" role="dialog" aria-label="Emojis" hidden>
+    <input id="emojis-busca" class="painel-flutuante__busca" type="search" placeholder="Buscar emoji" aria-label="Buscar emoji" autocomplete="off" spellcheck="false">
+    <div id="emojis-abas" class="painel-emojis__abas" role="toolbar" aria-label="Grupos"></div>
+    <div id="emojis-grade" class="painel-emojis__grade"></div>
+    <p id="emojis-nome" class="painel-emojis__nome"></p>
+  </div>
+
+  <!-- ============ GIFs (Klipy) ============ -->
+  <div id="painel-gifs" class="painel-flutuante painel-gifs" role="dialog" aria-label="GIFs" hidden>
+    <input id="gifs-busca" class="painel-flutuante__busca" type="search" placeholder="Pesquisar na KLIPY" aria-label="Pesquisar na KLIPY" autocomplete="off" spellcheck="false">
+    <div id="gifs-grade" class="painel-gifs__grade"></div>
+    <p class="painel-gifs__creditos">Powered by <strong>KLIPY</strong></p>
+  </div>
+
+  <!-- ============ Mensagens fixadas ============ -->
+  <div id="painel-fixadas" class="painel-flutuante painel-fixadas" role="dialog" aria-labelledby="fixadas-titulo" hidden>
+    <h2 id="fixadas-titulo" class="painel-flutuante__titulo">Mensagens fixadas</h2>
+    <div id="fixadas-lista" class="painel-fixadas__lista"></div>
+  </div>
 
   <div id="aviso-rapido" class="aviso-rapido" role="status" aria-live="polite" hidden></div>
 

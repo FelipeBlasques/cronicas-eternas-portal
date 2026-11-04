@@ -114,8 +114,13 @@ portal/
                                  app (cronicasEternasApp.avisar), o som e a prévia), chat.css: a página do chat, com
                                  login próprio, sem a barra lateral e sem as cinzas; voz.js (voz e vídeo: o painel, a sala, as configurações de aparelhos, o volume
                                  por pessoa e a voz simulada da prévia; usa o estado e os ganchosDaVoz do chat.js);
-                                 livekit-client.js (a cópia fixa do LiveKit) e LICENCA-livekit.txt (versão e licença)
-planejamento/       especificações e roteiro das sessões; referencias/ com o Atlas de Tyrenar
+                                 livekit-client.js (a cópia fixa do LiveKit) e LICENCA-livekit.txt (versão e licença);
+                                 extras.js (o seletor de emojis, o ":" no campo, as reações, o painel de GIFs, o GIF na
+                                 mensagem e as fixadas; usa o estado do chat.js e preenche os ganchosDosExtras);
+                                 emojis.js (só dados: EMOJIS, gerado por planejamento/ferramentas/gerar-emojis.mjs) e
+                                 LICENCA-emojis.txt (as licenças dos dados dos emojis)
+planejamento/       especificações e roteiro das sessões; referencias/ com o Atlas de Tyrenar; ferramentas/ com o
+                    gerar-emojis.mjs (gera o emojis.js a partir de pacotes npm instalados fora de portal/)
 ```
 
 ## Padrão: página nova no servidor

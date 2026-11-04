@@ -2291,3 +2291,469 @@ button.seletor-persona:focus-visible {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* =================================================================
+   Emojis, reações, GIFs e fixadas (o extras.js)
+   ================================================================= */
+
+/* A mensagem só de emojis aparece com o dobro do tamanho */
+.msg__texto--emojis {
+  font-size: 2em;
+  line-height: 1.25;
+}
+
+/* O alfinete da mensagem fixada, ao lado da hora */
+.msg__fixada {
+  display: inline-flex;
+  align-self: center;
+  color: var(--pergaminho-apagado);
+}
+
+.msg__lado .msg__fixada {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.15rem;
+}
+
+.msg__alfinete {
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.icone-botao--ligado {
+  color: var(--pergaminho);
+}
+
+/* As reações, embaixo da mensagem */
+.msg__reacoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.35rem;
+}
+
+.reacao {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-height: 1.75rem;
+  padding: 0.1rem 0.5rem;
+  font: inherit;
+  font-size: 0.9rem;
+  line-height: 1;
+  color: var(--pergaminho-apagado);
+  background: rgba(232, 221, 200, 0.05);
+  border: 1px solid var(--ferro-fraco);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: border-color 0.2s, background-color 0.2s, color 0.2s;
+}
+
+.reacao:hover:not(:disabled) {
+  color: var(--pergaminho);
+  border-color: var(--ferro);
+}
+
+.reacao:focus-visible {
+  outline: 2px solid var(--brasa);
+  outline-offset: 1px;
+}
+
+.reacao:disabled {
+  cursor: default;
+}
+
+.reacao--minha {
+  color: var(--pergaminho);
+  background: rgba(196, 106, 53, 0.12);
+  border-color: var(--brasa);
+}
+
+.reacao--minha:hover:not(:disabled) {
+  border-color: var(--brasa);
+}
+
+.reacao__emoji {
+  font-size: 1.1rem;
+}
+
+.reacao__numero {
+  font-variant-numeric: tabular-nums;
+}
+
+.reacao--mais {
+  padding: 0.1rem 0.45rem;
+  opacity: 0;
+}
+
+.msg:hover .reacao--mais,
+.reacao--mais:focus-visible,
+.reacao--mais[aria-expanded="true"] {
+  opacity: 1;
+}
+
+.reacao--mais svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+
+/* O GIF na mensagem: até 360 px, na proporção dele, com a altura reservada */
+.msg__gif {
+  display: block;
+  max-width: 100%;
+  margin-top: 0.35rem;
+  padding: 0;
+  overflow: hidden;
+  background: var(--pedra);
+  border: 1px solid var(--ferro-fraco);
+  border-radius: var(--raio);
+  cursor: zoom-in;
+}
+
+.msg__gif:hover,
+.msg__gif:focus-visible {
+  border-color: var(--ferro);
+  outline: none;
+}
+
+.msg__gif-imagem {
+  display: block;
+  width: min(360px, 100%, var(--largura, 360px));
+  height: auto;
+  aspect-ratio: var(--proporcao, auto);
+  object-fit: cover;
+}
+
+/* Os botões de emoji e de GIF no campo */
+.botao-gif {
+  width: auto;
+  padding: 0 0.35rem;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+/* O ":" usa o estilo da lista do @ */
+.emoji-sugestao__emoji {
+  width: 24px;
+  font-size: 1.2rem;
+  text-align: center;
+}
+
+/* O botão das fixadas, no cabeçalho */
+.botao-fixadas {
+  position: relative;
+  width: auto;
+  min-width: 30px;
+  gap: 0.2rem;
+  padding: 0 0.3rem;
+  grid-auto-flow: column;
+}
+
+.botao-fixadas__numero {
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Os painéis flutuantes: o seletor de emojis, os GIFs e as fixadas */
+.painel-flutuante {
+  position: fixed;
+  z-index: 65;
+  display: flex;
+  flex-direction: column;
+  max-width: calc(100vw - 16px);
+  max-height: calc(100vh - 16px);
+  max-height: calc(100dvh - 16px);
+  background: var(--pedra);
+  border: 1px solid var(--ferro);
+  border-radius: calc(var(--raio) + 2px);
+  box-shadow: 0 24px 60px -18px rgba(0, 0, 0, 0.95);
+}
+
+.painel-flutuante__busca {
+  flex: none;
+  margin: 0.6rem 0.6rem 0.4rem;
+  padding: 0.4rem 0.6rem;
+  font: inherit;
+  color: var(--pergaminho);
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--ferro-fraco);
+  border-radius: var(--raio);
+}
+
+.painel-flutuante__busca:focus-visible {
+  outline: none;
+  border-color: var(--brasa);
+}
+
+.painel-flutuante__titulo {
+  flex: none;
+  margin: 0;
+  padding: 0.7rem 0.9rem 0.5rem;
+  font-family: var(--fonte-gotica);
+  font-size: 1.25rem;
+  font-weight: 500;
+  color: var(--pergaminho);
+  border-bottom: 1px solid var(--ferro-fraco);
+}
+
+/* O seletor de emojis */
+.painel-emojis {
+  width: 360px;
+  height: 400px;
+}
+
+.painel-emojis__abas {
+  display: flex;
+  flex: none;
+  gap: 0.1rem;
+  padding: 0 0.5rem 0.3rem;
+  border-bottom: 1px solid var(--ferro-fraco);
+}
+
+.painel-emojis__aba {
+  flex: 1;
+  height: 30px;
+  padding: 0;
+  font-size: 1.05rem;
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  cursor: pointer;
+  filter: grayscale(0.7);
+  opacity: 0.7;
+  transition: opacity 0.2s, filter 0.2s;
+}
+
+.painel-emojis__aba:hover,
+.painel-emojis__aba[aria-pressed="true"] {
+  filter: none;
+  opacity: 1;
+}
+
+.painel-emojis__aba[aria-pressed="true"] {
+  border-bottom-color: var(--brasa);
+}
+
+.painel-emojis__grade {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 0.5rem 0.4rem;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ferro) transparent;
+}
+
+.painel-emojis__grupo {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin: 0;
+  padding: 0.45rem 0.2rem 0.25rem;
+  font-size: 0.78rem;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--pergaminho-apagado);
+  background: var(--pedra);
+}
+
+.painel-emojis__lista {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+}
+
+.emoji-opcao {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  padding: 0;
+  font-size: 1.45rem;
+  line-height: 1;
+  background: none;
+  border: 0;
+  border-radius: var(--raio);
+  cursor: pointer;
+}
+
+.emoji-opcao:hover,
+.emoji-opcao:focus-visible {
+  background: rgba(232, 221, 200, 0.09);
+  outline: none;
+}
+
+.painel-emojis__vazio {
+  margin: 1.5rem 0;
+  text-align: center;
+  color: var(--cinza);
+}
+
+.painel-emojis__nome {
+  flex: none;
+  min-height: 1.9rem;
+  margin: 0;
+  padding: 0.35rem 0.7rem;
+  overflow: hidden;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--pergaminho-apagado);
+  border-top: 1px solid var(--ferro-fraco);
+}
+
+/* O painel de GIFs */
+.painel-gifs {
+  width: 420px;
+  height: 460px;
+}
+
+.painel-gifs__grade {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-content: start;
+  gap: 0.4rem;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 0.6rem 0.5rem;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ferro) transparent;
+}
+
+.painel-gifs__coluna {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.painel-gifs__aviso {
+  grid-column: 1 / -1;
+  margin: 0.8rem 0;
+  text-align: center;
+  color: var(--cinza);
+}
+
+.gif-opcao {
+  display: block;
+  padding: 0;
+  overflow: hidden;
+  background: var(--carvao);
+  border: 1px solid transparent;
+  border-radius: var(--raio);
+  cursor: pointer;
+}
+
+.gif-opcao:hover,
+.gif-opcao:focus-visible {
+  border-color: var(--brasa);
+  outline: none;
+}
+
+.gif-opcao__imagem {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: var(--proporcao, auto);
+  object-fit: cover;
+}
+
+.painel-gifs__creditos {
+  flex: none;
+  margin: 0;
+  padding: 0.35rem 0.7rem;
+  font-size: 0.8rem;
+  text-align: right;
+  color: var(--pergaminho-apagado);
+  border-top: 1px solid var(--ferro-fraco);
+}
+
+/* O painel das fixadas */
+.painel-fixadas {
+  width: 400px;
+  max-height: min(520px, calc(100vh - 16px));
+  max-height: min(520px, calc(100dvh - 16px));
+}
+
+.painel-fixadas__lista {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0.3rem 0.6rem 0.6rem;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ferro) transparent;
+}
+
+.painel-fixadas__vazio {
+  margin: 1.2rem 0.4rem;
+  text-align: center;
+  color: var(--cinza);
+}
+
+.fixada {
+  padding: 0.55rem 0.4rem 0.4rem;
+  border-bottom: 1px solid var(--ferro-fraco);
+}
+
+.fixada:last-child {
+  border-bottom: 0;
+}
+
+.fixada__cabeca {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.fixada__retrato {
+  width: 24px;
+  height: 24px;
+  font-size: 0.75rem;
+}
+
+.fixada__nome {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--pergaminho);
+}
+
+.fixada__hora {
+  margin-left: auto;
+  flex: none;
+  font-size: 0.75rem;
+  color: var(--cinza);
+}
+
+.fixada__resumo {
+  margin: 0.3rem 0 0.15rem;
+  overflow-wrap: anywhere;
+  line-height: 1.4;
+  color: #ddd2bd;
+}
+
+.fixada__por {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--cinza);
+}
+
+.fixada__acoes {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.9rem;
+}
