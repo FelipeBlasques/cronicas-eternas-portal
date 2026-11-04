@@ -9,6 +9,9 @@ Portal do grupo de RPG em https://cronicaseternas.com. Cada jogador tem conta, v
 - Os dados ficam fora do código, em `/var/lib/portal`: `dados.json`, `segredo` e `uploads/`. Eles nunca entram no repositório.
 - Os cadernos ficam em `/var/lib/portal/cadernos/` (`<usuario>/caderno.json` e `<usuario>/imagens/`), fora do `dados.json`.
 - As imagens fixas das campanhas (`publico/imagens/`) não estão no repositório. Se existirem no servidor, a atualização não as apaga.
+- O **chat** abre em chat.cronicaseternas.com, servido pelo mesmo portal (porta 3000), num bloco próprio do nginx. As mensagens ficam em `/var/lib/portal/chat/` (`canais/`, `privadas/`, `estado.json` e `imagens/`), fora do `dados.json`; só a estrutura (categorias e canais) fica em `dados.chat`.
+- A voz e o vídeo do chat usam o **LiveKit**, um servidor de mídia que roda na VPS como serviço próprio (`livekit.service`, configurado em `/etc/livekit.yaml`), fora do portal, como o Foundry. Endereço público: voz.cronicaseternas.com (a sinalização passa pelo nginx; o áudio e o vídeo vão direto às portas 7881/tcp e 7882/udp).
+- As variáveis de ambiente do portal ficam num override do `portal.service` (`systemctl edit portal`): `HOST_CHAT`, `DOMINIO_COOKIE`, `LIVEKIT_URL`, `LIVEKIT_INTERNO`, `LIVEKIT_CHAVE` e `LIVEKIT_SEGREDO` (veja `planejamento/chat.md`). Com `DOMINIO_COOKIE`, o cookie da sessão se chama `ce_sessao` e vale nos subdomínios.
 - O app dos jogadores fica noutro repositório, `FelipeBlasques/cronicas-eternas-app` (Tauri, fork do FLC). Ele abre o portal na janela principal e manda tudo o que é de vtt.cronicaseternas.com para a janela do jogo. Páginas novas do portal não precisam de mudança no app.
 
 ## Onde você trabalha
@@ -27,6 +30,7 @@ O `unzip -o` só cria e substitui arquivos, nunca apaga. Se uma mudança tirar a
 ## Regras do código (obrigatórias)
 
 - **Sem bibliotecas externas**, nem no servidor nem nas páginas. Nada de npm, CDN ou framework.
+  - **A exceção única:** `publico/chat/livekit-client.js`, cópia do arquivo UMD do pacote npm `livekit-client` (Apache 2.0) numa versão fixa, com a licença e a versão em `publico/chat/LICENCA-livekit.txt`. Fica no repositório e é servido pelo portal, sem CDN. Ninguém o atualiza de passagem: só numa sessão que peça isso. No servidor do portal continua sem biblioteca nenhuma (o passe do LiveKit é um JWT feito com `node:crypto`).
 - **A CSP proíbe script e estilo inline.** Nada de `<script>` com código, atributo `style="..."` ou `<style>` no HTML. Tudo fica em arquivos `.js` e `.css`. Mudar estilo pelo JS com `elemento.style.setProperty(...)` pode.
 - **Nomes no código e textos da interface em português.**
 - Os scripts das páginas são clássicos (não módulos) e usam `defer`, para a prévia funcionar abrindo o arquivo direto no navegador.
@@ -70,6 +74,9 @@ portal/
     mapas.js        /api/mapas/... (Mapas e lugares; exporta podeVerLugar)
     memorias.js     /api/memorias/... (Memórias de Draevor: textos que só o administrador escreve e revela;
                     exporta podeLer)
+    chat.js         /api/chat/... (Chat: canais, privadas, lidas, personas e eventos SSE; a estrutura em
+                    dados.chat e as mensagens em chat/canais/*.jsonl e chat/privadas/*.jsonl, fora do
+                    dados.json; exporta resumoDoChat, que o /api/barra usa)
     caderno.js      /api/caderno/... (Caderno: notas e pastas de cada conta, em cadernos/<usuario>/caderno.json,
                     fora do dados.json, e as imagens em cadernos/<usuario>/imagens/; os ganchos de conta
                     renomeiam e apagam essas pastas. Links, embutidas, etiquetas, busca, citáveis, imagens
@@ -126,6 +133,7 @@ planejamento/       especificações e roteiro das sessões; referencias/ com o 
   curl -s -b /tmp/c http://127.0.0.1:3999/api/regras
   ```
   Pare o servidor no fim (`kill %1`).
+- **Chat:** para ver o endereço do chat, ligue com `HOST_CHAT=chat.localhost` e use `curl -H 'Host: chat.localhost'`. Para o cookie novo, `DOMINIO_COOKIE=cronicaseternas.com` (o curl não manda esse cookie para 127.0.0.1: confira só os cabeçalhos `Set-Cookie`). A voz pede `LIVEKIT_URL`, `LIVEKIT_CHAVE` e `LIVEKIT_SEGREDO`; sem eles, responde 503 e o texto funciona. Os eventos: `curl -N -b /tmp/c http://127.0.0.1:3999/api/chat/eventos`.
 - **Páginas:** a prévia (abrir `portal/publico/<pasta>/index.html` direto no navegador) fica comigo. No meu PC também há o `rodar-local.cmd`.
 - Antes de terminar, rode `node --check` em cada `.js` mudado.
 
