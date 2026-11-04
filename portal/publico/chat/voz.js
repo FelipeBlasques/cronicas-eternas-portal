@@ -11,28 +11,45 @@
    - A sala aberta no centro é uma grade de quadros, um por pessoa;
      uma tela compartilhada vai para o quadro grande.
    - Clique direito num quadro ou num nome na lista: o volume daquela
-     pessoa, só para você.
+     pessoa (a voz e a tela), só para você. Para o administrador, também
+     "Mover para…"; ele ainda pode arrastar quem está numa sala, na
+     lista, para outra sala (POST /api/chat/voz/mover). Quem é movido
+     recebe o evento "mover" e troca de sala, com o mudo e o ensurdecido.
+   - O microfone passa pelo portão de ruído (portao-de-ruido.js, um
+     AudioWorklet), que cala o som abaixo do corte escolhido.
+   - Sons curtos ao entrar e sair, e quando alguém entra ou sai da sua
+     sala, feitos com Web Audio.
 
    O passe de entrada vem de POST /api/chat/voz/entrar; o ensurdecido,
    que o LiveKit não sabe, vai para POST /api/chat/voz/estado.
 
    Na prévia, a voz é simulada (sem o livekit-client): entrar mostra
    quadros com retratos, o "falando" alterna entre eles e os botões
-   mudam os estados.
+   mudam os estados. Os sons tocam, e o "mover" mexe nas salas de
+   exemplo (mover você mesmo passa pelo mesmo caminho do evento).
 
    Usa o chat.js (carregado antes): estado, ganchosDaVoz, acharCanal(),
    retratoDe(), nomeDaPersona(), personaEscolhidaDa(), desenharLista(),
-   lerLocal(), gravarLocal(), eu(), personaDaContaDe(), abreCard() e
-   personaDaPresencaNaSala() (o card de quem está na sala); e o comum.js: pedir(), criar(),
-   simbolo(), avisarFalha(), avisoRapido().
+   lerLocal(), gravarLocal(), eu(), personaDaContaDe(), abreCard(),
+   personaDaPresencaNaSala() (o card de quem está na sala) e
+   prepararSom() / contextoDoSom (os sons); e o comum.js: pedir(), criar(),
+   simbolo(), perguntar(), avisarFalha(), avisoRapido().
    ================================================================= */
 
 const CONFIG_DA_VOZ = {
   intervaloDaFala: 1800, // prévia: de quanto em quanto tempo troca quem fala
   esperaDaPrevia: 500, // prévia: o "Conectando…"
-  chaveDosAparelhos: "chat:voz:aparelhos",
+  chaveDosAparelhos: "chat:voz:aparelhos:2",
+  chaveAntigaDosAparelhos: "chat:voz:aparelhos", // dela, só os aparelhos escolhidos valem
   chaveDosVolumes: "chat:voz:volumes",
+  chaveDoPortao: "chat:voz:portao",
+  chaveDosSons: "chat:voz:sons",
+  cortePadrao: -50, // dB
+  volumeDosSons: 0.06,
 };
+
+const DICA_DA_TELA =
+  "Para levar o som, escolha a tela inteira (com 'Compartilhar áudio do sistema') ou uma aba. Uma janela sozinha não leva som.";
 
 const TEXTO_DA_SITUACAO = {
   conectando: "Conectando…",
@@ -53,33 +70,48 @@ function lerObjetoLocal(chave) {
   }
 }
 
-// Os aparelhos escolhidos ("" = o padrão do sistema)
-const aparelhos = { microfone: "", saida: "", camera: "", ruido: true, eco: true };
+// Os aparelhos escolhidos ("" = o padrão do sistema) e o processamento do navegador
+const aparelhos = { microfone: "", saida: "", camera: "", eco: false, ruido: false, ganho: true };
 {
-  const guardados = lerObjetoLocal(CONFIG_DA_VOZ.chaveDosAparelhos);
+  const temNova = Boolean(lerLocal(CONFIG_DA_VOZ.chaveDosAparelhos));
+  const guardados = lerObjetoLocal(temNova ? CONFIG_DA_VOZ.chaveDosAparelhos : CONFIG_DA_VOZ.chaveAntigaDosAparelhos);
   for (const chave of ["microfone", "saida", "camera"]) if (typeof guardados[chave] === "string") aparelhos[chave] = guardados[chave];
-  for (const chave of ["ruido", "eco"]) if (typeof guardados[chave] === "boolean") aparelhos[chave] = guardados[chave];
+  if (temNova) for (const chave of ["eco", "ruido", "ganho"]) if (typeof guardados[chave] === "boolean") aparelhos[chave] = guardados[chave];
 }
 const guardarAparelhos = () => gravarLocal(CONFIG_DA_VOZ.chaveDosAparelhos, JSON.stringify(aparelhos));
 
-// O volume de cada pessoa, só para você: usuario → { volume: 0 a 100, silenciado }
+// O portão de ruído: ligado, e o corte em dB (de −80 a 0)
+const corteValido = (valor) => (Number.isFinite(valor) ? Math.min(0, Math.max(-80, Math.round(valor))) : CONFIG_DA_VOZ.cortePadrao);
+const portao = { ligado: true, corte: CONFIG_DA_VOZ.cortePadrao };
+{
+  const guardado = lerObjetoLocal(CONFIG_DA_VOZ.chaveDoPortao);
+  if (typeof guardado.ligado === "boolean") portao.ligado = guardado.ligado;
+  if (guardado.corte !== undefined) portao.corte = corteValido(Number(guardado.corte));
+}
+const guardarPortao = () => gravarLocal(CONFIG_DA_VOZ.chaveDoPortao, JSON.stringify(portao));
+
+// Os sons da chamada (entrar, sair, alguém entrou ou saiu): ligados, a não ser que desligue
+const sonsDaChamadaLigados = () => lerLocal(CONFIG_DA_VOZ.chaveDosSons) !== "nao";
+
+// O volume de cada pessoa, só para você: usuario → { volume: 0 a 100, tela: 0 a 100, silenciado }
 const volumes = lerObjetoLocal(CONFIG_DA_VOZ.chaveDosVolumes);
 const guardarVolumes = () => gravarLocal(CONFIG_DA_VOZ.chaveDosVolumes, JSON.stringify(volumes));
 
 function volumeDe(usuario) {
   const guardado = volumes[usuario];
-  const numero = Number(guardado?.volume);
-  return {
-    volume: Number.isFinite(numero) ? Math.min(100, Math.max(0, Math.round(numero))) : 100,
-    silenciado: Boolean(guardado?.silenciado),
+  const porcento = (valor) => {
+    const numero = Number(valor);
+    return Number.isFinite(numero) ? Math.min(100, Math.max(0, Math.round(numero))) : 100;
   };
+  return { volume: porcento(guardado?.volume), tela: porcento(guardado?.tela), silenciado: Boolean(guardado?.silenciado) };
 }
 
-// O que de fato toca: 0 com você ensurdecido ou a pessoa silenciada
-function volumeQueToca(usuario) {
+// O que de fato toca ("voz" ou "tela"): 0 com você ensurdecido ou a pessoa silenciada
+function volumeQueToca(usuario, fonte = "voz") {
   if (voz.ensurdecido) return 0;
-  const { volume, silenciado } = volumeDe(usuario);
-  return silenciado ? 0 : volume / 100;
+  const guardado = volumeDe(usuario);
+  if (guardado.silenciado) return 0;
+  return (fonte === "tela" ? guardado.tela : guardado.volume) / 100;
 }
 
 /* =================================================================
@@ -163,24 +195,125 @@ function textoDaFalhaDeAparelho(falha, aparelho) {
    O motor do LiveKit
    -----------------------------------------------------------------
    Os dois motores (este e o simulado da prévia) têm os mesmos nomes:
-   conectar(), pessoas(), definirMicrofone(), definirCamera(),
+   conectar({ microfone }), pessoas(), definirMicrofone(), definirCamera(),
    definirTela(), aplicarVolumes(), trocarAparelho(),
-   reiniciarMicrofone(), liberarSom() e sair(). Cada pessoa é
-   { usuario, persona, local, mudo, camera, tela, falando,
-     trilhaCamera, trilhaTela }.
+   reiniciarMicrofone(), aplicarPortao(), liberarSom() e sair(). Cada
+   pessoa é { usuario, persona, local, mudo, camera, tela, telaComSom,
+   falando, trilhaCamera, trilhaTela }.
    ================================================================= */
 
 function opcoesDoMicrofone() {
   return {
     deviceId: aparelhos.microfone ? { ideal: aparelhos.microfone } : undefined,
-    noiseSuppression: aparelhos.ruido,
     echoCancellation: aparelhos.eco,
-    autoGainControl: true,
+    noiseSuppression: aparelhos.ruido,
+    autoGainControl: aparelhos.ganho,
+    channelCount: 1,
   };
 }
 
+/* ---------- O portão de ruído, como processador do LiveKit ---------- */
+
+let portaoFalhou = false; // avisa uma vez só por página
+
+function avisarFalhaDoPortao() {
+  if (portaoFalhou) return;
+  portaoFalhou = true;
+  avisoRapido("Seu navegador não aceitou o corte de ruído: a voz segue sem ele.");
+}
+
+// A interface que o LiveKit pede (name, init, restart, destroy, processedTrack), com um
+// AudioContext próprio: microfone → portão (AudioWorklet) → trilha nova, em mono
+function criarProcessadorDoPortao() {
+  let contexto = null;
+  let fonte = null;
+  let no = null;
+
+  function ligarFonte(trilha) {
+    fonte?.disconnect();
+    fonte = contexto.createMediaStreamSource(new MediaStream([trilha]));
+    fonte.connect(no);
+  }
+
+  const processador = {
+    name: "portao-de-ruido",
+    processedTrack: undefined,
+    async init({ track }) {
+      if (typeof AudioWorkletNode !== "function") throw new Error("Sem AudioWorklet");
+      contexto = new AudioContext();
+      await contexto.audioWorklet.addModule("portao-de-ruido.js");
+      no = new AudioWorkletNode(contexto, "portao-de-ruido", {
+        numberOfInputs: 1,
+        numberOfOutputs: 1,
+        channelCount: 1,
+        channelCountMode: "explicit",
+        outputChannelCount: [1],
+        processorOptions: { corte: portao.corte },
+      });
+      const destino = contexto.createMediaStreamDestination();
+      destino.channelCount = 1;
+      no.connect(destino);
+      ligarFonte(track);
+      processador.processedTrack = destino.stream.getAudioTracks()[0];
+      if (contexto.state === "suspended") contexto.resume().catch(() => {});
+    },
+    async restart({ track }) {
+      if (contexto) ligarFonte(track);
+    },
+    async destroy() {
+      fonte?.disconnect();
+      no?.disconnect();
+      processador.processedTrack?.stop();
+      await contexto?.close().catch(() => {});
+      contexto = fonte = no = null;
+      processador.processedTrack = undefined;
+    },
+    mudarCorte: (corte) => no?.port.postMessage({ corte }),
+  };
+  return processador;
+}
+
+/* ---------- Os sons da chamada (Web Audio, sem arquivo) ---------- */
+
+// Cada nota: [frequência do começo, frequência do fim, atraso, duração], em Hz e segundos
+const SONS_DA_CHAMADA = {
+  entrei: [
+    [587, 587, 0, 0.13],
+    [880, 880, 0.1, 0.2],
+  ],
+  sai: [
+    [880, 880, 0, 0.13],
+    [587, 587, 0.1, 0.2],
+  ],
+  chegou: [[620, 830, 0, 0.14]],
+  partiu: [[830, 620, 0, 0.14]],
+};
+
+function tocarSomDaChamada(tipo) {
+  if (!sonsDaChamadaLigados()) return;
+  prepararSom();
+  const ctx = contextoDoSom;
+  if (!ctx) return;
+  if (ctx.state === "suspended") ctx.resume().catch(() => {});
+  const inicio = ctx.currentTime + 0.01;
+  for (const [de, para, atraso, duracao] of SONS_DA_CHAMADA[tipo] ?? []) {
+    const comeco = inicio + atraso;
+    const nota = ctx.createOscillator();
+    const volume = ctx.createGain();
+    nota.type = "sine";
+    nota.frequency.setValueAtTime(de, comeco);
+    if (para !== de) nota.frequency.exponentialRampToValueAtTime(para, comeco + duracao * 0.8);
+    volume.gain.setValueAtTime(0.0001, comeco);
+    volume.gain.exponentialRampToValueAtTime(CONFIG_DA_VOZ.volumeDosSons, comeco + 0.012);
+    volume.gain.exponentialRampToValueAtTime(0.0001, comeco + duracao);
+    nota.connect(volume).connect(ctx.destination);
+    nota.start(comeco);
+    nota.stop(comeco + duracao + 0.02);
+  }
+}
+
 function criarMotorDoLivekit(idSala, avisos) {
-  const { Room, RoomEvent, Track, VideoPresets, DisconnectReason } = window.LivekitClient;
+  const { Room, RoomEvent, Track, VideoPresets, AudioPresets, DisconnectReason } = window.LivekitClient;
   const caixaDosAudios = $("#audios-da-voz");
   let sala = null;
   let saindo = false;
@@ -199,6 +332,7 @@ function criarMotorDoLivekit(idSala, avisos) {
         : { tipo: "conta", id: usuario, nome: participante.name || usuario, imagem: null, fonte: null };
     const camera = participante.getTrackPublication(Track.Source.Camera);
     const tela = participante.getTrackPublication(Track.Source.ScreenShare);
+    const somDaTela = participante.getTrackPublication(Track.Source.ScreenShareAudio);
     const ligada = (publicacao) => Boolean(publicacao && !publicacao.isMuted && (local || publicacao.isSubscribed || publicacao.track));
     return {
       usuario,
@@ -207,6 +341,7 @@ function criarMotorDoLivekit(idSala, avisos) {
       mudo: !participante.isMicrophoneEnabled,
       camera: ligada(camera),
       tela: ligada(tela),
+      telaComSom: ligada(tela) && Boolean(somDaTela && !somDaTela.isMuted),
       falando: participante.isSpeaking,
       trilhaCamera: ligada(camera) ? camera.track ?? null : null,
       trilhaTela: ligada(tela) ? tela.track ?? null : null,
@@ -216,9 +351,34 @@ function criarMotorDoLivekit(idSala, avisos) {
   function aplicarVolumeEm(participante) {
     if (!sala || !participante || participante === sala.localParticipant || typeof participante.setVolume !== "function") return;
     const usuario = lerMetadata(participante.metadata).usuario || participante.identity;
-    const volume = volumeQueToca(usuario);
-    participante.setVolume(volume, Track.Source.Microphone);
-    participante.setVolume(volume, Track.Source.ScreenShareAudio);
+    participante.setVolume(volumeQueToca(usuario, "voz"), Track.Source.Microphone);
+    participante.setVolume(volumeQueToca(usuario, "tela"), Track.Source.ScreenShareAudio);
+  }
+
+  // O portão no microfone: põe, tira ou só muda o corte. Uma mudança por vez.
+  let filaDoPortao = Promise.resolve();
+  function aplicarPortao() {
+    filaDoPortao = filaDoPortao
+      .then(async () => {
+        const trilha = sala?.localParticipant.getTrackPublication(Track.Source.Microphone)?.track;
+        if (!trilha || typeof trilha.setProcessor !== "function") return;
+        const atual = trilha.getProcessor();
+        if (portao.ligado && !atual) {
+          const processador = criarProcessadorDoPortao();
+          try {
+            await trilha.setProcessor(processador);
+          } catch {
+            processador.destroy().catch(() => {});
+            avisarFalhaDoPortao();
+          }
+        } else if (!portao.ligado && atual) {
+          await trilha.stopProcessor();
+        } else if (atual) {
+          atual.mudarCorte?.(portao.corte);
+        }
+      })
+      .catch(() => {});
+    return filaDoPortao;
   }
 
   function limparAudios() {
@@ -230,9 +390,13 @@ function criarMotorDoLivekit(idSala, avisos) {
     sala
       .on(RoomEvent.ParticipantConnected, (participante) => {
         aplicarVolumeEm(participante);
+        avisos.chegou();
         mudou();
       })
-      .on(RoomEvent.ParticipantDisconnected, mudou)
+      .on(RoomEvent.ParticipantDisconnected, () => {
+        avisos.partiu();
+        mudou();
+      })
       .on(RoomEvent.TrackSubscribed, (trilha, _publicacao, participante) => {
         if (trilha.kind === "audio") {
           caixaDosAudios.append(trilha.attach());
@@ -248,7 +412,10 @@ function criarMotorDoLivekit(idSala, avisos) {
       .on(RoomEvent.TrackUnpublished, mudou)
       .on(RoomEvent.TrackMuted, mudou)
       .on(RoomEvent.TrackUnmuted, mudou)
-      .on(RoomEvent.LocalTrackPublished, mudou)
+      .on(RoomEvent.LocalTrackPublished, (publicacao) => {
+        if (publicacao.source === Track.Source.Microphone) aplicarPortao();
+        mudou();
+      })
       .on(RoomEvent.LocalTrackUnpublished, mudou) // também quando a tela para pela barra do navegador
       .on(RoomEvent.ActiveSpeakersChanged, mudou)
       .on(RoomEvent.ParticipantMetadataChanged, mudou)
@@ -268,7 +435,7 @@ function criarMotorDoLivekit(idSala, avisos) {
   }
 
   return {
-    async conectar() {
+    async conectar({ microfone = true } = {}) {
       let passe;
       try {
         passe = await pedir("POST", "/api/chat/voz/entrar", { canal: idSala });
@@ -283,16 +450,19 @@ function criarMotorDoLivekit(idSala, avisos) {
         audioCaptureDefaults: opcoesDoMicrofone(),
         videoCaptureDefaults: opcoesDaCamera(),
         audioOutput: aparelhos.saida ? { deviceId: aparelhos.saida } : undefined,
+        publishDefaults: { audioPreset: AudioPresets.musicHighQuality }, // 96 kbps; DTX e RED como no padrão
       });
       ligarEventos();
       await sala.connect(passe.url, passe.token);
       if (saindo) return;
       sala.startAudio().catch(() => {});
       avisos.somBloqueado(!sala.canPlaybackAudio);
-      try {
-        await sala.localParticipant.setMicrophoneEnabled(true, opcoesDoMicrofone());
-      } catch (falha) {
-        avisoRapido(textoDaFalhaDeAparelho(falha, "microfone"));
+      if (microfone) {
+        try {
+          await sala.localParticipant.setMicrophoneEnabled(true, opcoesDoMicrofone());
+        } catch (falha) {
+          avisoRapido(textoDaFalhaDeAparelho(falha, "microfone"));
+        }
       }
       avisos.mudou();
     },
@@ -302,7 +472,18 @@ function criarMotorDoLivekit(idSala, avisos) {
     },
     definirMicrofone: (ligado) => sala?.localParticipant.setMicrophoneEnabled(ligado, opcoesDoMicrofone()),
     definirCamera: (ligada) => sala?.localParticipant.setCameraEnabled(ligada, opcoesDaCamera()),
-    definirTela: (ligada) => sala?.localParticipant.setScreenShareEnabled(ligada),
+    // O som vai junto, sem o som desta aba (as vozes da chamada), quando o navegador deixa
+    definirTela: (ligada) =>
+      sala?.localParticipant.setScreenShareEnabled(
+        ligada,
+        ligada
+          ? {
+              audio: { restrictOwnAudio: true, echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+              systemAudio: "include",
+              selfBrowserSurface: "exclude",
+            }
+          : undefined,
+      ),
     aplicarVolumes() {
       if (sala) for (const participante of sala.remoteParticipants.values()) aplicarVolumeEm(participante);
     },
@@ -315,6 +496,7 @@ function criarMotorDoLivekit(idSala, avisos) {
       const trilha = sala.localParticipant.getTrackPublication(Track.Source.Microphone)?.track;
       if (trilha) await trilha.restartTrack(opcoesDoMicrofone());
     },
+    aplicarPortao,
     liberarSom: () => sala?.startAudio(),
     async sair() {
       saindo = true;
@@ -342,28 +524,43 @@ function criarMotorSimulado(idSala, avisos) {
   }
 
   const local = () => pessoas.find((p) => p.local);
+  const daPresenca = (p) => ({
+    usuario: p.usuario,
+    persona: personaDaPresencaNaSala(p, categoria),
+    local: false,
+    mudo: Boolean(p.mudo),
+    ensurdecido: Boolean(p.ensurdecido),
+    camera: Boolean(p.camera),
+    tela: Boolean(p.tela),
+    falando: false,
+  });
 
   return {
-    async conectar() {
+    async conectar({ microfone = true } = {}) {
       await esperar(CONFIG_DA_VOZ.esperaDaPrevia);
       if (saiu) return;
       const outras = (estado.dados.voz?.salas?.[idSala] ?? []).filter((p) => p.usuario !== eu());
       pessoas = [
-        { usuario: eu(), persona: minhaPersonaNa(idSala), local: true, mudo: false, camera: false, tela: false, falando: false },
-        ...outras.map((p) => ({
-          usuario: p.usuario,
-          persona: personaDaPresencaNaSala(p, categoria),
-          local: false,
-          mudo: Boolean(p.mudo),
-          ensurdecido: Boolean(p.ensurdecido),
-          camera: Boolean(p.camera),
-          tela: Boolean(p.tela),
-          falando: false,
-        })),
+        { usuario: eu(), persona: minhaPersonaNa(idSala), local: true, mudo: !microfone, camera: false, tela: false, falando: false },
+        ...outras.map(daPresenca),
       ];
       timer = setInterval(alternarFala, CONFIG_DA_VOZ.intervaloDaFala);
     },
-    pessoas: () => pessoas.map((p) => ({ ...p, trilhaCamera: null, trilhaTela: null, simulada: true })),
+    // Na prévia, as telas de exemplo vêm com som
+    pessoas: () => pessoas.map((p) => ({ ...p, telaComSom: p.tela, trilhaCamera: null, trilhaTela: null, simulada: true })),
+    // Só na prévia: o "mover" de exemplo põe e tira gente da sala
+    chegou(presenca) {
+      if (saiu || pessoas.some((p) => p.usuario === presenca.usuario)) return;
+      pessoas.push(daPresenca(presenca));
+      avisos.chegou();
+      avisos.mudou();
+    },
+    partiu(usuario) {
+      if (saiu || !pessoas.some((p) => p.usuario === usuario && !p.local)) return;
+      pessoas = pessoas.filter((p) => p.usuario !== usuario);
+      avisos.partiu();
+      avisos.mudou();
+    },
     async definirMicrofone(ligado) {
       local().mudo = !ligado;
       if (!ligado) local().falando = false;
@@ -380,6 +577,7 @@ function criarMotorSimulado(idSala, avisos) {
     aplicarVolumes() {},
     async trocarAparelho() {},
     async reiniciarMicrofone() {},
+    async aplicarPortao() {},
     async liberarSom() {},
     async sair() {
       saiu = true;
@@ -410,10 +608,13 @@ function avisosDaTentativa(tentativa) {
     aparelhos: () => vale() && $("#dialogo-voz").open && preencherAparelhos(),
     caiu: (mensagem) => vale() && caiuDaSala(mensagem),
     saiu: () => vale() && sairDaSala(),
+    chegou: () => vale() && voz.situacao === "conectado" && tocarSomDaChamada("chegou"),
+    partiu: () => vale() && voz.situacao === "conectado" && tocarSomDaChamada("partiu"),
   };
 }
 
-async function entrarNaSala(idSala) {
+// "manter" (quando o administrador move você): { mudo, ensurdecido, mudoAntes } da sala de antes
+async function entrarNaSala(idSala, manter = null) {
   const achado = acharCanal(idSala);
   if (!achado || achado.canal.tipo !== "voz") return;
   if (salaConectada() === idSala) return agendarDesenho();
@@ -425,11 +626,20 @@ async function entrarNaSala(idSala) {
 
   const tentativa = ++voz.tentativa;
   const motor = (MODO_PREVIA ? criarMotorSimulado : criarMotorDoLivekit)(idSala, avisosDaTentativa(tentativa));
-  Object.assign(voz, { motor, sala: idSala, situacao: "conectando", queda: "", ensurdecido: false, mudoAntes: false, somBloqueado: false, ampliado: undefined });
+  Object.assign(voz, {
+    motor,
+    sala: idSala,
+    situacao: "conectando",
+    queda: "",
+    ensurdecido: Boolean(manter?.ensurdecido),
+    mudoAntes: Boolean(manter?.mudoAntes),
+    somBloqueado: false,
+    ampliado: undefined,
+  });
   desenharTudo();
 
   try {
-    await motor.conectar();
+    await motor.conectar({ microfone: !manter?.mudo });
   } catch (falha) {
     motor.sair().catch(() => {});
     if (tentativa !== voz.tentativa) return;
@@ -440,7 +650,15 @@ async function entrarNaSala(idSala) {
   }
   if (tentativa !== voz.tentativa) return;
   voz.situacao = "conectado";
+  if (voz.ensurdecido) avisarEnsurdecido();
+  tocarSomDaChamada("entrei"); // trocar de sala toca só este
   desenharTudo();
+}
+
+// O botão Sair: o único que toca o "saiu"
+function sairPeloBotao() {
+  if (salaConectada()) tocarSomDaChamada("sai");
+  sairDaSala();
 }
 
 async function sairDaSala() {
@@ -521,9 +739,29 @@ async function alternarCamera() {
   desenharTudo();
 }
 
+// Sem "restrictOwnAudio", o som desta aba (as vozes da chamada) iria junto: avisa uma vez por página
+let avisouDoSomDaTela = false;
+
+function navegadorTiraOSomDoChat() {
+  try {
+    return Boolean(navigator.mediaDevices?.getSupportedConstraints?.().restrictOwnAudio);
+  } catch {
+    return false;
+  }
+}
+
 async function alternarTela() {
   const local = pessoaLocal();
   if (!voz.motor || !local) return;
+  if (!local.tela && !avisouDoSomDaTela && !navegadorTiraOSomDoChat()) {
+    avisouDoSomDaTela = true;
+    await perguntar({
+      titulo: "O som do chat pode ir junto",
+      texto:
+        "Seu navegador não consegue tirar o som do chat da transmissão. Compartilhe só uma aba, ou desmarque 'Compartilhar áudio'.",
+    });
+    if (!voz.motor || pessoaLocal()?.tela) return;
+  }
   try {
     await voz.motor.definirTela(!local.tela);
   } catch (falha) {
@@ -572,8 +810,8 @@ function botaoDaVoz(rotulo, icone, aoClicar, classe = "") {
   return b;
 }
 
-function trocarBotao(b, { rotulo, icone, pressionado, desligado = false, ligado = false }) {
-  b.title = rotulo;
+function trocarBotao(b, { rotulo, icone, pressionado, desligado = false, ligado = false, dica = "" }) {
+  b.title = dica || rotulo;
   b.setAttribute("aria-label", rotulo);
   if (pressionado !== undefined) b.setAttribute("aria-pressed", String(pressionado));
   b.classList.toggle("botao-voz--desligado", desligado);
@@ -603,7 +841,7 @@ function montarPainel() {
   painel.ensurdecer = botaoDaVoz("Ensurdecer", "icone-fone", alternarEnsurdecer);
   painel.camera = botaoDaVoz("Ligar a câmera", "icone-camera-desligada", alternarCamera);
   painel.tela = botaoDaVoz("Compartilhar a tela", "icone-tela", alternarTela);
-  painel.sair = botaoDaVoz("Sair da sala", "icone-desligar", sairDaSala, "botao-voz--sair");
+  painel.sair = botaoDaVoz("Sair da sala", "icone-desligar", sairPeloBotao, "botao-voz--sair");
   painel.botoes = criar("div", "painel-voz__botoes");
   painel.botoes.append(painel.microfone, painel.ensurdecer, painel.camera, painel.tela, painel.sair);
 
@@ -661,6 +899,7 @@ function desenharPainel() {
   });
   trocarBotao(painel.tela, {
     rotulo: local?.tela ? "Parar de compartilhar a tela" : "Compartilhar a tela",
+    dica: local?.tela ? "" : DICA_DA_TELA,
     icone: "icone-tela",
     pressionado: Boolean(local?.tela),
     ligado: Boolean(local?.tela),
@@ -772,7 +1011,7 @@ function registroDoQuadro(q) {
   });
   elemento.addEventListener("contextmenu", (evento) => {
     const usuario = registro.usuario;
-    if (!usuario || usuario === eu()) return;
+    if (!podeAbrirMenuDe(usuario)) return;
     evento.preventDefault();
     abrirVolume(usuario, registro.nome, evento.clientX, evento.clientY);
   });
@@ -790,7 +1029,7 @@ function atualizarQuadro(registro, q, categoria) {
   elemento.classList.toggle("quadro--falando", !ehTela && p.falando && !p.mudo);
   const conta = contaPorUsuario(p.usuario);
   elemento.title = conta ? `por ${conta.nome}` : "";
-  elemento.setAttribute("aria-label", ehTela ? `Tela de ${p.persona.nome}` : p.persona.nome);
+  elemento.setAttribute("aria-label", ehTela ? `Tela de ${p.persona.nome}${p.telaComSom ? ", com som" : ""}` : p.persona.nome);
 
   // A mídia: o vídeo, o desenho da prévia ou o retrato
   const trilha = ehTela ? p.trilhaTela : p.trilhaCamera;
@@ -834,8 +1073,10 @@ function atualizarQuadro(registro, q, categoria) {
   const nome = nomeDaPersona(p.persona, "quadro__nome");
   abreCard(nome, () => ({ usuario: p.usuario, persona: p.persona, categoria }));
   const partes = [];
-  if (ehTela) partes.push(simbolo("icone-tela", "estado-voz"), criar("span", "quadro__de", "Tela de "), nome);
-  else {
+  if (ehTela) {
+    partes.push(simbolo("icone-tela", "estado-voz"), criar("span", "quadro__de", "Tela de "), nome);
+    if (p.telaComSom) partes.push(simbolo("icone-voz", "estado-voz"));
+  } else {
     partes.push(nome);
     if (p.ensurdecido) partes.push(simbolo("icone-fone-mudo", "estado-voz estado-voz--desligado"));
     else if (p.mudo) partes.push(simbolo("icone-microfone-mudo", "estado-voz estado-voz--desligado"));
@@ -901,15 +1142,28 @@ function desenharChamada(caixa, categoria) {
 
 let volumeDeQuem = null;
 
+const souAdmin = () => Boolean(estado.dados?.conta.admin);
+
+// O menu de clique direito: o volume dos outros; o administrador também move (até a si mesmo)
+const podeAbrirMenuDe = (usuario) => Boolean(usuario) && (usuario !== eu() || souAdmin());
+
 function abrirVolume(usuario, nome, x, y) {
-  if (!usuario || usuario === eu()) return;
+  if (!podeAbrirMenuDe(usuario)) return;
+  const proprio = usuario === eu();
+  if (proprio && !salaAtualDe(usuario)) return; // você mesmo: só para mover, estando numa sala
   volumeDeQuem = usuario;
   const caixa = $("#volume-pessoa");
-  const { volume, silenciado } = volumeDe(usuario);
   $("#volume-nome").textContent = nome || contaPorUsuario(usuario)?.nome || usuario;
-  $("#volume-barra").value = String(volume);
-  $("#volume-valor").textContent = `${volume}%`;
-  $("#volume-silenciar").checked = silenciado;
+  $("#volume-controles").hidden = proprio;
+  if (!proprio) {
+    const { volume, tela, silenciado } = volumeDe(usuario);
+    $("#volume-barra").value = String(volume);
+    $("#volume-valor").textContent = `${volume}%`;
+    $("#volume-tela").value = String(tela);
+    $("#volume-tela-valor").textContent = `${tela}%`;
+    $("#volume-silenciar").checked = silenciado;
+  }
+  preencherMover(usuario);
   caixa.hidden = false;
   const largura = caixa.offsetWidth;
   const altura = caixa.offsetHeight;
@@ -917,7 +1171,7 @@ function abrirVolume(usuario, nome, x, y) {
   const topo = Math.max(8, Math.min(y, window.innerHeight - altura - 8));
   caixa.style.setProperty("left", `${esquerda + window.scrollX}px`);
   caixa.style.setProperty("top", `${topo + window.scrollY}px`);
-  $("#volume-barra").focus();
+  (proprio ? caixa.querySelector(".volume-pessoa__sala") : $("#volume-barra"))?.focus();
 }
 
 function fecharVolume() {
@@ -926,18 +1180,146 @@ function fecharVolume() {
 }
 
 function mudarVolume() {
-  if (!volumeDeQuem) return;
+  if (!volumeDeQuem || volumeDeQuem === eu()) return;
   const volume = Number($("#volume-barra").value);
+  const tela = Number($("#volume-tela").value);
   const silenciado = $("#volume-silenciar").checked;
   $("#volume-valor").textContent = `${volume}%`;
-  if (volume === 100 && !silenciado) delete volumes[volumeDeQuem];
-  else volumes[volumeDeQuem] = { volume, silenciado };
+  $("#volume-tela-valor").textContent = `${tela}%`;
+  if (volume === 100 && tela === 100 && !silenciado) delete volumes[volumeDeQuem];
+  else volumes[volumeDeQuem] = { volume, tela, silenciado };
   guardarVolumes();
   voz.motor?.aplicarVolumes();
 }
 
+/* =================================================================
+   Mover pessoas entre as salas (só o administrador)
+   ================================================================= */
+
+// A sala de voz em que a pessoa está agora (a sua, pelo LiveKit; a dos outros, pela presença)
+function salaAtualDe(usuario) {
+  if (usuario === eu()) return salaConectada();
+  for (const [id, pessoas] of Object.entries(estado.dados?.voz?.salas ?? {})) {
+    if (pessoas.some((p) => p.usuario === usuario)) return id;
+  }
+  return null;
+}
+
+// As salas de voz que a pessoa vê, na ordem da lista
+function salasQueVe(usuario) {
+  const salas = [];
+  for (const categoria of estado.dados?.categorias ?? []) {
+    if (!(estado.dados.membros?.[categoria.id] ?? []).includes(usuario)) continue;
+    for (const canal of categoria.canais) if (canal.tipo === "voz") salas.push({ canal, categoria });
+  }
+  return salas;
+}
+
+function preencherMover(usuario) {
+  const caixa = $("#volume-mover");
+  const atual = souAdmin() ? salaAtualDe(usuario) : null;
+  caixa.hidden = !atual;
+  if (!atual) return;
+  const botoes = salasQueVe(usuario)
+    .filter(({ canal }) => canal.id !== atual)
+    .map(({ canal, categoria }) => {
+      const b = criar("button", "volume-pessoa__sala");
+      b.type = "button";
+      b.append(criar("span", null, canal.nome), criar("span", "volume-pessoa__sala-categoria", categoria.nome));
+      b.addEventListener("click", () => {
+        fecharVolume();
+        moverPessoa(usuario, canal.id);
+      });
+      return b;
+    });
+  $("#volume-salas").replaceChildren(...(botoes.length ? botoes : [criar("p", "volume-pessoa__vazio", "Nenhuma outra sala de voz.")]));
+}
+
+async function moverPessoa(usuario, idSala) {
+  const de = salaAtualDe(usuario);
+  const destino = acharCanal(idSala);
+  if (!souAdmin() || !de || de === idSala || destino?.canal.tipo !== "voz") return;
+  if (MODO_PREVIA) return moverNaPrevia(usuario, de, destino);
+  try {
+    const resposta = await pedir("POST", "/api/chat/voz/mover", { usuario, canal: idSala });
+    if (resposta?.movida && usuario !== eu()) avisoRapido(`${contaPorUsuario(usuario)?.nome ?? usuario} foi para ${destino.canal.nome}.`);
+  } catch (falha) {
+    avisarFalha(falha);
+  }
+}
+
+// Prévia: mexe nas salas de exemplo como o servidor faria; mover você mesmo passa pelo evento
+function moverNaPrevia(usuario, de, destino) {
+  if (usuario === eu()) return ganchosDaVoz.mover({ canal: destino.canal.id });
+  const salas = estado.dados.voz.salas;
+  const pessoa = (salas[de] ?? []).find((p) => p.usuario === usuario);
+  if (!pessoa) return;
+  salas[de] = salas[de].filter((p) => p !== pessoa);
+  if (!salas[de].length) delete salas[de];
+  const mesa = destino.categoria.mesa;
+  const persona = (mesa && estado.dados.personasDosMembros?.[destino.categoria.id]?.[usuario]) || personaDaContaDe(usuario);
+  const nova = { ...pessoa, nome: persona.nome, imagem: persona.imagem ?? null, fonte: persona.fonte ?? null };
+  (salas[destino.canal.id] ??= []).push(nova);
+  if (voz.sala === de) voz.motor?.partiu?.(usuario);
+  if (voz.sala === destino.canal.id) voz.motor?.chegou?.(nova);
+  desenharLista();
+  agendarDesenho();
+  avisoRapido(`${contaPorUsuario(usuario)?.nome ?? usuario} foi para ${destino.canal.nome}.`);
+}
+
+// Arrastar, na lista, quem está numa sala para outra sala de voz
+function configurarArrastar() {
+  const lista = $("#lista");
+  let arrastando = null; // { usuario, de }
+
+  const salaDoAlvo = (evento) => {
+    const item = evento.target.closest?.(".item-canal[data-canal]");
+    if (!item || !arrastando) return null;
+    const achado = acharCanal(item.dataset.canal);
+    if (achado?.canal.tipo !== "voz") return null;
+    if (!(estado.dados.membros?.[achado.categoria.id] ?? []).includes(arrastando.usuario)) return null;
+    return item;
+  };
+  const marcar = (item) => {
+    for (const outro of lista.querySelectorAll(".item-canal--alvo")) if (outro !== item) outro.classList.remove("item-canal--alvo");
+    item?.classList.add("item-canal--alvo");
+  };
+
+  lista.addEventListener("dragstart", (evento) => {
+    const linha = evento.target.closest?.(".item-canal__sala li[draggable='true']");
+    if (!linha || !souAdmin()) return;
+    arrastando = { usuario: linha.dataset.usuario, de: linha.dataset.sala };
+    evento.dataTransfer.effectAllowed = "move";
+    evento.dataTransfer.setData("text/plain", linha.dataset.usuario);
+  });
+  lista.addEventListener("dragover", (evento) => {
+    const item = salaDoAlvo(evento);
+    marcar(item);
+    if (!item) return;
+    evento.preventDefault();
+    evento.dataTransfer.dropEffect = item.dataset.canal === arrastando.de ? "none" : "move";
+  });
+  lista.addEventListener("dragleave", (evento) => {
+    if (!lista.contains(evento.relatedTarget)) marcar(null);
+  });
+  lista.addEventListener("drop", (evento) => {
+    const item = salaDoAlvo(evento);
+    const quem = arrastando;
+    arrastando = null;
+    marcar(null);
+    if (!item) return;
+    evento.preventDefault();
+    if (item.dataset.canal !== quem.de) moverPessoa(quem.usuario, item.dataset.canal);
+  });
+  document.addEventListener("dragend", () => {
+    arrastando = null;
+    marcar(null);
+  });
+}
+
 function configurarVolume() {
   $("#volume-barra").addEventListener("input", mudarVolume);
+  $("#volume-tela").addEventListener("input", mudarVolume);
   $("#volume-silenciar").addEventListener("change", mudarVolume);
   document.addEventListener("pointerdown", (evento) => {
     if (volumeDeQuem && !$("#volume-pessoa").contains(evento.target)) fecharVolume();
@@ -950,7 +1332,7 @@ function configurarVolume() {
   // Na lista: clique direito no nome de quem está numa sala
   $("#lista").addEventListener("contextmenu", (evento) => {
     const linha = evento.target.closest(".item-canal__sala li[data-usuario]");
-    if (!linha || linha.dataset.usuario === eu()) return;
+    if (!linha || !podeAbrirMenuDe(linha.dataset.usuario)) return;
     evento.preventDefault();
     abrirVolume(linha.dataset.usuario, linha.querySelector(".nome-persona")?.textContent, evento.clientX, evento.clientY);
   });
@@ -1015,8 +1397,11 @@ function preencherAparelhos() {
 
 async function abrirConfiguracoesDeVoz() {
   const dialogo = $("#dialogo-voz");
-  $("#voz-ruido").checked = aparelhos.ruido;
   $("#voz-eco").checked = aparelhos.eco;
+  $("#voz-ruido").checked = aparelhos.ruido;
+  $("#voz-ganho").checked = aparelhos.ganho;
+  $("#voz-sons").checked = sonsDaChamadaLigados();
+  mostrarPortao();
   const saidaLivre = podeEscolherSaida();
   $("#voz-saida").disabled = !saidaLivre;
   $("#voz-saida-aviso").hidden = saidaLivre;
@@ -1045,8 +1430,9 @@ async function trocarAparelho(campo, tipo, aparelho) {
 }
 
 async function mudarProcessamento() {
-  aparelhos.ruido = $("#voz-ruido").checked;
   aparelhos.eco = $("#voz-eco").checked;
+  aparelhos.ruido = $("#voz-ruido").checked;
+  aparelhos.ganho = $("#voz-ganho").checked;
   guardarAparelhos();
   try {
     await voz.motor?.reiniciarMicrofone();
@@ -1056,12 +1442,34 @@ async function mudarProcessamento() {
   if (teste.ligado) comecarTeste();
 }
 
+/* ---------- O portão de ruído (a sensibilidade do microfone) ---------- */
+
+const textoDoCorte = (corte) => `${corte < 0 ? "−" : ""}${Math.abs(corte)} dB`;
+
+function mostrarPortao() {
+  $("#voz-portao").checked = portao.ligado;
+  $("#voz-corte").value = String(portao.corte);
+  $("#voz-corte").disabled = !portao.ligado;
+  $("#voz-corte-valor").textContent = portao.ligado ? textoDoCorte(portao.corte) : "Desligado";
+}
+
+function mudarPortao() {
+  portao.ligado = $("#voz-portao").checked;
+  portao.corte = corteValido(Number($("#voz-corte").value));
+  guardarPortao();
+  mostrarPortao();
+  voz.motor?.aplicarPortao();
+}
+
 /* ---------- O teste do microfone ---------- */
 
 const teste = { ligado: false, fluxo: null, contexto: null, quadro: 0 };
 
-function mostrarNivel(nivel) {
+// O nível em dB (−80 a 0) na barra; verde quando passa do corte (ou com o portão desligado)
+function mostrarNivel(decibeis) {
+  const nivel = Number.isFinite(decibeis) ? (decibeis + 80) / 80 : 0;
   $("#voz-nivel").style.setProperty("--nivel", String(Math.min(1, Math.max(0, nivel))));
+  $("#voz-barra").classList.toggle("voz-teste__barra--passa", teste.ligado && (!portao.ligado || decibeis > portao.corte));
 }
 
 function pararTeste() {
@@ -1069,7 +1477,7 @@ function pararTeste() {
   teste.fluxo?.getTracks().forEach((t) => t.stop());
   teste.contexto?.close().catch(() => {});
   Object.assign(teste, { ligado: false, fluxo: null, contexto: null, quadro: 0 });
-  mostrarNivel(0);
+  mostrarNivel(-Infinity);
   $("#voz-testar").textContent = "Testar o microfone";
 }
 
@@ -1082,8 +1490,9 @@ async function comecarTeste() {
   if (MODO_PREVIA) {
     let fase = 0;
     const animar = () => {
-      fase += 0.12;
-      mostrarNivel(Math.max(0, Math.sin(fase) * 0.5 + Math.random() * 0.35));
+      fase += 0.06;
+      // Fala de exemplo: sobe e desce entre o ruído de fundo (−70 dB) e a voz (−15 dB)
+      mostrarNivel(-70 + Math.max(0, Math.sin(fase)) * 50 + Math.random() * 8);
       teste.quadro = requestAnimationFrame(animar);
     };
     animar();
@@ -1102,12 +1511,13 @@ async function comecarTeste() {
   const analisador = teste.contexto.createAnalyser();
   analisador.fftSize = 1024;
   teste.contexto.createMediaStreamSource(teste.fluxo).connect(analisador);
-  const amostras = new Uint8Array(analisador.fftSize);
+  const amostras = new Float32Array(analisador.fftSize);
   const medir = () => {
-    analisador.getByteTimeDomainData(amostras);
+    analisador.getFloatTimeDomainData(amostras);
     let soma = 0;
-    for (const amostra of amostras) soma += ((amostra - 128) / 128) ** 2;
-    mostrarNivel(Math.sqrt(soma / amostras.length) * 4);
+    for (const amostra of amostras) soma += amostra * amostra;
+    const rms = Math.sqrt(soma / amostras.length);
+    mostrarNivel(rms > 0 ? 20 * Math.log10(rms) : -Infinity);
     teste.quadro = requestAnimationFrame(medir);
   };
   medir();
@@ -1121,8 +1531,16 @@ function configurarConfiguracoesDeVoz() {
   $("#voz-microfone").addEventListener("change", () => trocarAparelho("microfone", "audioinput", "microfone"));
   $("#voz-saida").addEventListener("change", () => trocarAparelho("saida", "audiooutput", "microfone"));
   $("#voz-camera").addEventListener("change", () => trocarAparelho("camera", "videoinput", "camera"));
-  $("#voz-ruido").addEventListener("change", mudarProcessamento);
   $("#voz-eco").addEventListener("change", mudarProcessamento);
+  $("#voz-ruido").addEventListener("change", mudarProcessamento);
+  $("#voz-ganho").addEventListener("change", mudarProcessamento);
+  $("#voz-portao").addEventListener("change", mudarPortao);
+  $("#voz-corte").addEventListener("input", mudarPortao);
+  $("#voz-sons").addEventListener("change", () => {
+    const ligar = $("#voz-sons").checked;
+    gravarLocal(CONFIG_DA_VOZ.chaveDosSons, ligar ? "sim" : "nao");
+    if (ligar) tocarSomDaChamada("entrei"); // para ouvir como é
+  });
 }
 
 /* =================================================================
@@ -1173,6 +1591,21 @@ ganchosDaVoz.ajustarPessoas = (idSala, pessoas) => {
   return lista;
 };
 
+// O administrador moveu você: troca de sala com o mudo e o ensurdecido de agora (fora de sala, ignora)
+ganchosDaVoz.mover = ({ canal }) => {
+  if (!salaConectada() || voz.situacao === "conectando" || canal === voz.sala) return;
+  const destino = acharCanal(canal);
+  if (destino?.canal.tipo !== "voz") return;
+  const local = pessoaLocal();
+  const manter = {
+    ensurdecido: voz.ensurdecido,
+    mudoAntes: voz.ensurdecido ? voz.mudoAntes : Boolean(local?.mudo),
+    mudo: voz.ensurdecido || Boolean(local?.mudo),
+  };
+  avisoRapido(`Você foi movido para ${destino.canal.nome}.`);
+  entrarNaSala(canal, manter);
+};
+
 ganchosDaVoz.salaConectada = salaConectada;
 ganchosDaVoz.encerrar = () => {
   if (voz.sala) sairDaSala();
@@ -1186,6 +1619,7 @@ ganchosDaVoz.encerrar = () => {
 function configurarVoz() {
   montarPainel();
   configurarVolume();
+  configurarArrastar();
   configurarConfiguracoesDeVoz();
 
   // Clicar numa sala na lista entra nela (abrir pelo endereço só mostra)

@@ -122,7 +122,7 @@ const apiDoServidor = {
   },
 };
 
-const TIPOS_DE_EVENTO = ["mensagem", "editada", "apagada", "lida", "canais", "voz", "presenca", "perfil", "reacoes", "fixadas", "recarregar"];
+const TIPOS_DE_EVENTO = ["mensagem", "editada", "apagada", "lida", "canais", "voz", "presenca", "perfil", "reacoes", "fixadas", "mover", "recarregar"];
 
 /* =================================================================
    Prévia: um chat de mentira, só na memória do navegador
@@ -900,6 +900,7 @@ const ganchosDaVoz = {
   ajustarPessoas: null, // (id da sala, pessoas) → a lista com o seu estado de agora
   salaConectada: null, // () → o id da sala em que você está, ou null
   encerrar: null, // () → sai da sala (saiu da conta)
+  mover: null, // ({ canal }) → o administrador moveu você para outra sala
 };
 
 const eu = () => estado.dados?.conta.usuario;
@@ -1368,6 +1369,8 @@ function itemDoCanal(canal, categoria) {
       for (const pessoa of pessoas) {
         const linha = criar("li");
         linha.dataset.usuario = pessoa.usuario;
+        linha.dataset.sala = canal.id;
+        if (estado.dados.conta.admin) linha.draggable = true; // arrastar para outra sala (voz.js)
         const conta = contaPorUsuario(pessoa.usuario);
         if (conta) linha.title = `por ${conta.nome}`;
         linha.append(retratoDe(pessoa, categoria, "item-canal__retrato"), nomeDaPersona(pessoa, "item-canal__pessoa"));
@@ -3339,6 +3342,8 @@ function tratarEvento(tipo, corpo) {
     aplicarPerfil(corpo.usuario, corpo.perfil);
   } else if (tipo === "reacoes" || tipo === "fixadas") {
     ganchosDosExtras.evento?.(tipo, corpo);
+  } else if (tipo === "mover" && corpo.canal) {
+    ganchosDaVoz.mover?.(corpo);
   } else if (tipo === "recarregar") {
     recarregarTudo().catch(() => {});
   }

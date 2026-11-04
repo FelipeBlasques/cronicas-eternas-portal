@@ -312,11 +312,12 @@ A API de mentira ganha:
   - GIFs em alta e na busca.
 - **Fixar:** fixar e desafixar, por duas contas.
 - **Voz:**
-  - o som novo, sem eco nem supressão;
-  - o noise gate cortando o barulho de fundo;
-  - os sons de entrar e sair;
-  - a tela inteira com som do sistema, sem a voz de ninguém voltar;
-  - mover alguém arrastando.
+  - o som novo, sem eco nem supressão (e as escolhas de microfone, saída e câmera mantidas);
+  - o noise gate cortando o barulho de fundo, arrastando a linha com o teste do microfone ligado;
+  - os sons de entrar e sair, e de alguém entrar e sair da sua sala (trocar de sala toca só o de entrar);
+  - a tela inteira com som do sistema, sem a voz de ninguém voltar; o ícone de som no quadro e o "Volume da tela";
+  - num navegador sem `restrictOwnAudio`, o aviso antes de compartilhar;
+  - mover alguém arrastando e pelo clique direito, mudo e ensurdecido, e numa sala de mesa (entra como o personagem).
 - **Avisos:**
   - no navegador, o texto do bloqueado;
   - no app novo, a notificação do Windows.
