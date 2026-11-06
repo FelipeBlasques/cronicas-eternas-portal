@@ -82,6 +82,7 @@ function formularioDe(dados) {
 }
 
 const marcadoresDe = (mapa) => `${caminhoDe("/api/mapas", mapa)}/marcadores`;
+const paginaDe = (mapa, marca) => `${caminhoDe(marcadoresDe(mapa), marca)}/pagina`;
 
 const apiDoServidor = {
   mapas: () => pedir("GET", "/api/mapas"),
@@ -94,6 +95,16 @@ const apiDoServidor = {
   alterarMarcador: (mapa, marca, dados) => pedir("PUT", caminhoDe(marcadoresDe(mapa), marca), dados),
   apagarMarcador: (mapa, marca) => pedir("DELETE", caminhoDe(marcadoresDe(mapa), marca)),
   importarLugares: (mapa, lugares) => pedir("POST", `${marcadoresDe(mapa)}/importar`, { lugares }),
+  // A página de um lugar
+  pagina: (mapa, marca) => pedir("GET", paginaDe(mapa, marca)),
+  gravarPagina: (mapa, marca, dados) => pedir("PUT", paginaDe(mapa, marca), dados),
+  apagarPagina: (mapa, marca) => pedir("DELETE", paginaDe(mapa, marca)),
+  enviarImagemDaPagina: (mapa, marca, arquivo) => {
+    const formulario = new FormData();
+    formulario.append("imagem", arquivo);
+    return pedir("POST", `${paginaDe(mapa, marca)}/imagens`, formulario);
+  },
+  citaveis: () => pedir("GET", "/api/mapas/citaveis"),
 };
 
 /* =================================================================
@@ -502,6 +513,72 @@ const MARCADORES_DA_PREVIA = [
   },
 ];
 
+// As páginas de exemplo, no formato do dados.json: uma completa, uma curta e uma "só o administrador".
+// A imagem da Torre Partida é desenhada num canvas (desenhoDaTorre), sem rede.
+const PAGINAS_DA_PREVIA = {
+  "marca-c41d0e01": {
+    pagina: {
+      texto: [
+        "Uma torre de vigia da estrada de Sedgecourt a Hardenmoor, partida ao meio por algo que veio de cima. Ninguém da região passa a noite aqui.",
+        "",
+        "![[imagem:img-70a2e001|A torre vista da estrada, ao entardecer]]",
+        "",
+        "## O que o grupo achou",
+        "",
+        "- Marcas de garras na escada, fundas demais para um urso.",
+        "- Um diário de vigia, com as últimas páginas arrancadas.",
+        '- Uma inscrição na porta: *"quem ouve a voz não desce"*.',
+        "",
+        "## Quem passou por aqui",
+        "",
+        "| Quem | Quando | O que fez |",
+        "| --- | --- | --- |",
+        "| [[personagem:p1|Venti]] | 362 ED | Dormiu no alto e ouviu alguém cantar lá embaixo |",
+        "| [[personagem:npc-3d4e5f60|A Voz na Torre]] | ? | **Ninguém sabe** |",
+        "",
+        "> O grupo chegou aqui depois de [[evento:e9|atravessar o Passo Negro]]. A cidade mais perto é [[lugar:mapa-7a1e0c3d/marca-7a1e0003|Hando]].",
+      ].join("\n"),
+      visibilidade: "todos",
+      versao: 3,
+      criadaPor: "takezo",
+      criadaNome: "Takezo",
+      criadaEm: "2026-11-02T21:10:00.000Z",
+      alteradaPor: "mestre",
+      alteradaNome: "Mestre",
+      alteradaEm: "2026-11-04T23:40:00.000Z",
+    },
+    imagensDaPagina: [{ id: "img-70a2e001", desenho: "torre", tamanho: 48000, enviadaEm: "2026-11-02T21:05:00.000Z", enviadaPor: "takezo" }],
+  },
+  "marca-7a1e0003": {
+    pagina: {
+      texto: "Cidade de pescadores na foz do rio. O porto fecha ao pôr do sol, e quem chega depois dorme no barco.\n\nA estalagem do cais aceita **moedas de Monaron**.",
+      visibilidade: "todos",
+      versao: 1,
+      criadaPor: "mestre",
+      criadaNome: "Mestre",
+      criadaEm: "2026-10-28T19:00:00.000Z",
+      alteradaPor: "mestre",
+      alteradaNome: "Mestre",
+      alteradaEm: "2026-10-28T19:00:00.000Z",
+    },
+    imagensDaPagina: [],
+  },
+  "marca-c41d0e02": {
+    pagina: {
+      texto: "# O que estava no porão\n\nUm baú de chumbo com o selo de [[lugar:mapa-7a1e0c3d/marca-c41d0e03|Círculo de Pedras]]. Quem o tirou do navio foi [[personagem:npc-1b2c3d4e|Bram]], antes de o grupo chegar.\n\n- [ ] Revelar quando o grupo voltar a Penshaw",
+      visibilidade: "admin",
+      versao: 2,
+      criadaPor: "mestre",
+      criadaNome: "Mestre",
+      criadaEm: "2026-10-30T22:00:00.000Z",
+      alteradaPor: "mestre",
+      alteradaNome: "Mestre",
+      alteradaEm: "2026-10-30T22:30:00.000Z",
+    },
+    imagensDaPagina: [],
+  },
+};
+
 // Guardados como no dados.json do servidor: os do atlas entraram pela importação do administrador
 function marcadoresDaPrevia() {
   const quando = "2026-10-20T12:00:00.000Z";
@@ -521,6 +598,7 @@ function marcadoresDaPrevia() {
     registradoNome: { mestre: "Mestre", takezo: "Takezo" }[m.registradoPor],
     criadoEm: quando,
     alteradoEm: quando,
+    ...structuredClone(PAGINAS_DA_PREVIA[m.id] ?? {}),
   }));
 }
 
@@ -532,6 +610,18 @@ function exemplosDaPrevia() {
       { usuario: "takezo", nome: "Takezo" },
       { usuario: "neia", nome: "Neia" },
     ],
+    // Para o Citar e os links das páginas: os mesmos da prévia do Caderno
+    personagens: [{ id: "p1", nome: "Venti" }],
+    outrosPersonagens: [
+      { id: "npc-1b2c3d4e", nome: "Bram, o guardião da ponte", visibilidade: "todos" },
+      { id: "npc-3d4e5f60", nome: "A Voz na Torre", visibilidade: "admin" },
+    ],
+    acontecimentos: [
+      { id: "e9", titulo: "O grupo atravessa o Passo Negro", ano: 362, visibilidade: "todos" },
+      { id: "e10", titulo: "A morte do guardião da ponte", ano: 365, visibilidade: "todos" },
+      { id: "e12", titulo: "O culto se move antes do inverno", ano: 366, visibilidade: "admin" },
+    ],
+    memorias: [{ id: "mem-0a1b2c3d", titulo: "Carta deixada na hospedaria", todos: true, contas: [] }],
     // As mesmas das outras prévias
     campanhas: [
       { id: "ode-to-sleep", nome: "Ode to Sleep", cor: "#2e3756" },
@@ -717,7 +807,104 @@ function criarApiDePrevia() {
       visibilidade: m.visibilidade,
       registradoPor: banco.contas.find((c) => c.usuario === m.registradoPor)?.nome ?? m.registradoNome ?? null,
       podeEditar: podeEditarMarcador(m),
+      temPagina: Boolean(m.pagina && podeVer(m.pagina)),
+      podeCriarPagina: !m.pagina && conta.cargo !== "jogador",
     };
+  }
+
+  /* ---------- A página de um lugar, como no servidor/mapas.js ---------- */
+
+  const LIMITES_DA_PAGINA = { texto: 30000, imagens: 30, link: 120 };
+  const UM_DIA = 24 * 60 * 60 * 1000;
+  const nomeDaConta = (usuario, reserva) => banco.contas.find((c) => c.usuario === usuario)?.nome ?? reserva ?? null;
+  const semPagina = () => erroComCodigo("Esse lugar não tem página.", "nao-encontrado");
+  const soQuemEscreve = () => {
+    if (conta.cargo === "jogador") throw erroComCodigo("Só os editores e o administrador escrevem as páginas dos lugares.", "proibido");
+  };
+  const enderecoDe = (imagem) => imagem.endereco ?? (imagem.desenho ? desenhoDaTorre() : null);
+
+  // Como o lerCodigos do servidor/caderno.js: os links e as imagens de um texto (as barras invertidas protegem as marcas)
+  function codigosDe(texto) {
+    const protegido = texto.replace(/\\([*~#[\]|\->\\])/g, (_, ch) => `\uE000${String.fromCharCode(0xe000 + ch.charCodeAt(0))}`);
+    const links = [...protegido.matchAll(/\[\[(nota|personagem|evento|mesa|memoria|lugar):([^\]|\n]+)\|([^\]\n]*)\]\]/g)];
+    const imagens = new Set([...protegido.matchAll(/!\[\[imagem:([^\]|\n]+)(?:\|([^\]\n]*))?\]\]/g)].map((achado) => achado[1]));
+    return { links, imagens };
+  }
+
+  // O que é visto pela conta, para o Citar e para os links de quem lê
+  function citaveisDaConta() {
+    const admin = conta.cargo === "admin";
+    const porNomeDe = (a, b) => a.nome.localeCompare(b.nome, "pt-BR", { numeric: true });
+    return {
+      personagens: [...banco.personagens, ...banco.outrosPersonagens.filter((p) => admin || p.visibilidade !== "admin")]
+        .map((p) => ({ id: p.id, nome: p.nome }))
+        .sort(porNomeDe),
+      acontecimentos: banco.acontecimentos
+        .filter((a) => admin || a.visibilidade !== "admin")
+        .sort((a, b) => a.ano - b.ano)
+        .map((a) => ({ id: a.id, titulo: a.titulo, ano: a.ano })),
+      mesas: banco.campanhas.map((m) => ({ id: m.id, nome: m.nome })),
+      memorias: banco.memorias.filter((m) => admin || m.todos || m.contas.includes(conta.usuario)).map((m) => ({ id: m.id, titulo: m.titulo })),
+      lugares: banco.mapas
+        .filter(podeVer)
+        .flatMap((mapa) => mapa.marcadores.filter(podeVer).map((m) => ({ id: `${mapa.id}/${m.id}`, nome: m.nome, mapa: mapa.nome }))),
+    };
+  }
+
+  // Como o alvosDosLinks: só viram link os alvos que a conta vê. As notas do Caderno não entram.
+  function alvosDosLinks(chaves) {
+    const vistos = citaveisDaConta();
+    const achar = (lista, id) => lista.find((item) => item.id === id);
+    const links = {};
+    for (const chave of chaves) {
+      const [tipo, ...resto] = chave.split(":");
+      const id = resto.join(":");
+      let alvo = null;
+      if (tipo === "personagem") alvo = achar(vistos.personagens, id) && { nome: achar(vistos.personagens, id).nome };
+      else if (tipo === "evento") alvo = achar(vistos.acontecimentos, id) && { titulo: achar(vistos.acontecimentos, id).titulo };
+      else if (tipo === "mesa") alvo = achar(vistos.mesas, id) && { nome: achar(vistos.mesas, id).nome };
+      else if (tipo === "memoria") alvo = achar(vistos.memorias, id) && { titulo: achar(vistos.memorias, id).titulo };
+      else if (tipo === "lugar") {
+        const lugar = achar(vistos.lugares, id);
+        alvo = lugar && { nome: lugar.nome, mapa: lugar.mapa };
+      }
+      if (alvo) links[chave] = alvo;
+    }
+    return links;
+  }
+
+  function lugarDaPagina(idMapa, idMarca) {
+    const marcador = acharMarcador(acharMapa(idMapa), idMarca);
+    if (marcador.pagina && !podeVer(marcador.pagina)) throw semPagina();
+    return marcador;
+  }
+
+  function textoDaPagina(valor) {
+    if (typeof valor !== "string" || !valor.trim()) throw erroComCodigo("Escreva o texto da página.");
+    const texto = valor.replace(/\r\n/g, "\n");
+    if (texto.length > LIMITES_DA_PAGINA.texto) {
+      throw erroComCodigo(`O texto da página pode ter no máximo ${LIMITES_DA_PAGINA.texto.toLocaleString("pt-BR")} caracteres.`);
+    }
+    for (const [, , , aparece] of codigosDe(texto).links) {
+      if (!aparece.trim()) {
+        throw erroComCodigo("Um link no campo Texto está sem o que aparece. Escreva depois da barra: [[evento:id|o que aparece]].");
+      }
+      if (aparece.length > LIMITES_DA_PAGINA.link) {
+        throw erroComCodigo(`O que aparece num link pode ter no máximo ${LIMITES_DA_PAGINA.link} caracteres (campo Texto).`);
+      }
+    }
+    return texto;
+  }
+
+  // Saem as imagens que o texto gravado não cita e que foram enviadas há mais de 24 horas
+  function tirarSobras(marcador) {
+    const citadas = codigosDe(marcador.pagina.texto).imagens;
+    const limite = Date.now() - UM_DIA;
+    marcador.imagensDaPagina = (marcador.imagensDaPagina ?? []).filter((imagem) => {
+      if (citadas.has(imagem.id) || !(Date.parse(imagem.enviadaEm) <= limite)) return true;
+      if (imagem.endereco) URL.revokeObjectURL(imagem.endereco);
+      return false;
+    });
   }
 
   function mapaPublico(mapa) {
@@ -859,7 +1046,148 @@ function criarApiDePrevia() {
       for (const lugar of novos) mapa.marcadores.push(novoMarcador(mapa, lugar));
       return { entraram: novos.length, pulados: doArquivo.length - novos.length };
     },
+    async citaveis() {
+      await esperar(80);
+      soQuemEscreve();
+      return structuredClone(citaveisDaConta());
+    },
+    async pagina(idMapa, idMarca) {
+      await esperar(180);
+      const marcador = acharMarcador(acharMapa(idMapa), idMarca);
+      const pagina = marcador.pagina;
+      if (!pagina || !podeVer(pagina)) throw semPagina();
+      const { links, imagens: citadas } = codigosDe(pagina.texto);
+      const chaves = new Set(links.map(([, tipo, id]) => `${tipo}:${id}`).filter((chave) => !chave.startsWith("nota:")));
+      const imagens = {};
+      for (const imagem of marcador.imagensDaPagina ?? []) {
+        if (citadas.has(imagem.id) && enderecoDe(imagem)) imagens[imagem.id] = enderecoDe(imagem);
+      }
+      return structuredClone({
+        pagina: {
+          texto: pagina.texto,
+          ...(conta.cargo === "admin" ? { visibilidade: pagina.visibilidade } : {}),
+          versao: pagina.versao,
+          criadaPor: nomeDaConta(pagina.criadaPor, pagina.criadaNome),
+          criadaEm: pagina.criadaEm,
+          alteradaPor: nomeDaConta(pagina.alteradaPor, pagina.alteradaNome),
+          alteradaEm: pagina.alteradaEm,
+        },
+        links: alvosDosLinks(chaves),
+        imagens,
+        podeEditar: conta.cargo === "admin" || (conta.cargo === "editor" && pagina.visibilidade !== "admin"),
+        podeApagar: conta.cargo === "admin",
+      });
+    },
+    // Cria (versão 0) ou altera; a versão que não é a guardada dá o conflito, sem gravar nada
+    async gravarPagina(idMapa, idMarca, dados) {
+      await esperar(300);
+      soQuemEscreve();
+      const marcador = lugarDaPagina(idMapa, idMarca);
+      const atual = marcador.pagina ?? null;
+      if (conta.cargo !== "admin" && dados.visibilidade !== undefined) {
+        throw erroComCodigo("Só o administrador escolhe quem vê a página.", "proibido");
+      }
+      if (!Number.isInteger(dados.versao)) throw erroComCodigo("Envie a versão da página que você está alterando.");
+      const texto = textoDaPagina(dados.texto);
+      let visibilidade = atual?.visibilidade ?? "todos";
+      if (conta.cargo === "admin") {
+        visibilidade = dados.visibilidade ?? visibilidade;
+        if (visibilidade !== "todos" && visibilidade !== "admin") throw erroComCodigo("Escolha quem vê a página: todos ou só o administrador.");
+      }
+      const versaoAtual = atual ? atual.versao : 0;
+      if (dados.versao !== versaoAtual) {
+        const mensagem = "Alguém salvou esta página enquanto você escrevia.";
+        const pagina = {
+          versao: versaoAtual,
+          alteradaPor: atual ? nomeDaConta(atual.alteradaPor, atual.alteradaNome) : null,
+          alteradaEm: atual?.alteradaEm ?? null,
+        };
+        throw erroComCodigo(mensagem, "conflito", { erro: mensagem, codigo: "conflito", pagina });
+      }
+      const quando = new Date().toISOString();
+      const quem = { alteradaPor: conta.usuario, alteradaNome: conta.nome, alteradaEm: quando };
+      if (atual) Object.assign(atual, { texto, visibilidade, versao: atual.versao + 1 }, quem);
+      else {
+        marcador.pagina = { texto, visibilidade, versao: 1, criadaPor: conta.usuario, criadaNome: conta.nome, criadaEm: quando, ...quem };
+      }
+      tirarSobras(marcador);
+      return { pagina: { versao: marcador.pagina.versao, alteradaEm: quando } };
+    },
+    async apagarPagina(idMapa, idMarca) {
+      await esperar(200);
+      if (conta.cargo !== "admin") throw proibido();
+      const marcador = acharMarcador(acharMapa(idMapa), idMarca);
+      if (!marcador.pagina) throw semPagina();
+      for (const imagem of marcador.imagensDaPagina ?? []) if (imagem.endereco) URL.revokeObjectURL(imagem.endereco);
+      delete marcador.pagina;
+      delete marcador.imagensDaPagina;
+      return { ok: true };
+    },
+    // A imagem fica no lugar: dá para enviá-la antes de a página existir
+    async enviarImagemDaPagina(idMapa, idMarca, arquivo) {
+      await esperar(500);
+      soQuemEscreve();
+      const marcador = lugarDaPagina(idMapa, idMarca);
+      if ((marcador.imagensDaPagina ?? []).length >= LIMITES_DA_PAGINA.imagens) {
+        throw erroComCodigo(`Um lugar pode ter no máximo ${LIMITES_DA_PAGINA.imagens} imagens na página.`);
+      }
+      if (!TIPOS_ACEITOS.includes(arquivo.type)) throw erroComCodigo("Use imagens PNG, JPG, WEBP, GIF ou AVIF.");
+      if (arquivo.size > 10 * 1024 * 1024) throw erroComCodigo("Cada imagem pode ter no máximo 10 MB.");
+      marcador.imagensDaPagina ??= [];
+      const ocupados = new Set(marcador.imagensDaPagina.map((i) => i.id));
+      let id;
+      do id = `img-${idAleatorio()}`;
+      while (ocupados.has(id));
+      const endereco = URL.createObjectURL(arquivo);
+      marcador.imagensDaPagina.push({ id, endereco, tamanho: arquivo.size, enviadaEm: new Date().toISOString(), enviadaPor: conta.usuario });
+      return { imagem: { id, endereco } };
+    },
   };
+}
+
+// A imagem da página de exemplo, desenhada uma vez num canvas: a torre partida contra o céu do entardecer
+let enderecoDaTorre = null;
+function desenhoDaTorre() {
+  if (enderecoDaTorre) return enderecoDaTorre;
+  const tela = document.createElement("canvas");
+  tela.width = 720;
+  tela.height = 420;
+  const g = tela.getContext("2d");
+  const ceu = g.createLinearGradient(0, 0, 0, 420);
+  ceu.addColorStop(0, "#2a2230");
+  ceu.addColorStop(0.6, "#8a4a2c");
+  ceu.addColorStop(1, "#d98a4a");
+  g.fillStyle = ceu;
+  g.fillRect(0, 0, 720, 420);
+  // Os morros e a estrada
+  g.fillStyle = "#1b1613";
+  g.beginPath();
+  g.moveTo(0, 340);
+  g.quadraticCurveTo(180, 290, 360, 330);
+  g.quadraticCurveTo(540, 370, 720, 320);
+  g.lineTo(720, 420);
+  g.lineTo(0, 420);
+  g.fill();
+  g.strokeStyle = "#5a4a3c";
+  g.lineWidth = 6;
+  g.beginPath();
+  g.moveTo(80, 420);
+  g.quadraticCurveTo(300, 360, 520, 345);
+  g.stroke();
+  // A torre, partida no alto
+  g.fillStyle = "#120e0c";
+  g.beginPath();
+  g.moveTo(440, 340);
+  g.lineTo(452, 150);
+  g.lineTo(470, 128);
+  g.lineTo(486, 160);
+  g.lineTo(500, 118);
+  g.lineTo(512, 150);
+  g.lineTo(524, 340);
+  g.fill();
+  g.fillStyle = "#e8b26a";
+  g.fillRect(478, 230, 8, 16);
+  return (enderecoDaTorre = tela.toDataURL("image/png"));
 }
 
 const api = MODO_PREVIA ? criarApiDePrevia() : apiDoServidor;
@@ -1463,8 +1791,9 @@ function mostrarLugarDoEndereco({ animar }) {
   selecionarLugar(marca, { animar, endereco: false });
 }
 
-async function copiarLink(m) {
-  const link = `${location.origin}${location.pathname}#${lugares.mapa.id}/${m.id}`;
+// O link do lugar; com "pagina", o da página dele
+async function copiarLink(m, { pagina = false } = {}) {
+  const link = `${location.origin}${location.pathname}#${lugares.mapa.id}/${m.id}${pagina ? "/pagina" : ""}`;
   try {
     await navigator.clipboard.writeText(link);
     avisoRapido("Link copiado. Quem abrir vai direto neste lugar.");
@@ -1570,6 +1899,17 @@ function mostrarDetalhe(m, { focar = false } = {}) {
     const texto = criar("div", "detalhe-lugar__texto");
     texto.append(...paragrafosDe(m.descricao));
     partes.push(texto);
+  }
+  // A página do lugar: "Ler a página"; sem página, "+ Página" para quem pode criar, com "Editar lugares" ligado
+  if (m.temPagina) {
+    const ler = botao("", "botao--principal detalhe-lugar__pagina", () => abrirPagina(m));
+    ler.append(simbolo("icone-livro"), "Ler a página");
+    partes.push(ler);
+  } else if (m.podeCriarPagina && lugares.editando) {
+    const nova = botao("", "botao--leve detalhe-lugar__pagina", () => abrirPagina(m, { editar: true }));
+    nova.append(simbolo("icone-mais"), "Página");
+    nova.setAttribute("aria-label", `Escrever a página de ${m.nome}`);
+    partes.push(nova);
   }
   const acoes = criar("div", "detalhe-lugar__acoes");
   acoes.append(
@@ -2169,6 +2509,565 @@ function configurarEdicao() {
 }
 
 /* =================================================================
+   A página de um lugar
+   -----------------------------------------------------------------
+   O texto completo do lugar, com as marcas do Caderno (marcas.js),
+   num diálogo largo: lendo, ou editando com o editor das marcas
+   (../editor-de-marcas.js), sem as tarefas e sem as notas. O
+   administrador e os editores escrevem; só o administrador apaga e
+   escolhe "só o administrador".
+
+   A página aberta tem endereço próprio (#mapa-…/marca-…/pagina).
+   Aberta pelo painel, ela entra no histórico, e fechar é o Voltar.
+   O Voltar do navegador (ou um link de lugar dentro dela) fecha sem
+   perguntar; o texto não salvo fica guardado na memória, por lugar,
+   até recarregar a página.
+   ================================================================= */
+
+const paginaDoLugar = {
+  aberta: false,
+  mapa: null, // o id do mapa e o do lugar da página aberta
+  marca: null,
+  lida: null, // o que o servidor mandou ({ pagina, links, imagens, podeEditar, podeApagar }), ou null na página nova
+  modo: "carregando", // "carregando", "lendo" ou "editando"
+  sessao: 0, // muda a cada troca de modo: o que chega atrasado de outra não vale
+  pelaPainel: false, // aberta pelo botão do painel: fechar é o Voltar do navegador
+  versao: 0, // a versão que a edição leu (0 para criar)
+  salvo: "", // o texto ao começar a edição
+  vendo: false, // "Ver como fica" ligado
+  imagensNovas: {}, // as enviadas nesta edição: id → endereço
+  enviando: 0, // quantas imagens ainda sobem
+  envios: null, // a fila das imagens
+  salvando: false,
+  citaveis: null, // a última lista do Citar, para o "Ver como fica"
+};
+
+// O texto que o Voltar do navegador deixou sem salvar, por lugar ("<mapa>/<marca>"), só na memória
+const rascunhosDasPaginas = new Map();
+
+const chaveDaPagina = () => `${paginaDoLugar.mapa}/${paginaDoLugar.marca}`;
+const paginaDoEndereco = () => location.hash.match(/^#(mapa-[\w-]+)\/(marca-[\w-]+)\/pagina$/);
+const areaDaPagina = () => $("#pagina-texto");
+const marcadorDaPagina = () =>
+  lugares.mapa?.id === paginaDoLugar.mapa ? lugares.porId.get(paginaDoLugar.marca)?.marcador ?? null : null;
+
+// O editor das marcas da página: sem "Tarefa", sem "Embutir nota" e com o botão Imagem
+const editorDaPagina = criarEditorDeMarcas({
+  area: () => (paginaDoLugar.modo === "editando" ? areaDaPagina() : null),
+  citaveis: async () => (paginaDoLugar.citaveis = await api.citaveis()),
+  tarefas: false,
+  imagens: { escolher: () => $("#pagina-imagens").click() },
+});
+
+// "12 de novembro de 2026": a data real, não o Ciclo de Sylara
+const diaPorExtenso = (iso) => new Date(iso).toLocaleDateString("pt-BR", { day: "numeric", month: "long", year: "numeric" });
+
+function fraseDaAutoria(pagina) {
+  const criada = `Escrita por ${pagina.criadaPor ?? "alguém"} em ${diaPorExtenso(pagina.criadaEm)}`;
+  const mudou = pagina.alteradaPor !== pagina.criadaPor || diaPorExtenso(pagina.alteradaEm) !== diaPorExtenso(pagina.criadaEm);
+  return mudou ? `${criada} · alterada por ${pagina.alteradaPor ?? "alguém"} em ${diaPorExtenso(pagina.alteradaEm)}` : criada;
+}
+
+/* ---------- Abrir e fechar ---------- */
+
+// O mapa e o tipo, o ícone e o nome, o apelido e, para o administrador, o selo da página escondida
+function mostrarCabecaDaPagina(m) {
+  $("#pagina-sobre").textContent = `${lugares.mapa?.nome ?? ""} · ${NOMES_DOS_TIPOS[m.tipo]}`;
+  const icone = $("#pagina-icone");
+  icone.classList.toggle("detalhe-lugar__icone--arcano", m.glifo === "arcano");
+  icone.replaceChildren(simbolo(iconeDoLugar(m)));
+  $("#pagina-nome").textContent = m.nome;
+  $("#pagina-apelido").textContent = m.apelido;
+  $("#pagina-apelido").hidden = !m.apelido;
+  mostrarSeloDaPagina();
+}
+
+function mostrarSeloDaPagina() {
+  const selo = $("#pagina-selo");
+  selo.hidden = !(ehAdmin() && paginaDoLugar.lida?.pagina.visibilidade === "admin");
+  if (!selo.hidden && !selo.childNodes.length) selo.append(simbolo("icone-oculto"), "Só o administrador");
+}
+
+// Pelo painel (o endereço entra no histórico) ou pelo endereço. Com "editar", abre já na edição de uma página nova.
+function abrirPagina(m, { editar = false, endereco = true } = {}) {
+  if (!lugares.mapa) return;
+  Object.assign(paginaDoLugar, { aberta: true, mapa: lugares.mapa.id, marca: m.id, lida: null, pelaPainel: false, citaveis: null });
+  if (endereco) paginaDoLugar.pelaPainel = trocarEndereco(`#${lugares.mapa.id}/${m.id}/pagina`, { nova: true });
+  mostrarCabecaDaPagina(m);
+  const dialogo = $("#dialogo-pagina");
+  if (!dialogo.open) dialogo.showModal();
+  if (editar) comecarEdicaoDaPagina();
+  else carregarPagina();
+}
+
+// Pede a página e mostra a leitura. Falhou: o diálogo fecha e vem o aviso.
+async function carregarPagina() {
+  const sessao = ++paginaDoLugar.sessao;
+  paginaDoLugar.modo = "carregando";
+  editorDaPagina.fechar();
+  $("#pagina-corpo").replaceChildren(criar("p", "pagina-lugar__carregando", "Carregando…"));
+  atualizarAcoesDaPagina();
+  let lida;
+  try {
+    lida = await api.pagina(paginaDoLugar.mapa, paginaDoLugar.marca);
+  } catch (falha) {
+    if (sessao !== paginaDoLugar.sessao) return;
+    fecharPagina();
+    avisarFalha(falha);
+    return;
+  }
+  if (sessao !== paginaDoLugar.sessao) return;
+  paginaDoLugar.lida = lida;
+  mostrarLeituraDaPagina();
+}
+
+// Fecha de vez, sem perguntar. Aberta pelo painel, volta no histórico; senão, o endereço fica o do lugar.
+function fecharPagina() {
+  if (!paginaDoLugar.aberta) return;
+  const { mapa, marca, pelaPainel } = paginaDoLugar;
+  limparPagina();
+  $("#dialogo-pagina").close();
+  if (!paginaDoEndereco()) return;
+  if (pelaPainel) history.back();
+  else trocarEndereco(`#${mapa}/${marca}`);
+}
+
+function limparPagina() {
+  paginaDoLugar.aberta = false;
+  paginaDoLugar.sessao++;
+  Object.assign(paginaDoLugar, { modo: "carregando", vendo: false, enviando: 0, envios: null, salvando: false, pelaPainel: false });
+  editorDaPagina.fechar();
+  $("#pagina-corpo").replaceChildren();
+}
+
+const temMudancaNaPagina = () => {
+  if (!paginaDoLugar.aberta || paginaDoLugar.modo !== "editando") return false;
+  const visibilidade = $("#pagina-quem-ve input:checked")?.value;
+  const mudouQuemVe = visibilidade && visibilidade !== (paginaDoLugar.lida?.pagina.visibilidade ?? "todos");
+  return areaDaPagina()?.value !== paginaDoLugar.salvo || Boolean(mudouQuemVe) || paginaDoLugar.enviando > 0;
+};
+
+function perguntarSeSai() {
+  return perguntar({
+    titulo: "Sair sem salvar o que mudou?",
+    texto: "O que você escreveu depois do último Salvar se perde.",
+    confirmar: "Sair sem salvar",
+    cancelar: "Continuar escrevendo",
+    perigo: true,
+  });
+}
+
+// Esc, "Fechar", "Cancelar" numa página nova e o clique fora: com mudança, pergunta antes
+async function pedirParaFecharPagina() {
+  if (temMudancaNaPagina() && !(await perguntarSeSai())) return;
+  fecharPagina();
+}
+
+// O endereço mudou (o Voltar, o Avançar ou um link de lugar dentro da página): a página aberta que não é mais
+// a do endereço fecha sem perguntar, guardando o texto não salvo; a do endereço abre, se o lugar está escolhido.
+function seguirPaginaDoEndereco() {
+  const pedida = paginaDoEndereco();
+  if (paginaDoLugar.aberta) {
+    if (pedida && pedida[1] === paginaDoLugar.mapa && pedida[2] === paginaDoLugar.marca) return;
+    const area = areaDaPagina();
+    if (paginaDoLugar.modo === "editando" && area && area.value !== paginaDoLugar.salvo) rascunhosDasPaginas.set(chaveDaPagina(), area.value);
+    limparPagina();
+    $("#dialogo-pagina").close();
+  }
+  if (!pedida || lugares.mapa?.id !== pedida[1] || lugares.selecionado !== pedida[2]) return;
+  abrirPagina(lugares.porId.get(pedida[2]).marcador, { endereco: false });
+}
+
+/* ---------- Lendo ---------- */
+
+function mostrarLeituraDaPagina() {
+  const { pagina, links, imagens } = paginaDoLugar.lida;
+  Object.assign(paginaDoLugar, { modo: "lendo", vendo: false });
+  editorDaPagina.fechar();
+  const texto = criar("div", "marcas pagina-lugar__texto");
+  texto.append(...desenharMarcas(pagina.texto, { links, embutidas: {}, imagens }, {}));
+  const corpo = $("#pagina-corpo");
+  corpo.replaceChildren(texto, criar("p", "pagina-lugar__autoria", fraseDaAutoria(pagina)));
+  corpo.scrollTop = 0;
+  mostrarSeloDaPagina();
+  atualizarAcoesDaPagina();
+}
+
+// Os botões de cada modo e, na edição, o "Enviando imagem…" ao lado do Salvar
+function atualizarAcoesDaPagina() {
+  const { modo, lida, enviando, salvando } = paginaDoLugar;
+  const editando = modo === "editando";
+  $("#pagina-ver-no-mapa").hidden = editando;
+  $("#pagina-copiar").hidden = editando;
+  $("#pagina-fechar").hidden = editando;
+  $("#pagina-editar").hidden = modo !== "lendo" || !lida?.podeEditar;
+  $("#pagina-cancelar").hidden = !editando;
+  $("#pagina-salvar").hidden = !editando;
+  $("#pagina-salvar").disabled = salvando;
+  $("#pagina-apagar").hidden = !editando || !lida?.podeApagar;
+  let situacao = "";
+  if (editando && enviando) situacao = enviando === 1 ? "Enviando imagem…" : `Enviando ${enviando} imagens…`;
+  else if (editando && salvando) situacao = "Salvando…";
+  $("#pagina-situacao").textContent = situacao;
+}
+
+/* ---------- Editando ---------- */
+
+function comecarEdicaoDaPagina() {
+  const { lida } = paginaDoLugar;
+  paginaDoLugar.sessao++;
+  Object.assign(paginaDoLugar, {
+    modo: "editando",
+    vendo: false,
+    imagensNovas: {},
+    enviando: 0,
+    envios: null,
+    salvando: false,
+    versao: lida?.pagina.versao ?? 0,
+    salvo: lida?.pagina.texto ?? "",
+  });
+
+  const area = criar("textarea", "pagina-lugar__area");
+  area.id = "pagina-texto";
+  area.spellcheck = true;
+  area.placeholder = "Escreva a página do lugar. [[ cita um personagem, um acontecimento, uma mesa, uma memória ou outro lugar.";
+  area.setAttribute("aria-label", `Texto da página de ${marcadorDaPagina()?.nome ?? "este lugar"}`);
+  const rascunho = rascunhosDasPaginas.get(chaveDaPagina());
+  rascunhosDasPaginas.delete(chaveDaPagina());
+  area.value = rascunho ?? paginaDoLugar.salvo;
+
+  const vista = criar("div", "marcas pagina-lugar__texto pagina-lugar__vista");
+  vista.id = "pagina-vista";
+  vista.hidden = true;
+
+  const corpo = $("#pagina-corpo");
+  corpo.replaceChildren(area, vista);
+  // A barra vem depois de a área estar na página: ela diz que controla o #pagina-texto
+  const barra = editorDaPagina.barra();
+  barra.id = "pagina-barra";
+  const ver = criar("button", "botao botao--leve pagina-lugar__ver");
+  ver.id = "pagina-ver";
+  ver.type = "button";
+  ver.setAttribute("aria-pressed", "false");
+  ver.append(simbolo("icone-ver"), "Ver como fica");
+  ver.addEventListener("click", alternarVistaDaPagina);
+  const linha = criar("div", "pagina-lugar__ferramentas");
+  linha.append(barra, ver);
+  corpo.prepend(linha);
+
+  if (ehAdmin()) corpo.append(campoQuemVe(lida?.pagina.visibilidade ?? "todos"));
+
+  corpo.scrollTop = 0;
+  mostrarSeloDaPagina();
+  atualizarAcoesDaPagina();
+  area.focus({ preventScroll: true });
+  if (rascunho !== undefined && rascunho !== paginaDoLugar.salvo) avisoRapido("Recuperado o texto que você não salvou.");
+}
+
+function campoQuemVe(atual) {
+  const grupo = criar("fieldset", "grupo pagina-lugar__quem-ve");
+  grupo.id = "pagina-quem-ve";
+  grupo.append(criar("legend", "campo__rotulo", "Quem vê a página"));
+  const segmentos = criar("div", "segmentos");
+  for (const [valor, texto] of [
+    ["todos", "Todos"],
+    ["admin", "Só o administrador"],
+  ]) {
+    const rotulo = criar("label");
+    const opcao = criar("input");
+    opcao.type = "radio";
+    opcao.name = "pagina-visibilidade";
+    opcao.value = valor;
+    opcao.checked = valor === atual;
+    rotulo.append(opcao, criar("span", null, texto));
+    segmentos.append(rotulo);
+  }
+  grupo.append(segmentos);
+  return grupo;
+}
+
+// "Cancelar" na edição: com mudança, pergunta; a página que já existe volta para a leitura, a nova fecha
+async function cancelarEdicaoDaPagina() {
+  if (temMudancaNaPagina() && !(await perguntarSeSai())) return;
+  if (!paginaDoLugar.aberta || paginaDoLugar.modo !== "editando") return;
+  if (!paginaDoLugar.lida) return fecharPagina();
+  paginaDoLugar.sessao++;
+  mostrarLeituraDaPagina();
+  $("#pagina-editar").focus();
+}
+
+// Os links que a leitura conhecia, mais os da lista do Citar (com o nome dela)
+function linksDaVista() {
+  const links = { ...(paginaDoLugar.lida?.links ?? {}) };
+  const lista = paginaDoLugar.citaveis;
+  if (lista) {
+    const juntar = (chave, alvo) => {
+      if (!Object.hasOwn(links, chave)) links[chave] = alvo;
+    };
+    for (const p of lista.personagens) juntar(`personagem:${p.id}`, { nome: p.nome });
+    for (const ev of lista.acontecimentos) juntar(`evento:${ev.id}`, { titulo: ev.titulo });
+    for (const mesa of lista.mesas) juntar(`mesa:${mesa.id}`, { nome: mesa.nome });
+    for (const memoria of lista.memorias) juntar(`memoria:${memoria.id}`, { titulo: memoria.titulo });
+    for (const lugar of lista.lugares) juntar(`lugar:${lugar.id}`, { nome: lugar.nome, mapa: lugar.mapa });
+  }
+  return links;
+}
+
+function desenharVistaDaPagina() {
+  const vista = $("#pagina-vista");
+  if (!vista) return;
+  const imagens = { ...(paginaDoLugar.lida?.imagens ?? {}), ...paginaDoLugar.imagensNovas };
+  const texto = areaDaPagina().value;
+  if (texto.trim()) vista.replaceChildren(...desenharMarcas(texto, { links: linksDaVista(), embutidas: {}, imagens }, {}));
+  else vista.replaceChildren(criar("p", "pagina-lugar__vazia", "A página ainda está vazia."));
+}
+
+// "Ver como fica" troca a área pelo texto desenhado, e de volta
+function alternarVistaDaPagina() {
+  const vendo = !paginaDoLugar.vendo;
+  paginaDoLugar.vendo = vendo;
+  editorDaPagina.fechar();
+  $("#pagina-ver").setAttribute("aria-pressed", String(vendo));
+  areaDaPagina().hidden = vendo;
+  $("#pagina-vista").hidden = !vendo;
+  const barra = $("#pagina-barra");
+  barra.inert = vendo;
+  barra.classList.toggle("pagina-lugar__barra--apagada", vendo);
+  if (!vendo) return areaDaPagina().focus();
+  desenharVistaDaPagina();
+  // Os links novos usam os nomes do Citar: a lista vem uma vez, se o Citar ainda não abriu
+  if (!paginaDoLugar.citaveis) {
+    const sessao = paginaDoLugar.sessao;
+    api
+      .citaveis()
+      .then((lista) => {
+        paginaDoLugar.citaveis = lista;
+        if (sessao === paginaDoLugar.sessao && paginaDoLugar.vendo) desenharVistaDaPagina();
+      })
+      .catch(() => {});
+  }
+}
+
+/* ---------- As imagens: pelo botão, por colar e por arrastar ---------- */
+
+// Uma por vez, na ordem; cada uma que chega entra no texto onde está o cursor
+function enviarImagensDaPagina(arquivos) {
+  const lista = [...arquivos];
+  if (!lista.length || paginaDoLugar.modo !== "editando") return;
+  const sessao = paginaDoLugar.sessao;
+  paginaDoLugar.enviando += lista.length;
+  atualizarAcoesDaPagina();
+  const envios = (paginaDoLugar.envios ?? Promise.resolve()).then(async () => {
+    for (const arquivo of lista) await enviarUmaImagemDaPagina(arquivo, sessao);
+  });
+  paginaDoLugar.envios = envios;
+  envios.finally(() => {
+    if (paginaDoLugar.envios === envios) paginaDoLugar.envios = null;
+  });
+}
+
+async function enviarUmaImagemDaPagina(arquivo, sessao) {
+  if (sessao !== paginaDoLugar.sessao) return;
+  let imagem = null;
+  let falha = null;
+  try {
+    editorDaPagina.conferirImagem(arquivo);
+    ({ imagem } = await api.enviarImagemDaPagina(paginaDoLugar.mapa, paginaDoLugar.marca, arquivo));
+  } catch (erro) {
+    falha = erro;
+  }
+  if (sessao !== paginaDoLugar.sessao) return;
+  paginaDoLugar.enviando = Math.max(0, paginaDoLugar.enviando - 1);
+  if (imagem) {
+    paginaDoLugar.imagensNovas[imagem.id] = imagem.endereco;
+    editorDaPagina.porImagem(imagem.id, arquivo.name || "");
+    if (paginaDoLugar.vendo) desenharVistaDaPagina();
+  }
+  atualizarAcoesDaPagina();
+  if (falha) await avisarFalha(falha);
+}
+
+const levaArquivos = (evento) => [...(evento.dataTransfer?.types ?? [])].includes("Files");
+
+/* ---------- Salvar e apagar ---------- */
+
+// Espera as imagens que sobem. No conflito, pergunta; "Salvar a minha" manda de novo com a versão nova.
+async function salvarPagina() {
+  if (paginaDoLugar.modo !== "editando" || paginaDoLugar.salvando) return;
+  const sessao = paginaDoLugar.sessao;
+  paginaDoLugar.salvando = true;
+  editorDaPagina.fechar();
+  atualizarAcoesDaPagina();
+  try {
+    if (paginaDoLugar.envios) await paginaDoLugar.envios;
+    if (sessao !== paginaDoLugar.sessao) return;
+    const dados = { texto: areaDaPagina().value, versao: paginaDoLugar.versao };
+    if (ehAdmin()) dados.visibilidade = $("#pagina-quem-ve input:checked")?.value ?? "todos";
+    for (;;) {
+      try {
+        await api.gravarPagina(paginaDoLugar.mapa, paginaDoLugar.marca, dados);
+        break;
+      } catch (falha) {
+        if (falha.codigo !== "conflito" || !falha.extra?.pagina) throw falha;
+        const quem = falha.extra.pagina.alteradaPor ?? "Alguém";
+        const porCima = await perguntar({
+          titulo: "Salvar por cima?",
+          texto: `${quem} salvou esta página enquanto você escrevia. Salvar a sua por cima?`,
+          confirmar: "Salvar a minha",
+          cancelar: "Cancelar",
+        });
+        if (!porCima || sessao !== paginaDoLugar.sessao) return;
+        dados.versao = falha.extra.pagina.versao;
+        paginaDoLugar.versao = dados.versao;
+      }
+    }
+    if (sessao !== paginaDoLugar.sessao) return;
+    rascunhosDasPaginas.delete(chaveDaPagina());
+    paginaDoLugar.salvando = false;
+    // O painel passa a mostrar "Ler a página"; depois, a página de novo, para os links e as imagens
+    try {
+      await recarregar();
+    } catch {
+      // a página continua; o painel se acerta na próxima vez
+    }
+    if (sessao !== paginaDoLugar.sessao) return;
+    avisoRapido("Página salva.");
+    await carregarPagina();
+    $("#pagina-editar").hidden ? $("#pagina-fechar").focus() : $("#pagina-editar").focus();
+  } catch (falha) {
+    if (sessao === paginaDoLugar.sessao) avisarFalha(falha);
+  } finally {
+    if (sessao === paginaDoLugar.sessao) {
+      paginaDoLugar.salvando = false;
+      atualizarAcoesDaPagina();
+    }
+  }
+}
+
+async function apagarPagina() {
+  const m = marcadorDaPagina();
+  const confirmado = await perguntar({
+    titulo: "Apagar esta página?",
+    texto: `A página de ${m?.nome ?? "este lugar"} sai de vez, com as imagens dela. O lugar continua no mapa.`,
+    confirmar: "Apagar",
+    cancelar: "Cancelar",
+    perigo: true,
+  });
+  if (!confirmado || !paginaDoLugar.aberta) return;
+  try {
+    await api.apagarPagina(paginaDoLugar.mapa, paginaDoLugar.marca);
+  } catch (falha) {
+    avisarFalha(falha);
+    return;
+  }
+  rascunhosDasPaginas.delete(chaveDaPagina());
+  fecharPagina();
+  try {
+    await recarregar();
+  } catch {
+    // o painel se acerta na próxima vez
+  }
+  avisoRapido("Página apagada.");
+}
+
+/* ---------- Os eventos do diálogo ---------- */
+
+function configurarPagina() {
+  const dialogo = $("#dialogo-pagina");
+  const corpo = $("#pagina-corpo");
+
+  // Esc pergunta antes, como o "Fechar"; o clique no fundo escurecido também
+  dialogo.addEventListener("cancel", (evento) => {
+    evento.preventDefault();
+    pedirParaFecharPagina();
+  });
+  dialogo.addEventListener("click", (evento) => {
+    if (evento.target !== dialogo) return;
+    const caixa = dialogo.getBoundingClientRect();
+    const dentro =
+      evento.clientX >= caixa.left && evento.clientX <= caixa.right && evento.clientY >= caixa.top && evento.clientY <= caixa.bottom;
+    if (!dentro) pedirParaFecharPagina();
+  });
+  // Fechado por fora (na prévia, a troca de conta fecha os diálogos): o endereço volta a ser o do lugar
+  dialogo.addEventListener("close", () => {
+    // O "close" chega depois: se a página já foi limpa, ou outra abriu nesse meio-tempo, não há o que fazer
+    if (!paginaDoLugar.aberta || dialogo.open) return;
+    const { mapa, marca } = paginaDoLugar;
+    limparPagina();
+    if (paginaDoEndereco()) trocarEndereco(`#${mapa}/${marca}`);
+  });
+
+  // Ctrl+S ou Ctrl+Enter salvam (⌘ no Mac)
+  dialogo.addEventListener("keydown", (evento) => {
+    if (paginaDoLugar.modo !== "editando" || !(evento.ctrlKey || evento.metaKey) || evento.altKey || evento.shiftKey) return;
+    if (evento.key.toLowerCase() !== "s" && evento.key !== "Enter") return;
+    evento.preventDefault();
+    salvarPagina();
+  });
+
+  // A área de texto: as teclas e o [[ do editor das marcas, o colar e o arrastar das imagens
+  corpo.addEventListener("keydown", (evento) => {
+    if (evento.target.id !== "pagina-texto") return;
+    if ((evento.ctrlKey || evento.metaKey) && evento.key === "Enter") return;
+    editorDaPagina.tecla(evento);
+  });
+  corpo.addEventListener("input", (evento) => {
+    if (evento.target.id === "pagina-texto") editorDaPagina.digitou(evento);
+  });
+  corpo.addEventListener("paste", (evento) => {
+    if (evento.target.id !== "pagina-texto") return;
+    const dados = evento.clipboardData;
+    const imagens = [...(dados?.files ?? [])].filter((arquivo) => arquivo.type.startsWith("image/"));
+    if (!imagens.length || dados.getData("text/plain")) return;
+    evento.preventDefault();
+    enviarImagensDaPagina(imagens);
+  });
+  corpo.addEventListener("dragover", (evento) => {
+    if (paginaDoLugar.modo !== "editando" || !levaArquivos(evento)) return;
+    evento.preventDefault();
+    evento.dataTransfer.dropEffect = "copy";
+    areaDaPagina()?.classList.add("pagina-lugar__area--soltar");
+  });
+  corpo.addEventListener("dragleave", (evento) => {
+    if (!corpo.contains(evento.relatedTarget)) areaDaPagina()?.classList.remove("pagina-lugar__area--soltar");
+  });
+  corpo.addEventListener("drop", (evento) => {
+    if (paginaDoLugar.modo !== "editando" || !levaArquivos(evento)) return;
+    evento.preventDefault();
+    areaDaPagina()?.classList.remove("pagina-lugar__area--soltar");
+    enviarImagensDaPagina(evento.dataTransfer.files);
+  });
+  $("#pagina-imagens").addEventListener("change", (evento) => {
+    const arquivos = [...evento.target.files];
+    evento.target.value = "";
+    enviarImagensDaPagina(arquivos);
+  });
+
+  $("#pagina-fechar").addEventListener("click", pedirParaFecharPagina);
+  $("#pagina-editar").addEventListener("click", comecarEdicaoDaPagina);
+  $("#pagina-cancelar").addEventListener("click", cancelarEdicaoDaPagina);
+  $("#pagina-salvar").addEventListener("click", salvarPagina);
+  $("#pagina-apagar").addEventListener("click", apagarPagina);
+  $("#pagina-copiar").addEventListener("click", () => {
+    const m = marcadorDaPagina();
+    if (m) copiarLink(m, { pagina: true });
+  });
+  // Fecha e centraliza o lugar
+  $("#pagina-ver-no-mapa").addEventListener("click", () => {
+    const m = marcadorDaPagina();
+    fecharPagina();
+    if (m) visor.centralizar(m.x, m.y);
+  });
+
+  // Com mudança por salvar (ou imagem subindo), fechar a aba pede confirmação
+  window.addEventListener("beforeunload", (evento) => {
+    if (!temMudancaNaPagina()) return;
+    evento.preventDefault();
+    evento.returnValue = "";
+  });
+}
+
+/* =================================================================
    Carregar e desenhar tudo
    ================================================================= */
 
@@ -2258,6 +3157,7 @@ async function iniciar() {
   configurarEdicao();
   configurarLugares();
   configurarEdicaoDosLugares();
+  configurarPagina();
   iniciarCinzas(30);
   if (MODO_PREVIA) configurarSimulacao();
 
@@ -2280,10 +3180,12 @@ async function iniciar() {
   const aoMudarOEndereco = () => {
     navegacao.pelaGaleria = false;
     mostrarRota();
+    seguirPaginaDoEndereco();
   };
   window.addEventListener("popstate", aoMudarOEndereco);
   window.addEventListener("hashchange", aoMudarOEndereco);
   mostrarRota();
+  seguirPaginaDoEndereco();
 }
 
 iniciar();
