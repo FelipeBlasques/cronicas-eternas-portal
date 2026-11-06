@@ -15,7 +15,8 @@
    ================================================================= */
 
 const EXTRAS = {
-  recentes: 24, // os últimos emojis usados, em chat:emojis:recentes
+  usados: 27, // "Usados com frequência": 3 linhas de 9
+  usadosGuardados: 200, // em chat:emojis:usados, no máximo
   sugestoes: 8, // as sugestões do ":"
   emojisGrandes: 27, // mensagem só de emojis, até 27, aparece maior
   nomesNaReacao: 10, // "Neia, Takezo... e mais 3 reagiram com 😂"
@@ -62,29 +63,106 @@ function fecharPainel() {
 const painelEstaAberto = (painel) => painelAberto?.painel === painel;
 
 /* =================================================================
-   Emojis: a lista, a busca e os recentes
+   Emojis: a lista, a busca, o tom de pele e os usados
    ================================================================= */
 
 const GRUPOS_DE_EMOJIS = typeof EMOJIS !== "undefined" ? EMOJIS : [];
+
+// Os desenhos da coluna dos grupos (os <symbol> do index.html)
+const ICONES_DOS_GRUPOS = {
+  usados: "icone-grupo-usados",
+  pessoas: "icone-grupo-pessoas",
+  natureza: "icone-grupo-natureza",
+  comida: "icone-grupo-comida",
+  atividades: "icone-grupo-atividades",
+  viagens: "icone-grupo-viagens",
+  objetos: "icone-grupo-objetos",
+  simbolos: "icone-grupo-simbolos",
+  bandeiras: "icone-grupo-bandeiras",
+};
 
 // Cada emoji com o texto da busca (nome e palavras, sem acento e em minúsculas)
 const TODOS_OS_EMOJIS = GRUPOS_DE_EMOJIS.flatMap((g) =>
   g.emojis.map((x) => ({ ...x, nomeBusca: normalizar(x.n), palavrasBusca: x.p.map(normalizar) })),
 );
-const EMOJI_POR_TEXTO = new Map(TODOS_OS_EMOJIS.map((x) => [x.e, x]));
+// O emoji (e cada tom dele) leva aos dados do emoji sem tom
+const EMOJI_POR_TEXTO = new Map();
+for (const x of TODOS_OS_EMOJIS) {
+  EMOJI_POR_TEXTO.set(x.e, x);
+  for (const t of x.t ?? []) EMOJI_POR_TEXTO.set(t, x);
+}
 
-function emojisRecentes() {
+const dadosDoEmoji = (emoji) => EMOJI_POR_TEXTO.get(emoji) ?? EMOJI_POR_TEXTO.get(emoji.replace(/️/g, "")) ?? null;
+const semTom = (emoji) => dadosDoEmoji(emoji)?.e ?? emoji;
+
+// O tom de pele: 0 é a amarela, sem tom; de 1 a 5, os tons
+const MAOS_DOS_TONS = ["✋", ...(EMOJI_POR_TEXTO.get("✋")?.t ?? [])];
+const NOMES_DOS_TONS = ["Sem tom", "Pele clara", "Pele morena clara", "Pele morena", "Pele morena escura", "Pele escura"];
+
+function lerTom() {
+  const n = Number(lerLocal("chat:emojis:tom"));
+  return Number.isInteger(n) && n >= 1 && n <= 5 && MAOS_DOS_TONS.length === 6 ? n : 0;
+}
+
+let tomAtual = lerTom();
+const comTom = (x) => (tomAtual && x.t ? x.t[tomAtual - 1] : x.e);
+
+// Os usados: { "<emoji sem tom>": { vezes, em } }, em chat:emojis:usados
+function lerUsados() {
+  const bruto = lerLocal("chat:emojis:usados");
+  if (bruto !== null) {
+    try {
+      const usados = JSON.parse(bruto);
+      return usados && typeof usados === "object" && !Array.isArray(usados) ? usados : {};
+    } catch {
+      return {};
+    }
+  }
+  // Da lista antiga (chat:emojis:recentes): cada um com vezes 1, um minuto de diferença
+  let recentes = [];
   try {
     const lista = JSON.parse(lerLocal("chat:emojis:recentes") || "[]");
-    return Array.isArray(lista) ? lista.filter((e) => typeof e === "string").slice(0, EXTRAS.recentes) : [];
+    if (Array.isArray(lista)) recentes = lista.filter((e) => typeof e === "string" && e);
   } catch {
-    return [];
+    recentes = [];
   }
+  const usados = {};
+  const agora = Date.now();
+  recentes.forEach((e, i) => {
+    const base = semTom(e);
+    if (!usados[base]) usados[base] = { vezes: 1, em: agora - i * 60000 };
+  });
+  if (recentes.length) gravarLocal("chat:emojis:usados", JSON.stringify(usados));
+  return usados;
+}
+
+const usoValido = (u) => u && Number.isFinite(u.vezes) && u.vezes > 0 && Number.isFinite(u.em);
+
+// Os mais usados, na ordem de vezes / (1 + dias desde o último uso / 7)
+function emojisUsados() {
+  const agora = Date.now();
+  const nota = (u) => u.vezes / (1 + Math.max(0, agora - u.em) / 86400000 / 7);
+  return Object.entries(lerUsados())
+    .filter(([e, u]) => e && usoValido(u))
+    .sort((a, b) => nota(b[1]) - nota(a[1]))
+    .slice(0, EXTRAS.usados)
+    .map(([e]) => dadosDoEmoji(e) ?? { e, n: e, p: [] });
 }
 
 function usouEmoji(emoji) {
-  const lista = [emoji, ...emojisRecentes().filter((e) => e !== emoji)].slice(0, EXTRAS.recentes);
-  gravarLocal("chat:emojis:recentes", JSON.stringify(lista));
+  const base = semTom(emoji);
+  const usados = Object.fromEntries(Object.entries(lerUsados()).filter(([, u]) => usoValido(u)));
+  usados[base] = { vezes: (usados[base]?.vezes ?? 0) + 1, em: Date.now() };
+  // Passando do limite, sai o de menor conta (o mais antigo, se empatar)
+  let chaves = Object.keys(usados);
+  while (chaves.length > EXTRAS.usadosGuardados) {
+    const sai = chaves
+      .filter((e) => e !== base)
+      .reduce((a, b) => (usados[b].vezes < usados[a].vezes || (usados[b].vezes === usados[a].vezes && usados[b].em < usados[a].em) ? b : a));
+    delete usados[sai];
+    chaves = Object.keys(usados);
+  }
+  gravarLocal("chat:emojis:usados", JSON.stringify(usados));
 }
 
 // Busca pelo nome e pelas palavras: primeiro os que começam pelo termo, depois os que o contêm
@@ -102,11 +180,11 @@ function buscarEmojis(termo, limite = Infinity) {
   return [...comeca, ...palavra, ...contem].slice(0, limite);
 }
 
-const nomeDoEmoji = (emoji) => EMOJI_POR_TEXTO.get(emoji)?.n ?? EMOJI_POR_TEXTO.get(emoji.replace(/️/g, ""))?.n ?? emoji;
+const nomeDoEmoji = (emoji) => dadosDoEmoji(emoji)?.n ?? emoji;
 
 // Mensagem só de emojis: até 27, ignorando espaços, sem nada mais
 const REGEX_SO_EMOJIS =
-  /^(?:[#*0-9]️?⃣|[\p{Extended_Pictographic}\p{Regional_Indicator}\p{Emoji_Modifier}‍️]|\s)+$/u;
+  /^(?:[#*0-9]️?⃣|[\p{Extended_Pictographic}\p{Regional_Indicator}\p{Emoji_Modifier}‍️\u{E0020}-\u{E007F}]|\s)+$/u;
 const segmentador = typeof Intl.Segmenter === "function" ? new Intl.Segmenter("pt-BR", { granularity: "grapheme" }) : null;
 
 function ehSoEmojis(texto) {
@@ -120,30 +198,47 @@ function ehSoEmojis(texto) {
    O seletor de emojis (escrever e reagir)
    ================================================================= */
 
-let seletor = { modo: "escrever", mensagem: null, montado: false };
+let seletor = { modo: "escrever", mensagem: null, montado: false, temUsados: false };
+
+const POR_LINHA = 9; // as colunas da grade
 
 function botaoDeEmoji(x) {
-  const b = criar("button", "emoji-opcao", x.e);
+  const emoji = comTom(x);
+  const b = criar("button", "emoji-opcao", emoji);
   b.type = "button";
+  b.tabIndex = -1;
   b.title = x.n;
   b.setAttribute("aria-label", x.n);
-  b.dataset.emoji = x.e;
+  b.dataset.emoji = emoji;
   return b;
 }
 
-// A grade inteira: os recentes e os grupos, cada um com o seu título
-function montarGradeDeEmojis() {
+// Só uma casa da grade entra no Tab; as setas andam entre elas
+function acertarCasaComFoco(grade = $("#emojis-grade")) {
+  const primeiro = grade.querySelector(".emoji-opcao");
+  if (primeiro) primeiro.tabIndex = 0;
+}
+
+function focarEmoji(botao) {
+  for (const b of $("#emojis-grade").querySelectorAll('.emoji-opcao[tabindex="0"]')) b.tabIndex = -1;
+  botao.tabIndex = 0;
+  botao.focus();
+  botao.scrollIntoView({ block: "nearest" });
+}
+
+// A grade inteira: os usados e os grupos, cada um com o seu título
+function montarGradeDeEmojis(manterRolagem = false) {
   const grade = $("#emojis-grade");
+  const rolagem = grade.scrollTop;
   const partes = [];
-  const recentes = emojisRecentes()
-    .map((e) => EMOJI_POR_TEXTO.get(e) ?? { e, n: e })
-    .filter(Boolean);
-  if (recentes.length) {
-    partes.push(criar("h3", "painel-emojis__grupo", "Recentes"));
-    partes[partes.length - 1].dataset.grupo = "recentes";
+  const usados = emojisUsados();
+  seletor.temUsados = usados.length > 0;
+  if (usados.length) {
+    const titulo = criar("h3", "painel-emojis__grupo", "Usados com frequência");
+    titulo.dataset.grupo = "usados";
     const caixa = criar("div", "painel-emojis__lista");
-    caixa.append(...recentes.map(botaoDeEmoji));
-    partes.push(caixa);
+    caixa.append(...usados.map(botaoDeEmoji));
+    partes.push(titulo, caixa);
   }
   for (const g of GRUPOS_DE_EMOJIS) {
     const titulo = criar("h3", "painel-emojis__grupo", g.nome);
@@ -153,20 +248,22 @@ function montarGradeDeEmojis() {
     partes.push(titulo, caixa);
   }
   grade.replaceChildren(...partes);
-  grade.scrollTop = 0;
+  acertarCasaComFoco(grade);
+  grade.scrollTop = manterRolagem ? rolagem : 0;
   marcarAbaAtual();
 }
 
 function montarAbas() {
   const abas = $("#emojis-abas");
-  const lista = [{ id: "recentes", nome: "Recentes", icone: "🕘" }, ...GRUPOS_DE_EMOJIS];
+  const lista = [{ id: "usados", nome: "Usados com frequência" }, ...GRUPOS_DE_EMOJIS];
   abas.replaceChildren(
     ...lista.map((g) => {
-      const b = criar("button", "painel-emojis__aba", g.icone);
+      const b = criar("button", "painel-emojis__aba");
       b.type = "button";
       b.title = g.nome;
       b.setAttribute("aria-label", g.nome);
       b.dataset.grupo = g.id;
+      b.append(simbolo(ICONES_DOS_GRUPOS[g.id] ?? "icone-emoji"));
       b.addEventListener("click", () => {
         $("#emojis-busca").value = "";
         if ($("#emojis-grade").dataset.busca) montarGradeDeEmojis();
@@ -192,10 +289,9 @@ function marcarAbaAtual(forcado) {
       if (inicioDoGrupo(titulo) <= grade.scrollTop + 4) atual = titulo.dataset.grupo;
     }
   }
-  const recentes = Boolean(grade.querySelector('[data-grupo="recentes"]'));
   for (const aba of $("#emojis-abas").children) {
     aba.setAttribute("aria-pressed", String(aba.dataset.grupo === atual));
-    if (aba.dataset.grupo === "recentes") aba.hidden = !recentes;
+    if (aba.dataset.grupo === "usados") aba.hidden = !seletor.temUsados;
   }
 }
 
@@ -214,9 +310,63 @@ function mostrarBuscaDeEmojis() {
     const caixa = criar("div", "painel-emojis__lista");
     caixa.append(...achados.map(botaoDeEmoji));
     grade.replaceChildren(caixa);
+    acertarCasaComFoco(grade);
   }
   grade.scrollTop = 0;
   marcarAbaAtual("nenhuma");
+}
+
+// A barra de baixo: o emoji sob o mouse (ou com o foco) grande e o nome; sem nenhum, a frase
+function mostrarNaBarra(botao) {
+  $("#emojis-nome-emoji").textContent = botao ? botao.dataset.emoji : "";
+  $("#emojis-nome-texto").textContent = botao ? botao.title : seletor.frase ?? "";
+}
+
+function emojiComFoco() {
+  const ativo = document.activeElement;
+  return ativo?.classList?.contains("emoji-opcao") && $("#emojis-grade").contains(ativo) ? ativo : null;
+}
+
+// O tom de pele: o botão com a mão no tom e a fileira das seis opções
+function atualizarBotaoDoTom() {
+  const botao = $("#emojis-tom");
+  botao.textContent = MAOS_DOS_TONS[tomAtual] ?? "✋";
+  botao.title = `Tom de pele: ${NOMES_DOS_TONS[tomAtual].toLowerCase()}`;
+  botao.setAttribute("aria-label", botao.title);
+}
+
+function fecharTons() {
+  $("#emojis-tons").hidden = true;
+  $("#emojis-tom").setAttribute("aria-expanded", "false");
+}
+
+function abrirTons() {
+  const fileira = $("#emojis-tons");
+  fileira.replaceChildren(
+    ...MAOS_DOS_TONS.map((mao, i) => {
+      const b = criar("button", "painel-emojis__opcao-tom", mao);
+      b.type = "button";
+      b.title = NOMES_DOS_TONS[i];
+      b.setAttribute("aria-label", NOMES_DOS_TONS[i]);
+      b.setAttribute("aria-pressed", String(i === tomAtual));
+      b.addEventListener("click", () => escolherTom(i));
+      return b;
+    }),
+  );
+  fileira.hidden = false;
+  $("#emojis-tom").setAttribute("aria-expanded", "true");
+  fileira.children[tomAtual]?.focus();
+}
+
+function escolherTom(tom) {
+  tomAtual = tom;
+  gravarLocal("chat:emojis:tom", String(tom));
+  fecharTons();
+  atualizarBotaoDoTom();
+  if ($("#emojis-grade").dataset.busca) mostrarBuscaDeEmojis();
+  else montarGradeDeEmojis(true);
+  mostrarNaBarra(null);
+  $("#emojis-tom").focus();
 }
 
 // modo "escrever": insere no campo; modo "reagir": reage à mensagem
@@ -228,12 +378,17 @@ function abrirSeletorDeEmojis(ancora, modo = "escrever", mensagem = null) {
     montarAbas();
     seletor.montado = true;
   }
+  tomAtual = lerTom();
+  atualizarBotaoDoTom();
+  fecharTons();
   $("#emojis-busca").value = "";
   delete $("#emojis-grade").dataset.busca;
-  $("#emojis-nome").textContent = modo === "reagir" ? "Escolha a reação" : "Shift + clique escolhe mais de um";
+  seletor.frase = modo === "reagir" ? "Escolha a reação" : "Shift + clique escolhe mais de um";
+  mostrarNaBarra(null);
   painel.classList.toggle("painel-emojis--reagir", modo === "reagir");
   montarGradeDeEmojis();
   abrirPainel(painel, ancora, () => {
+    fecharTons();
     if (seletor.modo === "escrever") $("#campo-texto").focus();
   });
   $("#emojis-busca").focus();
@@ -262,6 +417,34 @@ function escolherEmoji(emoji, manterAberto) {
   if (!manterAberto) fecharPainel();
 }
 
+// A casa ao lado (setas): 9 por linha, passando de um grupo para o outro na mesma coluna.
+// Para cima, da primeira linha, volta para a busca ("busca").
+function casaVizinha(botao, tecla) {
+  const lista = botao.parentElement;
+  const itens = [...lista.children];
+  const i = itens.indexOf(botao);
+  const coluna = i % POR_LINHA;
+  const listas = [...$("#emojis-grade").querySelectorAll(".painel-emojis__lista")];
+  const k = listas.indexOf(lista);
+  if (tecla === "ArrowRight") return itens[i + 1] ?? listas[k + 1]?.firstElementChild ?? null;
+  if (tecla === "ArrowLeft") return itens[i - 1] ?? listas[k - 1]?.lastElementChild ?? null;
+  if (tecla === "ArrowDown") {
+    if (i + POR_LINHA < itens.length) return itens[i + POR_LINHA];
+    const ultimaLinha = Math.floor((itens.length - 1) / POR_LINHA);
+    if (Math.floor(i / POR_LINHA) < ultimaLinha) return itens[itens.length - 1];
+    const proxima = listas[k + 1];
+    return proxima ? proxima.children[Math.min(coluna, proxima.children.length - 1)] : null;
+  }
+  if (tecla === "ArrowUp") {
+    if (i - POR_LINHA >= 0) return itens[i - POR_LINHA];
+    const anterior = listas[k - 1];
+    if (!anterior) return "busca";
+    const n = anterior.children.length;
+    return anterior.children[Math.min(Math.floor((n - 1) / POR_LINHA) * POR_LINHA + coluna, n - 1)];
+  }
+  return null;
+}
+
 function configurarSeletorDeEmojis() {
   const grade = $("#emojis-grade");
   grade.addEventListener("click", (evento) => {
@@ -270,7 +453,31 @@ function configurarSeletorDeEmojis() {
   });
   grade.addEventListener("mouseover", (evento) => {
     const botao = evento.target.closest(".emoji-opcao");
-    if (botao) $("#emojis-nome").textContent = `${botao.dataset.emoji}  ${botao.title}`;
+    if (botao) mostrarNaBarra(botao);
+  });
+  grade.addEventListener("mouseleave", () => mostrarNaBarra(emojiComFoco()));
+  grade.addEventListener("focusin", (evento) => {
+    if (evento.target.classList.contains("emoji-opcao")) mostrarNaBarra(evento.target);
+  });
+  grade.addEventListener("focusout", (evento) => {
+    if (!evento.relatedTarget?.classList?.contains("emoji-opcao")) mostrarNaBarra(null);
+  });
+  grade.addEventListener("keydown", (evento) => {
+    const botao = evento.target.closest(".emoji-opcao");
+    if (!botao) return;
+    if (evento.key.startsWith("Arrow")) {
+      evento.preventDefault();
+      const vizinha = casaVizinha(botao, evento.key);
+      if (vizinha === "busca") $("#emojis-busca").focus();
+      else if (vizinha) focarEmoji(vizinha);
+    } else if (evento.key === "Enter" || evento.key === " ") {
+      evento.preventDefault();
+      escolherEmoji(botao.dataset.emoji, evento.key === "Enter" && evento.shiftKey);
+    }
+  });
+  // O espaço solto não clica de novo no botão
+  grade.addEventListener("keyup", (evento) => {
+    if (evento.key === " " && evento.target.closest(".emoji-opcao")) evento.preventDefault();
   });
   grade.addEventListener("scroll", () => {
     if (!grade.dataset.busca) marcarAbaAtual();
@@ -282,7 +489,18 @@ function configurarSeletorDeEmojis() {
       evento.preventDefault();
       const primeiro = grade.querySelector(".emoji-opcao");
       if (primeiro) escolherEmoji(primeiro.dataset.emoji, evento.shiftKey);
+    } else if (evento.key === "ArrowDown") {
+      const primeiro = grade.querySelector(".emoji-opcao");
+      if (primeiro) {
+        evento.preventDefault();
+        focarEmoji(primeiro);
+      }
     }
+  });
+  $("#emojis-tom").addEventListener("click", () => ($("#emojis-tons").hidden ? abrirTons() : fecharTons()));
+  // Um clique no painel fora do tom fecha a fileira
+  $("#painel-emojis").addEventListener("pointerdown", (evento) => {
+    if (!$("#emojis-tons").hidden && !evento.target.closest(".painel-emojis__tom")) fecharTons();
   });
   $("#botao-emoji").addEventListener("click", (evento) => abrirSeletorDeEmojis(evento.currentTarget, "escrever"));
 }
@@ -313,7 +531,7 @@ function desenharSugestoes() {
       item.type = "button";
       item.setAttribute("role", "option");
       item.setAttribute("aria-selected", String(i === sugestaoAtual.escolhida));
-      item.append(criar("span", "emoji-sugestao__emoji", x.e), criar("span", "mencao-opcao__nome", x.n));
+      item.append(criar("span", "emoji-sugestao__emoji", comTom(x)), criar("span", "mencao-opcao__nome", x.n));
       item.addEventListener("mousedown", (evento) => {
         evento.preventDefault();
         sugestaoAtual.escolhida = i;
@@ -333,7 +551,7 @@ function fecharSugestoes() {
 function escolherSugestao() {
   const campo = $("#campo-texto");
   const { inicio, fim, opcoes, escolhida } = sugestaoAtual;
-  const emoji = opcoes[escolhida].e;
+  const emoji = comTom(opcoes[escolhida]);
   campo.value = `${campo.value.slice(0, inicio)}${emoji}${campo.value.slice(fim)}`;
   const posicao = inicio + emoji.length;
   campo.setSelectionRange(posicao, posicao);

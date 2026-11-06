@@ -104,10 +104,11 @@ const REGEX_ARQUIVO_PRIVADA = /^([a-z0-9_-]{2,30})~([a-z0-9_-]{2,30})\.jsonl$/;
 const REGEX_IMAGEM = /^img-[0-9a-z-]{1,60}\.[a-z0-9]{2,5}$/;
 const REGEX_ID_GIF = /^[A-Za-z0-9_-]{1,120}$/;
 // Uma reação: um emoji só. Um keycap (1️⃣), uma bandeira (dois Regional_Indicator) ou um
-// pictograma com o seletor de variação e o tom de pele, que o ZWJ pode juntar a outros (🏳️‍🌈)
+// pictograma com o seletor de variação e o tom de pele, que o ZWJ pode juntar a outros (🏳️‍🌈),
+// ou uma bandeira de etiqueta (🏴 + as etiquetas + o fim, como a da Inglaterra)
 const PICTOGRAMA = "\\p{Extended_Pictographic}\\uFE0F?\\p{Emoji_Modifier}?";
 const REGEX_EMOJI = new RegExp(
-  `^(?:[0-9#*]\\uFE0F?\\u20E3|\\p{Regional_Indicator}{2}|${PICTOGRAMA}(?:\\u200D${PICTOGRAMA})*)$`,
+  `^(?:[0-9#*]\\uFE0F?\\u20E3|\\p{Regional_Indicator}{2}|\\u{1F3F4}[\\u{E0020}-\\u{E007E}]+\\u{E007F}|${PICTOGRAMA}(?:\\u200D${PICTOGRAMA})*)$`,
   "u",
 );
 

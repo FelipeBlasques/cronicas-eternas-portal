@@ -10,6 +10,12 @@
    A brasa só no canal atual, nas menções e na moldura de quem fala.
    ================================================================= */
 
+/* O Noto Color Emoji (do Google Fonts) logo depois da primeira fonte: só no chat */
+:root {
+  --fonte-texto: "Alegreya", "Noto Color Emoji", "Palatino Linotype", Georgia, serif;
+  --fonte-gotica: "Grenze Gotisch", "Noto Color Emoji", "UnifrakturMaguntia", "Palatino Linotype", Georgia, serif;
+}
+
 html:has(body.chat) {
   overflow: hidden;
 }
@@ -807,7 +813,7 @@ button.seletor-persona:focus-visible {
 
 .msg__codigo {
   padding: 0.05rem 0.3rem;
-  font-family: Consolas, "Courier New", monospace;
+  font-family: Consolas, "Courier New", "Noto Color Emoji", monospace;
   font-size: 0.88em;
   background: rgba(0, 0, 0, 0.42);
   border: 1px solid var(--ferro-fraco);
@@ -818,7 +824,7 @@ button.seletor-persona:focus-visible {
   margin: 0.3rem 0;
   padding: 0.55rem 0.8rem;
   overflow-x: auto;
-  font-family: Consolas, "Courier New", monospace;
+  font-family: Consolas, "Courier New", "Noto Color Emoji", monospace;
   font-size: 0.9rem;
   line-height: 1.45;
   white-space: pre;
@@ -2728,51 +2734,158 @@ button.seletor-persona:focus-visible {
   border-bottom: 1px solid var(--ferro-fraco);
 }
 
-/* O seletor de emojis */
+/* O seletor de emojis: a busca e o tom no alto, os grupos à esquerda, a grade e a barra de baixo */
 .painel-emojis {
-  width: 360px;
-  height: 400px;
+  width: 400px;
+  height: 440px;
 }
 
-.painel-emojis__abas {
+.painel-emojis__topo {
   display: flex;
   flex: none;
-  gap: 0.1rem;
-  padding: 0 0.5rem 0.3rem;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.6rem 0.6rem 0.4rem;
   border-bottom: 1px solid var(--ferro-fraco);
 }
 
-.painel-emojis__aba {
+.painel-emojis__busca {
   flex: 1;
-  height: 30px;
+  min-width: 0;
+  margin: 0;
+}
+
+.painel-emojis__tom {
+  position: relative;
+  flex: none;
+}
+
+/* O que é só emoji: o Noto antes de tudo, sempre em cores */
+.painel-emojis__botao-tom,
+.painel-emojis__opcao-tom,
+.emoji-opcao,
+.painel-emojis__nome-emoji,
+.emoji-sugestao__emoji,
+.reacao__emoji,
+.msg__texto--emojis {
+  font-family: "Noto Color Emoji", var(--fonte-texto);
+  font-variant-emoji: emoji;
+}
+
+.painel-emojis__botao-tom,
+.painel-emojis__opcao-tom {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
   padding: 0;
-  font-size: 1.05rem;
+  font-size: 1.25rem;
+  line-height: 1;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--raio);
+  cursor: pointer;
+}
+
+.painel-emojis__botao-tom:hover,
+.painel-emojis__botao-tom[aria-expanded="true"],
+.painel-emojis__opcao-tom:hover {
+  background: rgba(232, 221, 200, 0.09);
+}
+
+.painel-emojis__botao-tom:focus-visible,
+.painel-emojis__opcao-tom:focus-visible {
+  outline: none;
+  border-color: var(--brasa);
+}
+
+/* A fileira das seis opções, ali mesmo, por cima da grade */
+.painel-emojis__tons {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 3;
+  display: flex;
+  gap: 0.1rem;
+  padding: 0.25rem;
+  background: var(--pedra);
+  border: 1px solid var(--ferro);
+  border-radius: var(--raio);
+  box-shadow: 0 12px 30px -10px rgba(0, 0, 0, 0.9);
+}
+
+.painel-emojis__tons[hidden] {
+  display: none;
+}
+
+.painel-emojis__opcao-tom[aria-pressed="true"] {
+  border-color: var(--ferro-forte);
+}
+
+.painel-emojis__corpo {
+  display: grid;
+  flex: 1;
+  grid-template-columns: 44px 1fr;
+  min-height: 0;
+}
+
+/* A coluna dos grupos, com os desenhos */
+.painel-emojis__abas {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0.3rem 0;
+  border-right: 1px solid var(--ferro-fraco);
+  scrollbar-width: none;
+}
+
+.painel-emojis__aba {
+  display: grid;
+  flex: none;
+  place-items: center;
+  height: 36px;
+  padding: 0;
+  color: var(--cinza);
   background: none;
   border: 0;
-  border-bottom: 2px solid transparent;
   border-radius: 0;
   cursor: pointer;
-  filter: grayscale(0.7);
-  opacity: 0.7;
-  transition: opacity 0.2s, filter 0.2s;
+  transition: color 0.2s;
+}
+
+.painel-emojis__aba[hidden] {
+  display: none;
+}
+
+.painel-emojis__aba svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .painel-emojis__aba:hover,
-.painel-emojis__aba[aria-pressed="true"] {
-  filter: none;
-  opacity: 1;
+.painel-emojis__aba:focus-visible {
+  color: var(--pergaminho);
+  outline: none;
 }
 
+/* O grupo onde a grade está: um filete de brasa à esquerda */
 .painel-emojis__aba[aria-pressed="true"] {
-  border-bottom-color: var(--brasa);
+  color: var(--pergaminho);
+  box-shadow: inset 2px 0 0 var(--brasa);
 }
 
 .painel-emojis__grade {
   position: relative;
-  flex: 1;
+  min-width: 0;
   min-height: 0;
   overflow-y: auto;
-  padding: 0 0.5rem 0.4rem;
+  padding: 0 0.45rem 0.4rem;
   scrollbar-width: thin;
   scrollbar-color: var(--ferro) transparent;
 }
@@ -2793,20 +2906,24 @@ button.seletor-persona:focus-visible {
 
 .painel-emojis__lista {
   display: grid;
-  grid-template-columns: repeat(8, 1fr);
+  grid-template-columns: repeat(9, 36px);
+  grid-auto-rows: 36px;
 }
 
 .emoji-opcao {
   display: grid;
   place-items: center;
-  aspect-ratio: 1;
+  width: 36px;
+  height: 36px;
   padding: 0;
-  font-size: 1.45rem;
+  font-size: 1.6rem;
   line-height: 1;
   background: none;
   border: 0;
   border-radius: var(--raio);
   cursor: pointer;
+  /* ao andar com as setas, a casa não fica embaixo do título grudado */
+  scroll-margin-top: 2rem;
 }
 
 .emoji-opcao:hover,
@@ -2815,23 +2932,46 @@ button.seletor-persona:focus-visible {
   outline: none;
 }
 
+.emoji-opcao:focus-visible {
+  box-shadow: inset 0 0 0 1px var(--ferro-forte);
+}
+
 .painel-emojis__vazio {
   margin: 1.5rem 0;
   text-align: center;
   color: var(--cinza);
 }
 
+/* A barra de baixo: o emoji grande e o nome, ou a frase */
 .painel-emojis__nome {
+  display: flex;
   flex: none;
-  min-height: 1.9rem;
+  align-items: center;
+  gap: 0.55rem;
+  min-height: 2.6rem;
   margin: 0;
-  padding: 0.35rem 0.7rem;
+  padding: 0.2rem 0.7rem;
   overflow: hidden;
   font-size: 0.85rem;
-  white-space: nowrap;
-  text-overflow: ellipsis;
   color: var(--pergaminho-apagado);
   border-top: 1px solid var(--ferro-fraco);
+}
+
+.painel-emojis__nome-emoji {
+  flex: none;
+  font-size: 1.9rem;
+  line-height: 1;
+}
+
+.painel-emojis__nome-emoji:empty {
+  display: none;
+}
+
+.painel-emojis__nome-texto {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 /* O painel de GIFs */
