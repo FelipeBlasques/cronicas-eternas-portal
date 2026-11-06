@@ -29,6 +29,9 @@ const {
   apagarImagens,
 } = require("./base");
 const { textoOpcional } = require("./linha");
+// Os links e o Citar da página de um lugar vêm do Caderno. Pedido só dentro das funções: o servidor.js
+// carrega este arquivo antes do caderno.js, e o caderno.js pede este (o podeVerLugar).
+const caderno = () => require("./caderno");
 
 const TIPOS = new Set(["capital", "cidade", "vila", "reino", "regiao", "relevo", "lugar"]);
 // Os glifos da Linha do Tempo e três com o desenho do atlas (os desenhos ficam na página)
@@ -42,6 +45,14 @@ const LIMITES = { mapas: 30, marcadores: 300 };
 const LADO_MAXIMO = 30000; // largura e altura da imagem, em pixels
 const RAIO_MAXIMO = 0.05; // em proporção da largura
 const LIMITE_IMPORTACAO = 1024 * 1024; // 300 lugares com descrição longa cabem com folga
+const PAGINA = {
+  texto: 30000, // caracteres do texto da página de um lugar
+  imagens: 30, // imagens enviadas para a página de um lugar
+  json: 256 * 1024, // o corpo do PUT da página: o texto inteiro, com folga para os acentos
+};
+const UM_DIA = 24 * 60 * 60 * 1000; // a imagem que o texto não cita sai depois disso
+const ESCALA = { distancia: 100000, pixels: 20 }; // a distância maior e a linha menor, em pixels da imagem
+const UNIDADES = new Set(["km", "mi"]);
 
 const carimbo = () => new Date().toISOString();
 const idAleatorio = () => crypto.randomBytes(4).toString("hex");
@@ -100,6 +111,8 @@ const podeVer = (conta, item) => Boolean(conta.admin || item.visibilidade !== "a
 const podeVerLugar = (conta, mapa, marcador) => podeVer(conta, mapa) && podeVer(conta, marcador);
 const podeEditarMarcador = (conta, m) =>
   Boolean(conta.admin || (conta.editor && m.registradoPor && m.registradoPor === conta.usuario));
+// A página do lugar: a "só o administrador" não existe para as outras contas
+const temPaginaVisivel = (conta, m) => Boolean(m.pagina && podeVer(conta, m.pagina));
 
 function exigirAdmin(conta) {
   if (!conta.admin) throw new ErroHttp(403, "Só o administrador pode fazer isso.", "proibido");
@@ -146,6 +159,8 @@ function marcadorPublico(m, conta) {
     visibilidade: VISIBILIDADES.has(m.visibilidade) ? m.visibilidade : "todos",
     registradoPor: nomeDaConta(m.registradoPor, m.registradoNome),
     podeEditar: podeEditarMarcador(conta, m),
+    temPagina: temPaginaVisivel(conta, m),
+    podeCriarPagina: !m.pagina && cargoDe(conta) !== "jogador",
   };
 }
 
@@ -162,6 +177,7 @@ function mapaPublico(mapa, conta, conhecidas) {
     visibilidade: VISIBILIDADES.has(mapa.visibilidade) ? mapa.visibilidade : "todos",
     criadoEm: mapa.criadoEm,
     alteradoEm: mapa.alteradoEm,
+    escala: mapa.escala ?? null,
     marcadores: mapa.marcadores.filter((m) => podeVer(conta, m)).map((m) => marcadorPublico(m, conta)),
   };
 }
@@ -371,10 +387,13 @@ async function tratarMapas(req, res, rota, metodo, conta) {
   } catch {
     throw new ErroHttp(404, "Endereço não encontrado.");
   }
-  const [id, recurso, marca, ...resto] = partes;
+  const [id, recurso, marca, quarto, quinto, ...resto] = partes;
 
-  if (!resto.length) {
+  if (!quarto && !resto.length) {
     if (!id && metodo === "GET") return enviarJson(res, 200, dadosDosMapas(conta));
+    // Os ids de mapa começam sempre com "mapa-"
+    if (id === "citaveis" && !recurso && metodo === "GET") return enviarCitaveis(res, conta);
+    if (id && recurso === "escala" && !marca && metodo === "PUT") return marcarEscala(req, res, conta, id);
     if (!id && metodo === "POST") return enviarMapa(req, res, conta);
     if (id && !recurso && metodo === "PUT") return alterarMapa(req, res, conta, id);
     if (id && !recurso && metodo === "DELETE") return apagarMapa(res, conta, id);
@@ -384,6 +403,12 @@ async function tratarMapas(req, res, rota, metodo, conta) {
       if (marca && metodo === "PUT") return alterarMarcador(req, res, conta, id, marca);
       if (marca && metodo === "DELETE") return apagarMarcador(res, conta, id, marca);
     }
+  }
+  if (id && recurso === "marcadores" && marca && quarto === "pagina" && !resto.length) {
+    if (!quinto && metodo === "GET") return lerPagina(res, conta, id, marca);
+    if (!quinto && metodo === "PUT") return gravarPagina(req, res, conta, id, marca);
+    if (!quinto && metodo === "DELETE") return apagarPagina(res, conta, id, marca);
+    if (quinto === "imagens" && metodo === "POST") return receberImagemDaPagina(req, res, conta, id, marca);
   }
   throw new ErroHttp(404, "Endereço não encontrado.");
 }
@@ -448,7 +473,7 @@ async function apagarMapa(res, conta, id) {
   const mapa = acharMapa(conta, id);
   dados.mapas = dados.mapas.filter((m) => m !== mapa);
   await salvarDados();
-  await apagarImagens([mapa.imagem, mapa.miniatura]);
+  await apagarImagens([mapa.imagem, mapa.miniatura, ...mapa.marcadores.flatMap(arquivosDaPagina)]);
   console.log(`${conta.usuario} apagou dos Mapas: ${mapa.nome}`);
   enviarJson(res, 200, { ok: true });
 }
@@ -490,6 +515,7 @@ async function apagarMarcador(res, conta, id, idMarca) {
   const marcador = acharMarcador(conta, mapa, idMarca);
   mapa.marcadores = mapa.marcadores.filter((m) => m !== marcador);
   await salvarDados();
+  await apagarImagens(arquivosDaPagina(marcador));
   console.log(`${conta.usuario} apagou do mapa ${mapa.nome}: ${marcador.nome}`);
   enviarJson(res, 200, { ok: true });
 }
@@ -533,18 +559,264 @@ async function importarLugares(req, res, conta, id) {
   enviarJson(res, 200, { entraram: novos.length, pulados: lugares.length - novos.length });
 }
 
-// Quando alguém troca o próprio usuário, os lugares que marcou acompanham
-function renomearNosMapas(antigo, novo) {
-  for (const mapa of dados.mapas ?? []) {
-    for (const m of mapa.marcadores ?? []) if (m.registradoPor === antigo) m.registradoPor = novo;
+/* ---------- A página de um lugar ---------- */
+
+// Os arquivos das imagens da página, para apagar junto com ela, com o lugar ou com o mapa
+const arquivosDaPagina = (m) => (m.imagensDaPagina ?? []).map((imagem) => imagem.arquivo);
+
+function exigirQuemEscrevePagina(conta) {
+  if (cargoDe(conta) === "jogador") {
+    throw new ErroHttp(403, "Só os editores e o administrador escrevem as páginas dos lugares.", "proibido");
   }
 }
 
-// Conta excluída: os lugares dela guardam só o nome, e ninguém herda o que era dela
+// O lugar com a página que a conta vê; sem página, ou com a "só o administrador" para outra conta: 404
+function acharPagina(conta, marcador) {
+  if (!temPaginaVisivel(conta, marcador)) {
+    throw new ErroHttp(404, "Esse lugar não tem página.", "nao-encontrado");
+  }
+  return marcador.pagina;
+}
+
+function enviarCitaveis(res, conta) {
+  exigirQuemEscrevePagina(conta);
+  enviarJson(res, 200, caderno().citaveisDoPortal(conta));
+}
+
+function lerPagina(res, conta, id, idMarca) {
+  const mapa = acharMapa(conta, id);
+  const marcador = acharMarcador(conta, mapa, idMarca);
+  const pagina = acharPagina(conta, marcador);
+  const { lerCodigos, alvosDosLinks } = caderno();
+  const lida = lerCodigos(pagina.texto);
+  // As notas do Caderno não entram: ficam só como texto para todos
+  const chaves = [...lida.links].filter((chave) => !chave.startsWith("nota:"));
+  const doLugar = new Map((marcador.imagensDaPagina ?? []).map((imagem) => [imagem.id, imagem.arquivo]));
+  const imagens = {};
+  for (const idDaImagem of lida.imagens) if (doLugar.has(idDaImagem)) imagens[idDaImagem] = doLugar.get(idDaImagem);
+  enviarJson(res, 200, {
+    pagina: {
+      texto: pagina.texto,
+      ...(conta.admin ? { visibilidade: VISIBILIDADES.has(pagina.visibilidade) ? pagina.visibilidade : "todos" } : {}),
+      versao: pagina.versao,
+      criadaPor: nomeDaConta(pagina.criadaPor, pagina.criadaNome),
+      criadaEm: pagina.criadaEm,
+      alteradaPor: nomeDaConta(pagina.alteradaPor, pagina.alteradaNome),
+      alteradaEm: pagina.alteradaEm,
+    },
+    links: alvosDosLinks(conta, chaves),
+    imagens,
+    podeEditar: Boolean(conta.admin || (conta.editor && pagina.visibilidade !== "admin")),
+    podeApagar: Boolean(conta.admin),
+  });
+}
+
+function textoDaPagina(valor) {
+  if (typeof valor !== "string" || !valor.trim()) throw new ErroHttp(400, "Escreva o texto da página.");
+  const textoNovo = valor.replace(/\r\n/g, "\n");
+  if (textoNovo.length > PAGINA.texto) {
+    throw new ErroHttp(400, `O texto da página pode ter no máximo ${PAGINA.texto.toLocaleString("pt-BR")} caracteres.`);
+  }
+  caderno().conferirLinks(textoNovo);
+  return textoNovo;
+}
+
+// Saem as imagens do lugar que o texto gravado não cita e que foram enviadas há mais de 24 horas.
+// As mais novas ficam: podem ser de alguém que ainda está escrevendo. Devolve os arquivos que saíram.
+function tirarSobras(marcador) {
+  if (!marcador.imagensDaPagina?.length) return [];
+  const citadas = caderno().lerCodigos(marcador.pagina.texto).imagens;
+  const limite = Date.now() - UM_DIA;
+  const sobras = [];
+  marcador.imagensDaPagina = marcador.imagensDaPagina.filter((imagem) => {
+    const enviada = Date.parse(imagem.enviadaEm);
+    if (citadas.has(imagem.id) || !(enviada <= limite)) return true;
+    sobras.push(imagem.arquivo);
+    return false;
+  });
+  return sobras;
+}
+
+// Cria ou altera. Cada gravação manda a versão que leu (0 para criar); se a do servidor for outra,
+// nada é gravado e a resposta é 409, com a versão nova e quem salvou.
+async function gravarPagina(req, res, conta, id, idMarca) {
+  exigirQuemEscrevePagina(conta);
+  const corpo = await lerJson(req, PAGINA.json);
+  const mapa = acharMapa(conta, id);
+  const marcador = acharMarcador(conta, mapa, idMarca);
+  const atual = marcador.pagina ?? null;
+  // A "só o administrador" não existe para o editor
+  if (atual && !podeVer(conta, atual)) throw new ErroHttp(404, "Esse lugar não tem página.", "nao-encontrado");
+  if (!conta.admin && corpo.visibilidade !== undefined) {
+    throw new ErroHttp(403, "Só o administrador escolhe quem vê a página.", "proibido");
+  }
+  if (!Number.isInteger(corpo.versao)) throw new ErroHttp(400, "Envie a versão da página que você está alterando.");
+  const textoNovo = textoDaPagina(corpo.texto);
+  let visibilidade = atual?.visibilidade ?? "todos";
+  if (conta.admin) {
+    visibilidade = corpo.visibilidade ?? visibilidade;
+    if (!VISIBILIDADES.has(visibilidade)) {
+      throw new ErroHttp(400, "Escolha quem vê a página: todos ou só o administrador.");
+    }
+  }
+  const versaoAtual = atual ? atual.versao : 0;
+  if (corpo.versao !== versaoAtual) {
+    throw new ErroHttp(409, "Alguém salvou esta página enquanto você escrevia.", "conflito", {
+      pagina: {
+        versao: versaoAtual,
+        alteradaPor: atual ? nomeDaConta(atual.alteradaPor, atual.alteradaNome) : null,
+        alteradaEm: atual ? atual.alteradaEm : null,
+      },
+    });
+  }
+
+  const quando = carimbo();
+  const quem = { alteradaPor: conta.usuario, alteradaNome: conta.nome, alteradaEm: quando };
+  if (atual) {
+    Object.assign(atual, { texto: textoNovo, visibilidade, versao: atual.versao + 1 }, quem);
+  } else {
+    marcador.pagina = {
+      texto: textoNovo,
+      visibilidade,
+      versao: 1,
+      criadaPor: conta.usuario,
+      criadaNome: conta.nome,
+      criadaEm: quando,
+      ...quem,
+    };
+  }
+  const sobras = tirarSobras(marcador);
+  await salvarDados();
+  await apagarImagens(sobras);
+  console.log(`${conta.usuario} escreveu a página de ${marcador.nome} no mapa ${mapa.nome}`);
+  enviarJson(res, atual ? 200 : 201, { pagina: { versao: marcador.pagina.versao, alteradaEm: quando } });
+}
+
+async function apagarPagina(res, conta, id, idMarca) {
+  exigirAdmin(conta);
+  const mapa = acharMapa(conta, id);
+  const marcador = acharMarcador(conta, mapa, idMarca);
+  acharPagina(conta, marcador);
+  const arquivos = arquivosDaPagina(marcador);
+  delete marcador.pagina;
+  delete marcador.imagensDaPagina;
+  await salvarDados();
+  await apagarImagens(arquivos);
+  console.log(`${conta.usuario} apagou a página de ${marcador.nome} no mapa ${mapa.nome}`);
+  enviarJson(res, 200, { ok: true });
+}
+
+// O lugar onde a imagem vai entrar: a conta vê o lugar e, se ele já tem página, também a página
+function lugarDaImagem(conta, id, idMarca) {
+  const mapa = acharMapa(conta, id);
+  const marcador = acharMarcador(conta, mapa, idMarca);
+  if (marcador.pagina && !podeVer(conta, marcador.pagina)) {
+    throw new ErroHttp(404, "Esse lugar não tem página.", "nao-encontrado");
+  }
+  return marcador;
+}
+
+function cabemImagens(marcador) {
+  if ((marcador.imagensDaPagina ?? []).length >= PAGINA.imagens) {
+    throw new ErroHttp(400, `Um lugar pode ter no máximo ${PAGINA.imagens} imagens na página.`);
+  }
+}
+
+// A imagem fica no lugar, e não na página: dá para enviá-la antes de a página existir
+async function receberImagemDaPagina(req, res, conta, id, idMarca) {
+  exigirQuemEscrevePagina(conta);
+  cabemImagens(lugarDaImagem(conta, id, idMarca)); // antes de receber a imagem
+  const form = await lerFormulario(req, CONFIG.maxImagem + 4096);
+  const arquivo = form.get("imagem");
+  if (!arquivoEnviado(arquivo)) throw new ErroHttp(400, "Escolha a imagem.");
+  if (!TIPOS_IMAGEM[arquivo.type]) throw new ErroHttp(400, "Use imagens PNG, JPG, WEBP, GIF ou AVIF.");
+  if (arquivo.size > CONFIG.maxImagem) throw new ErroHttp(413, "Cada imagem pode ter no máximo 10 MB.");
+  const caminho = await guardarImagem(arquivo);
+
+  // Enquanto a imagem era gravada, o lugar pode ter sido apagado, ou outra imagem ter chegado
+  let marcador;
+  try {
+    marcador = lugarDaImagem(conta, id, idMarca);
+    cabemImagens(marcador);
+  } catch (erro) {
+    await apagarImagens([caminho]);
+    throw erro;
+  }
+  if (!Array.isArray(marcador.imagensDaPagina)) marcador.imagensDaPagina = [];
+  const imagem = {
+    id: novoId("img-", new Set(marcador.imagensDaPagina.map((i) => i.id))),
+    arquivo: caminho,
+    tamanho: arquivo.size,
+    enviadaEm: carimbo(),
+    enviadaPor: conta.usuario,
+  };
+  marcador.imagensDaPagina.push(imagem);
+  await salvarDados();
+  enviarJson(res, 201, { imagem: { id: imagem.id, endereco: imagem.arquivo } });
+}
+
+/* ---------- A escala do mapa ---------- */
+
+// { escala: { distancia, unidade, de: { x, y }, ate: { x, y } } } ou { escala: null }, que tira a escala
+function valoresDaEscala(bruta, mapa) {
+  if (!bruta || typeof bruta !== "object" || Array.isArray(bruta)) {
+    throw new ErroHttp(400, "A escala não está num formato válido.");
+  }
+  const distancia =
+    typeof bruta.distancia === "number" && Number.isFinite(bruta.distancia)
+      ? Math.round(bruta.distancia * 100) / 100
+      : NaN;
+  if (!(distancia > 0 && distancia <= ESCALA.distancia)) {
+    throw new ErroHttp(400, "A distância precisa ser um número maior que zero e de no máximo 100.000.");
+  }
+  if (!UNIDADES.has(bruta.unidade)) throw new ErroHttp(400, "Escolha a unidade da escala: km ou milhas.");
+  const mensagem = "As pontas da linha da escala precisam estar dentro do mapa.";
+  const ponta = (p) => {
+    if (!p || typeof p !== "object" || Array.isArray(p)) throw new ErroHttp(400, mensagem);
+    return { x: proporcao(numeroEntre(p.x, 0, 1, mensagem)), y: proporcao(numeroEntre(p.y, 0, 1, mensagem)) };
+  };
+  const de = ponta(bruta.de);
+  const ate = ponta(bruta.ate);
+  if (Math.hypot((ate.x - de.x) * mapa.largura, (ate.y - de.y) * mapa.altura) < ESCALA.pixels) {
+    throw new ErroHttp(400, "A linha da escala precisa ser mais comprida.");
+  }
+  return { distancia, unidade: bruta.unidade, de, ate, alteradaEm: carimbo() };
+}
+
+async function marcarEscala(req, res, conta, id) {
+  exigirAdmin(conta);
+  const corpo = await lerJson(req);
+  const mapa = acharMapa(conta, id);
+  if (corpo.escala === undefined) throw new ErroHttp(400, "Envie a escala do mapa.");
+  mapa.escala = corpo.escala === null ? null : valoresDaEscala(corpo.escala, mapa);
+  await salvarDados();
+  console.log(`${conta.usuario} ${mapa.escala ? "marcou" : "tirou"} a escala do mapa ${mapa.nome}`);
+  enviarJson(res, 200, { escala: mapa.escala });
+}
+
+// Quando alguém troca o próprio usuário, os lugares que marcou, as páginas que escreveu
+// e as imagens que enviou acompanham
+function renomearNosMapas(antigo, novo) {
+  for (const mapa of dados.mapas ?? []) {
+    for (const m of mapa.marcadores ?? []) {
+      if (m.registradoPor === antigo) m.registradoPor = novo;
+      if (m.pagina?.criadaPor === antigo) m.pagina.criadaPor = novo;
+      if (m.pagina?.alteradaPor === antigo) m.pagina.alteradaPor = novo;
+      for (const imagem of m.imagensDaPagina ?? []) if (imagem.enviadaPor === antigo) imagem.enviadaPor = novo;
+    }
+  }
+}
+
+// Conta excluída: os lugares e as páginas dela guardam só o nome, e ninguém herda o que era dela
 function desligarContaDosMapas(conta) {
   for (const mapa of dados.mapas ?? []) {
     for (const m of mapa.marcadores ?? []) {
       if (m.registradoPor === conta.usuario) Object.assign(m, { registradoPor: null, registradoNome: conta.nome });
+      if (m.pagina?.criadaPor === conta.usuario) Object.assign(m.pagina, { criadaPor: null, criadaNome: conta.nome });
+      if (m.pagina?.alteradaPor === conta.usuario) {
+        Object.assign(m.pagina, { alteradaPor: null, alteradaNome: conta.nome });
+      }
+      for (const imagem of m.imagensDaPagina ?? []) if (imagem.enviadaPor === conta.usuario) imagem.enviadaPor = null;
     }
   }
 }

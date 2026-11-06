@@ -72,7 +72,10 @@ portal/
     regras.js       /api/regras/... (Regras da casa)
     personagens.js  /api/galeria/... (Personagens: fichas e outros personagens; a arte da galeria
                     fica em `retrato`, separada da capa e da arte do card das Mesas)
-    mapas.js        /api/mapas/... (Mapas e lugares; exporta podeVerLugar)
+    mapas.js        /api/mapas/... (Mapas e lugares; exporta podeVerLugar). A página de cada lugar fica no
+                    marcador (pagina, com versões, e imagensDaPagina, com os arquivos em uploads/); a escala
+                    fica no mapa (escala). Os links e o Citar da página vêm das funções do caderno.js, pedido
+                    só dentro das funções (const caderno = () => require("./caderno"))
     memorias.js     /api/memorias/... (Memórias de Draevor: textos que só o administrador escreve e revela;
                     exporta podeLer)
     chat.js         /api/chat/... (Chat: canais, privadas, lidas, personas, perfis, reações, fixadas, GIFs e
@@ -85,7 +88,8 @@ portal/
     caderno.js      /api/caderno/... (Caderno: notas e pastas de cada conta, em cadernos/<usuario>/caderno.json,
                     fora do dados.json, e as imagens em cadernos/<usuario>/imagens/; os ganchos de conta
                     renomeiam e apagam essas pastas. Links, embutidas, etiquetas, busca, citáveis, imagens
-                    protegidas e órfãs; /api/caderno/publico/... é o link público, sem login)
+                    protegidas e órfãs; /api/caderno/publico/... é o link público, sem login). Exporta para
+                    os Mapas lerCodigos, alvosDosLinks, conferirLinks e citaveisDoPortal (o Citar sem as notas)
   publico/
     comum.js        lista PAGINAS e barra lateral, pedir(), $, criar(), botao(), imagem(),
                     simbolo(), perguntar(), avisoRapido(), avisarFalha(), fecharAoClicarFora(),
