@@ -1502,7 +1502,262 @@ body.com-visor .cenario__cinzas {
    Telas pequenas
    ================================================================= */
 
+/* "Ler a página" e "+ Página", entre o texto e as ações */
+.detalhe-lugar__pagina {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: 0.45rem;
+}
+
+.detalhe-lugar__pagina svg {
+  flex: none;
+  width: 1.1rem;
+  height: 1.1rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* =================================================================
+   A página de um lugar
+   -----------------------------------------------------------------
+   Um diálogo largo e alto: a cabeça e as ações ficam paradas e o
+   corpo rola por dentro. Lendo, o texto numa coluna de leitura;
+   editando, a barra do editor das marcas e a área de texto, que
+   ocupa o que sobra. No celular, ocupa a tela.
+   ================================================================= */
+
+.dialogo.dialogo--pagina {
+  width: min(54rem, calc(100vw - 2rem));
+  max-height: calc(100dvh - 2rem);
+  padding: 1.6rem 1.9rem 1.4rem;
+  overflow: hidden;
+}
+
+.dialogo--pagina[open] {
+  display: flex;
+  flex-direction: column;
+}
+
+.pagina-lugar {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.pagina-lugar__cabeca {
+  flex: none;
+  display: grid;
+  justify-items: start;
+  gap: 0.35rem;
+  padding-bottom: 0.9rem;
+  border-bottom: 1px solid var(--ferro-fraco);
+}
+
+.pagina-lugar__sobre {
+  margin: 0;
+  font-size: 0.85rem;
+  font-variant: small-caps;
+  letter-spacing: 0.06em;
+  color: var(--pergaminho-apagado);
+}
+
+.pagina-lugar__titulo {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.pagina-lugar__nome {
+  margin: 0;
+  font-family: var(--fonte-gotica);
+  font-weight: 500;
+  font-size: 2.3rem;
+  line-height: 1.02;
+  overflow-wrap: anywhere;
+  text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.7);
+}
+
+.pagina-lugar__apelido {
+  margin: 0;
+  font-style: italic;
+  color: var(--pergaminho-apagado);
+}
+
+/* O corpo rola por dentro; a área de texto ocupa o que sobra */
+.pagina-lugar__corpo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 1.1rem 0.4rem 0.6rem 0;
+}
+
+.pagina-lugar__texto {
+  width: 100%;
+  max-width: 44rem;
+  margin: 0 auto;
+  font-size: 1.08rem;
+}
+
+.pagina-lugar__autoria {
+  width: 100%;
+  max-width: 44rem;
+  margin: 0.6rem auto 0;
+  padding-top: 0.7rem;
+  font-size: 0.85rem;
+  font-style: italic;
+  color: var(--cinza);
+  border-top: 1px solid var(--ferro-fraco);
+}
+
+.pagina-lugar__carregando,
+.pagina-lugar__vazia {
+  margin: 1rem 0;
+  font-style: italic;
+  color: var(--pergaminho-apagado);
+}
+
+/* Editando: a barra e o "Ver como fica" numa linha */
+.pagina-lugar__ferramentas {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  min-width: 0;
+}
+
+.pagina-lugar__ferramentas .ferramentas {
+  min-width: 0;
+}
+
+.pagina-lugar__barra--apagada {
+  opacity: 0.4;
+}
+
+.pagina-lugar__ver {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.95rem;
+}
+
+.pagina-lugar__ver svg {
+  flex: none;
+  width: 1.05rem;
+  height: 1.05rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.pagina-lugar__ver[aria-pressed="true"] {
+  color: var(--pergaminho);
+  border-color: var(--ferro-forte);
+}
+
+.pagina-lugar__area {
+  display: block;
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 16rem;
+  margin: 0;
+  padding: 0.9rem 1rem 1.2rem;
+  font-family: var(--fonte-texto);
+  font-size: 1.05rem;
+  line-height: 1.6;
+  color: var(--pergaminho);
+  background: rgba(12, 10, 9, 0.45);
+  border: 1px solid var(--ferro-fraco);
+  border-radius: var(--raio);
+  resize: none;
+}
+
+.pagina-lugar__area[hidden],
+.pagina-lugar__vista[hidden] {
+  display: none;
+}
+
+.pagina-lugar__area:focus-visible {
+  outline: none;
+  border-color: var(--ferro);
+}
+
+.pagina-lugar__area::placeholder {
+  font-style: italic;
+  color: var(--cinza);
+}
+
+/* Um arquivo de imagem sendo arrastado para a página */
+.pagina-lugar__area--soltar {
+  border-style: dashed;
+  border-color: var(--ferro-forte);
+}
+
+.pagina-lugar__vista {
+  flex: 1 1 auto;
+  min-height: 16rem;
+  padding: 0.9rem 1rem 1.2rem;
+  border: 1px dashed var(--ferro-fraco);
+  border-radius: var(--raio);
+}
+
+.pagina-lugar__quem-ve {
+  flex: none;
+}
+
+.pagina-lugar__acoes {
+  flex: none;
+  margin-top: 0;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--ferro-fraco);
+}
+
+.pagina-lugar__situacao {
+  font-size: 0.92rem;
+  font-style: italic;
+  color: var(--pergaminho-apagado);
+}
+
+.pagina-lugar__situacao:empty {
+  display: none;
+}
+
 @media (max-width: 760px) {
+  /* A página de um lugar ocupa a tela */
+  .dialogo.dialogo--pagina {
+    width: 100vw;
+    max-width: 100vw;
+    height: 100dvh;
+    max-height: 100dvh;
+    margin: 0;
+    padding: 1.1rem 1rem 0.9rem;
+    border-radius: 0;
+  }
+
+  .pagina-lugar__nome {
+    font-size: 1.85rem;
+  }
+
+  .pagina-lugar__ferramentas {
+    flex-wrap: nowrap;
+  }
+
+  .pagina-lugar__ver {
+    flex: none;
+  }
+
   .pagina-mapas {
     padding: 2rem 1rem 7rem;
   }
