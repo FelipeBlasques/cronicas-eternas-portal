@@ -32,6 +32,11 @@
      aoMarcarTarefa(linha, marcada, caixa)  com ela, a caixinha da
                              tarefa pode ser marcada; sem ela, fica
                              só para ver
+   E, como propriedade da mesma função, o endereço de uma coisa do
+   portal (o mesmo dos links), que o grafo do Caderno usa:
+
+     desenharMarcas.enderecoDoPortal(tipo, id)
+
    Cada caixinha leva em data-linha o número da linha da tarefa no
    texto (a primeira linha é 0).
 
@@ -106,6 +111,16 @@ const desenharMarcas = (() => {
     });
   }
 
+  // O endereço de um personagem, acontecimento, mesa, memória ou lugar ("<mapa>/<marca>"), a partir do id
+  function enderecoDoPortal(tipo, id) {
+    if (tipo === "personagem") return `${enderecoDaPagina("personagens")}#personagem-${codificar(id)}`;
+    if (tipo === "evento") return `${enderecoDaPagina("linha")}#evento-${codificar(id)}`;
+    if (tipo === "mesa") return `${enderecoDaPagina("personagens")}#mesa-${codificar(id)}`;
+    if (tipo === "memoria") return `${enderecoDaPagina("memorias")}#memoria-${codificar(id)}`;
+    const [mapa, marca = ""] = id.split("/");
+    return `${enderecoDaPagina("mapas")}#${codificar(mapa)}/${codificar(marca)}`;
+  }
+
   // [[tipo:<id>|o que aparece]]: vira link só quando quem lê vê o alvo; senão, fica o texto
   function linkDoPortal(tipo, id, aparece, ctx) {
     const chave = `${tipo}:${id}`;
@@ -117,22 +132,13 @@ const desenharMarcas = (() => {
       link.href = alvo.publico || `${enderecoDaPagina("caderno")}#nota-${codificar(limpo)}`;
       link.title = `No Caderno: ${alvo.titulo}`;
       if (ctx.aoAbrirNota && !alvo.publico) aoClicarComum(link, () => ctx.aoAbrirNota(limpo));
-    } else if (tipo === "personagem") {
-      link.href = `${enderecoDaPagina("personagens")}#personagem-${codificar(limpo)}`;
-      link.title = `Nos Personagens: ${alvo.nome}`;
-    } else if (tipo === "evento") {
-      link.href = `${enderecoDaPagina("linha")}#evento-${codificar(limpo)}`;
-      link.title = `Na Linha do Tempo: ${alvo.titulo}`;
-    } else if (tipo === "mesa") {
-      link.href = `${enderecoDaPagina("personagens")}#mesa-${codificar(limpo)}`;
-      link.title = `Nos Personagens: a mesa ${alvo.nome}`;
-    } else if (tipo === "memoria") {
-      link.href = `${enderecoDaPagina("memorias")}#memoria-${codificar(limpo)}`;
-      link.title = `Nas Memórias de Draevor: ${alvo.titulo}`;
     } else {
-      const [mapa, marca = ""] = limpo.split("/");
-      link.href = `${enderecoDaPagina("mapas")}#${codificar(mapa)}/${codificar(marca)}`;
-      link.title = `No mapa ${alvo.mapa}: ${alvo.nome}`;
+      link.href = enderecoDoPortal(tipo, limpo);
+      if (tipo === "personagem") link.title = `Nos Personagens: ${alvo.nome}`;
+      else if (tipo === "evento") link.title = `Na Linha do Tempo: ${alvo.titulo}`;
+      else if (tipo === "mesa") link.title = `Nos Personagens: a mesa ${alvo.nome}`;
+      else if (tipo === "memoria") link.title = `Nas Memórias de Draevor: ${alvo.titulo}`;
+      else link.title = `No mapa ${alvo.mapa}: ${alvo.nome}`;
     }
     return link;
   }
@@ -565,7 +571,7 @@ const desenharMarcas = (() => {
     return blocos;
   }
 
-  return function desenharMarcas(texto, conteudo = {}, opcoes = {}) {
+  function desenharMarcas(texto, conteudo = {}, opcoes = {}) {
     const ctx = {
       links: conteudo?.links ?? {},
       embutidas: conteudo?.embutidas ?? {},
@@ -578,5 +584,9 @@ const desenharMarcas = (() => {
       citacoes: 0, // quantas citações em volta
     };
     return lerBlocos(linhasDe(texto), ctx);
-  };
+  }
+
+  // O grafo do Caderno usa os mesmos endereços dos links
+  desenharMarcas.enderecoDoPortal = enderecoDoPortal;
+  return desenharMarcas;
 })();

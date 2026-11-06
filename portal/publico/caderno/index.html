@@ -15,6 +15,7 @@
   <script src="../marcas.js" defer></script>
   <script src="../editor-de-marcas.js" defer></script>
   <script src="caderno.js" defer></script>
+  <script src="grafo.js" defer></script>
 </head>
 <body class="com-barra" data-pagina="caderno" data-raiz="../">
 
@@ -48,6 +49,8 @@
       <symbol id="icone-tabela" viewBox="0 0 24 24"><path d="M3.5 5h17v14h-17ZM3.5 9.7h17M3.5 14.3h17M12 5v14"/></symbol>
       <symbol id="icone-separador" viewBox="0 0 24 24"><path d="M3 12h18"/><path d="M6 6.5h12M6 17.5h12" stroke-opacity=".45"/></symbol>
       <symbol id="icone-imagem" viewBox="0 0 24 24"><path d="M3.5 5h17v14h-17ZM3.5 16.5l5-5 4 4 2.5-2.5 5.5 5"/><circle cx="15.5" cy="9" r="1.6"/></symbol>
+      <!-- O botão Grafo: três círculos ligados -->
+      <symbol id="icone-grafo" viewBox="0 0 24 24"><circle cx="6" cy="7" r="2.6"/><circle cx="18" cy="6" r="2.6"/><circle cx="12" cy="18" r="2.6"/><path d="M8.5 6.8l6.9-.6M7.3 9.3l3.5 6.4M16.8 8.4l-3.6 7.2"/></symbol>
       <symbol id="icone-embutir" viewBox="0 0 24 24"><path d="M3.5 4.5h17v15h-17Z"/><path d="M7 8h10v8H7Z" stroke-opacity=".55"/><path d="M9.5 11h5M9.5 13.5h3.5"/></symbol>
     </defs>
   </svg>
@@ -75,7 +78,14 @@
   <main id="pagina" class="pagina-caderno" hidden>
     <aside id="lateral" class="lateral" aria-labelledby="titulo-caderno">
       <div class="lateral__cabeca">
-        <h2 id="titulo-caderno" class="lateral__titulo">Caderno</h2>
+        <div class="lateral__topo">
+          <h2 id="titulo-caderno" class="lateral__titulo">Caderno</h2>
+          <!-- O grafo das notas (#grafo); o administrador vê o do caderno escolhido -->
+          <button id="botao-grafo" class="botao botao--leve lateral__grafo" type="button" title="Ver o grafo do caderno">
+            <svg class="lateral__grafo-icone" aria-hidden="true"><use href="#icone-grafo"/></svg>
+            <span>Grafo</span>
+          </button>
+        </div>
         <!-- Só o administrador: de quem é o caderno que ele lê -->
         <label id="campo-conta" class="campo lateral__conta" hidden>
           <span class="campo__rotulo">Caderno de:</span>
@@ -124,7 +134,7 @@
       <p id="espaco-imagens" class="lateral__pe" hidden></p>
     </aside>
 
-    <!-- A nota aberta (#nota-<id> no endereço), ou o convite para escolher uma -->
+    <!-- A nota aberta (#nota-<id> no endereço), o grafo (#grafo e #grafo-<id>, montado pelo grafo.js), ou o convite para escolher uma -->
     <section id="area-nota" class="area-nota" tabindex="-1" aria-label="Nota"></section>
   </main>
 

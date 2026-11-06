@@ -89,7 +89,9 @@ portal/
     caderno.js      /api/caderno/... (Caderno: notas e pastas de cada conta, em cadernos/<usuario>/caderno.json,
                     fora do dados.json, e as imagens em cadernos/<usuario>/imagens/; os ganchos de conta
                     renomeiam e apagam essas pastas. Links, embutidas, etiquetas, busca, citáveis, imagens
-                    protegidas e órfãs; /api/caderno/publico/... é o link público, sem login). Exporta para
+                    protegidas e órfãs; o grafo em /api/caderno/grafo e, para o administrador,
+                    /api/caderno/contas/<usuario>/grafo, montado do que já se lê das notas;
+                    /api/caderno/publico/... é o link público, sem login). Exporta para
                     os Mapas lerCodigos, alvosDosLinks, conferirLinks e citaveisDoPortal (o Citar sem as notas)
   publico/
     comum.js        lista PAGINAS e barra lateral, pedir(), $, criar(), botao(), imagem(),
@@ -102,7 +104,8 @@ portal/
     calendario.js   o Ciclo de Sylara: MESES, textoDaData(), textoDoPeriodo(), faseDaLua()...
     marcas.js       as marcas do texto das notas do Caderno (tipo Markdown, com os links, as embutidas e as
                     imagens do portal): declara só desenharMarcas(texto, { links, embutidas, imagens }, opcoes),
-                    que devolve os elementos. Usado pelo Caderno e pela leitura pública
+                    que devolve os elementos, e desenharMarcas.enderecoDoPortal(tipo, id), o endereço
+                    dos links do portal (o grafo do Caderno usa). Usado pelo Caderno e pela leitura pública
     marcas.css      o estilo das marcas, dentro de um elemento com a classe "marcas"
     editor-de-marcas.js  o editor do texto com as marcas, comum ao Caderno e à página do lugar dos Mapas:
                     declara só criarEditorDeMarcas({ area, citaveis, notas?, tarefas?, imagens? }), que devolve
@@ -119,7 +122,9 @@ portal/
                                  a régua e o medir distância com a viagem do Pathfinder 2e), mapas.css
     memorias/                    index.html, memorias.js, memorias.css
     caderno/                     index.html, caderno.js, caderno.css (carrega também ../marcas.js, ../marcas.css,
-                                 ../editor-de-marcas.js e ../editor-de-marcas.css)
+                                 ../editor-de-marcas.js e ../editor-de-marcas.css); grafo.js (o grafo das notas em
+                                 #grafo e #grafo-<id>: o canvas, a simulação por forças e o painel; usa o estado,
+                                 a api, o abrirNota e o buscarEtiqueta do caderno.js e preenche os ganchosDoGrafo)
     ler/                         index.html, ler.js, ler.css: a leitura pública de uma nota do Caderno (/ler/#<token>),
                                  sem login e sem a barra lateral; carrega também ../marcas.js e ../marcas.css
     chat/                        index.html, chat.js (texto: lista, mensagens, privadas, eventos, administração,
