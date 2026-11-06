@@ -103,6 +103,12 @@ portal/
                     imagens do portal): declara só desenharMarcas(texto, { links, embutidas, imagens }, opcoes),
                     que devolve os elementos. Usado pelo Caderno e pela leitura pública
     marcas.css      o estilo das marcas, dentro de um elemento com a classe "marcas"
+    editor-de-marcas.js  o editor do texto com as marcas, comum ao Caderno e à página do lugar dos Mapas:
+                    declara só criarEditorDeMarcas({ area, citaveis, notas?, tarefas?, imagens? }), que devolve
+                    barra(), tecla(), digitou(), abrirCitar(), porImagem(), conferirImagem(), textoDoLink() e
+                    fechar() (a barra de botões com o menu do Título, Ctrl+B/Ctrl+I e o Enter das listas, o Citar
+                    com o diálogo criado na primeira vez e o pôr a imagem). Carregado depois do comum.js
+    editor-de-marcas.css  o estilo da barra de botões, do menu do Título e do Citar
     style.css       estilos comuns: variáveis, topo, barra lateral, botões, campos, diálogos, cards
     index.html, script.js        página Mesas, tela de entrada e administração
     linha-do-tempo/              index.html, linha.js, linha.css
@@ -110,7 +116,8 @@ portal/
     personagens/                 index.html, personagens.js, personagens.css
     mapas/                       index.html, visor.js, mapas.js, mapas.css
     memorias/                    index.html, memorias.js, memorias.css
-    caderno/                     index.html, caderno.js, caderno.css (carrega também ../marcas.js e ../marcas.css)
+    caderno/                     index.html, caderno.js, caderno.css (carrega também ../marcas.js, ../marcas.css,
+                                 ../editor-de-marcas.js e ../editor-de-marcas.css)
     ler/                         index.html, ler.js, ler.css: a leitura pública de uma nota do Caderno (/ler/#<token>),
                                  sem login e sem a barra lateral; carrega também ../marcas.js e ../marcas.css
     chat/                        index.html, chat.js (texto: lista, mensagens, privadas, eventos, administração,

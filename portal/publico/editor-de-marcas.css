@@ -1,0 +1,226 @@
+/* =================================================================
+   Crônicas Eternas: o editor das marcas
+   -----------------------------------------------------------------
+   A barra de botões, o menu do botão Título e o diálogo do Citar do
+   editor-de-marcas.js. Carregado depois do ../style.css e do
+   ../marcas.css, antes do css da página.
+   ================================================================= */
+
+/* A barra de botões das marcas: placas de ferro pequenas, em grupos */
+.ferramentas {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.9rem;
+  margin: 0 0 0.9rem;
+}
+
+.ferramentas__grupo {
+  display: flex;
+  gap: 0.2rem;
+}
+
+.ferramenta {
+  display: grid;
+  place-items: center;
+  width: 2.2rem;
+  height: 2.2rem;
+  padding: 0;
+  font: inherit;
+  font-size: 1.05rem;
+  line-height: 1;
+  color: var(--pergaminho-apagado);
+  background: linear-gradient(180deg, #26201b 0%, #17130f 100%);
+  border: 1px solid var(--ferro-fraco);
+  border-radius: var(--raio);
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s;
+}
+
+.ferramenta:hover,
+.ferramenta[aria-expanded="true"] {
+  color: var(--pergaminho);
+  border-color: var(--ferro-forte);
+}
+
+.ferramenta:focus-visible {
+  outline: 2px solid var(--brasa);
+  outline-offset: 2px;
+}
+
+.ferramenta__icone {
+  width: 1.15rem;
+  height: 1.15rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.ferramenta--negrito .ferramenta__letra {
+  font-weight: 700;
+}
+
+.ferramenta--italico .ferramenta__letra {
+  font-style: italic;
+}
+
+.ferramenta--riscado .ferramenta__letra {
+  font-size: 0.92rem;
+  text-decoration: line-through;
+}
+
+/* =================================================================
+   O menu do botão Título (a mesma cara do menu "⋯" do Caderno)
+   ================================================================= */
+
+.menu-do-titulo {
+  position: fixed;
+  z-index: 60;
+  display: grid;
+  min-width: 11rem;
+  max-width: min(18rem, calc(100vw - 16px));
+  padding: 0.35rem;
+  background: linear-gradient(180deg, #241e1a 0%, #15120f 100%);
+  border: 1px solid var(--ferro);
+  border-radius: var(--raio);
+  box-shadow: 0 24px 50px -16px rgba(0, 0, 0, 0.95);
+}
+
+.menu-do-titulo[hidden] {
+  display: none;
+}
+
+.menu-do-titulo__item {
+  display: block;
+  width: 100%;
+  padding: 0.45rem 0.8rem;
+  font: inherit;
+  font-size: 1rem;
+  text-align: left;
+  color: var(--pergaminho-apagado);
+  background: none;
+  border: 0;
+  border-radius: var(--raio);
+  cursor: pointer;
+}
+
+.menu-do-titulo__item:hover,
+.menu-do-titulo__item:focus-visible {
+  color: var(--pergaminho);
+  background: rgba(232, 221, 200, 0.07);
+  outline: none;
+}
+
+.menu-do-titulo__item:focus-visible {
+  box-shadow: inset 0 0 0 1px var(--ferro-forte);
+}
+
+/* =================================================================
+   Citar: a busca pelas notas e pelas coisas do portal (como nas Memórias)
+   ================================================================= */
+
+.dialogo.dialogo--citar {
+  width: min(32rem, calc(100vw - 2rem));
+}
+
+#citar-busca::-webkit-search-cancel-button {
+  filter: grayscale(1) brightness(1.6);
+}
+
+.citar__resultados {
+  display: grid;
+  gap: 1rem;
+  max-height: min(50vh, 24rem);
+  overflow: auto;
+  margin-top: 1.1rem;
+  padding-right: 0.5rem;
+}
+
+.citar__titulo {
+  margin: 0 0 0.3rem;
+  font-size: 0.86rem;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--cinza);
+}
+
+.citar__lista {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.citar__item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  width: 100%;
+  padding: 0.4rem 0.6rem;
+  font: inherit;
+  text-align: left;
+  color: var(--pergaminho-apagado);
+  background: none;
+  border: 0;
+  border-radius: var(--raio);
+  cursor: pointer;
+  transition: color 0.2s, background-color 0.2s;
+}
+
+.citar__item:hover,
+.citar__item:focus-visible {
+  color: var(--pergaminho);
+  background: rgba(232, 221, 200, 0.06);
+}
+
+.citar__item:focus-visible {
+  outline: 2px solid var(--brasa);
+  outline-offset: -2px;
+}
+
+.citar__nome {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.citar__extra {
+  flex: none;
+  max-width: 50%;
+  font-size: 0.9rem;
+  font-style: italic;
+  text-align: right;
+  color: var(--cinza);
+  overflow-wrap: anywhere;
+}
+
+.citar__vazio {
+  margin: 0;
+  font-style: italic;
+  color: var(--cinza);
+}
+
+/* Celular: a barra de botões rola de lado, sem empurrar a página */
+@media (max-width: 760px) {
+  .ferramentas {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 0.35rem;
+    scrollbar-width: thin;
+    scrollbar-color: var(--ferro) transparent;
+  }
+
+  .ferramentas__grupo {
+    flex: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ferramenta,
+  .citar__item {
+    transition: none;
+  }
+}
