@@ -26,7 +26,7 @@ const TIPOS = new Map([
   ["documento", "Emitido por"],
   ["inscricao", "Onde está gravada"],
 ]);
-const LIMITES = { memorias: 500, capitulos: 80, texto: 100000, livro: 1000000, link: 120 };
+const LIMITES = { memorias: 500, capitulos: 80, texto: 100000, livro: 1000000, link: 120, inicio: 160 };
 const LIMITE_JSON = 4 * 1024 * 1024; // um livro inteiro, com acentos, passa de 1 MB
 
 // Uma menção no texto: [[evento:<id>|o que aparece]] ou [[personagem:<id>|o que aparece]]
@@ -124,6 +124,20 @@ function memoriaVisivel(conta, id) {
 
 const textosDe = (m) => (m.tipo === "livro" ? m.capitulos.map((c) => c.texto) : [m.texto]);
 
+// O começo do texto para a lista: sem as marcas e sem os códigos dos links, as linhas juntas
+// (no Poema, com " / ", para a página pôr os versos de volta) e cortado no fim de uma palavra
+function inicioDoTexto(textoDaMemoria, versos) {
+  const linhas = textoDaMemoria
+    .replace(REGEX_LINK, (_, alvo, id, aparece) => aparece)
+    .split("\n")
+    .map((linha) => linha.replace(/^\s*(?:-|\d+\.)\s+/, "").replace(/\*\*|\*/g, "").trim())
+    .filter(Boolean);
+  const junto = linhas.join(versos ? " / " : " ").replace(/\s+/g, " ").trim();
+  if (junto.length <= LIMITES.inicio) return junto;
+  const corte = junto.lastIndexOf(" ", LIMITES.inicio);
+  return `${junto.slice(0, corte > 0 ? corte : LIMITES.inicio).replace(/[\s/]+$/, "")}…`;
+}
+
 // Os personagens que a conta vê na galeria: os do portal sempre; os outros, se não forem só do administrador
 function personagensVisiveis(conta) {
   const outros = (dados.outrosPersonagens ?? []).filter((p) => conta.admin || p.visibilidade !== "admin");
@@ -171,13 +185,23 @@ function citaveis() {
   return { acontecimentos, personagens };
 }
 
-// A lista vai sem os textos, só com o que a lista precisa
+// A lista vai sem os textos, só com o que a biblioteca precisa: o começo do texto e, no Livro,
+// quantos capítulos ele tem
 function dadosDasMemorias(conta) {
   const memorias = dados.memorias
     .filter((m) => podeLer(conta, m))
     .map((m) => {
-      const item = { id: m.id, titulo: m.titulo, reveladaEm: reveladaEm(m, conta) };
-      if (conta.admin) Object.assign(item, { tipo: m.tipo, alteradoEm: m.alteradoEm, revelacao: revelacaoPublica(m) });
+      const item = {
+        id: m.id,
+        titulo: m.titulo,
+        tipo: m.tipo,
+        data: m.data ? dataPublica(m.data, true) : null,
+        detalhe: TIPOS.get(m.tipo) ? m.detalhe || "" : "",
+      };
+      if (m.tipo === "livro") item.capitulos = m.capitulos.length;
+      else item.inicio = inicioDoTexto(m.texto, m.tipo === "poema");
+      item.reveladaEm = reveladaEm(m, conta);
+      if (conta.admin) Object.assign(item, { alteradoEm: m.alteradoEm, revelacao: revelacaoPublica(m) });
       return item;
     })
     .sort(ordemDaLista);
