@@ -1,20 +1,20 @@
 A lista de emojis do chat (emojis.js) foi gerada por
 planejamento/ferramentas/gerar-emojis.mjs a partir de:
 
-- unicode-emoji-json 0.9.0 (a lista, os grupos e a ordem), licença MIT;
-- cldr-annotations-full 49.0.0 e cldr-annotations-derived-full 49.0.0
-  (os nomes e as palavras em português), dados do Unicode CLDR, licença
-  Unicode-3.0.
+- emojibase-data 18.0.0 (a lista, os grupos, a ordem e os tons de
+  pele), licença MIT;
+- os nomes e as palavras em português que vêm dentro dele, dados do
+  Unicode CLDR, licença Unicode-3.0.
 
-As duas licenças seguem abaixo, como vêm nos pacotes.
+As duas licenças seguem abaixo.
 
 =====================================================================
-unicode-emoji-json
+emojibase-data
 =====================================================================
 
-The MIT License (MIT)
+MIT License
 
-Copyright (c) 2019 Mu-An Chiou
+Copyright (c) 2017-2019 Miles Johnson
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -35,7 +35,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 =====================================================================
-cldr-annotations-full e cldr-annotations-derived-full (Unicode CLDR)
+Dados do Unicode CLDR (dentro do emojibase-data)
 =====================================================================
 
 COPYRIGHT AND PERMISSION NOTICE

@@ -10,6 +10,7 @@ Portal do grupo de RPG em https://cronicaseternas.com. Cada jogador tem conta, v
 - Os cadernos ficam em `/var/lib/portal/cadernos/` (`<usuario>/caderno.json` e `<usuario>/imagens/`), fora do `dados.json`.
 - As imagens fixas das campanhas (`publico/imagens/`) não estão no repositório. Se existirem no servidor, a atualização não as apaga.
 - O **chat** abre em chat.cronicaseternas.com, servido pelo mesmo portal (porta 3000), num bloco próprio do nginx. As mensagens ficam em `/var/lib/portal/chat/` (`canais/`, `privadas/`, `estado.json`, `reacoes.json`, `fixadas.json` e `imagens/`), fora do `dados.json`; só a estrutura (categorias e canais) e os perfis do chat (`dados.chat.perfis`, com a foto e a faixa em `uploads/`) ficam em `dados.chat`.
+- Os **emojis** do chat usam a fonte Noto Color Emoji, do Google Fonts (como as outras fontes), só no chat. Sem acesso ao Google Fonts, aparecem os do sistema.
 - Os **GIFs** do chat vêm da Klipy, sempre pelo portal (a página nunca fala com ela). Sem `KLIPY_CHAVE`, o chat fica sem GIFs.
 - A voz e o vídeo do chat usam o **LiveKit**, um servidor de mídia que roda na VPS como serviço próprio (`livekit.service`, configurado em `/etc/livekit.yaml`), fora do portal, como o Foundry. Endereço público: voz.cronicaseternas.com (a sinalização passa pelo nginx; o áudio e o vídeo vão direto às portas 7881/tcp e 7882/udp).
 - As variáveis de ambiente do portal ficam num override do `portal.service` (`systemctl edit portal`): `HOST_CHAT`, `DOMINIO_COOKIE`, `LIVEKIT_URL`, `LIVEKIT_INTERNO`, `LIVEKIT_CHAVE`, `LIVEKIT_SEGREDO` (veja `planejamento/chat.md`) e `KLIPY_CHAVE` (veja `planejamento/chat-atualizacao-1.md`; `KLIPY_BASE` e `KLIPY_MIDIA` só mudam para teste ou se a Klipy trocar o endereço das imagens). Com `DOMINIO_COOKIE`, o cookie da sessão se chama `ce_sessao` e vale nos subdomínios.
@@ -131,10 +132,11 @@ portal/
                                  livekit-client.js (a cópia fixa do LiveKit) e LICENCA-livekit.txt (versão e licença);
                                  extras.js (o seletor de emojis, o ":" no campo, as reações, o painel de GIFs, o GIF na
                                  mensagem e as fixadas; usa o estado do chat.js e preenche os ganchosDosExtras);
-                                 emojis.js (só dados: EMOJIS, gerado por planejamento/ferramentas/gerar-emojis.mjs) e
+                                 emojis.js (só dados: EMOJIS, com os tons de pele, gerado do emojibase-data por
+                                 planejamento/ferramentas/gerar-emojis.mjs) e
                                  LICENCA-emojis.txt (as licenças dos dados dos emojis)
 planejamento/       especificações e roteiro das sessões; referencias/ com o Atlas de Tyrenar; ferramentas/ com o
-                    gerar-emojis.mjs (gera o emojis.js a partir de pacotes npm instalados fora de portal/)
+                    gerar-emojis.mjs (gera o emojis.js a partir do pacote npm emojibase-data, instalado fora de portal/)
 ```
 
 ## Padrão: página nova no servidor

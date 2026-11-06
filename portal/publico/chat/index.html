@@ -6,7 +6,7 @@
   <title>Chat · Crônicas Eternas</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alegreya:ital,wght@0,400;0,500;0,700;1,400;1,500&family=Grenze+Gotisch:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alegreya:ital,wght@0,400;0,500;0,700;1,400;1,500&family=Grenze+Gotisch:wght@400;500;600;700&family=Noto+Color+Emoji&display=swap">
   <link rel="stylesheet" href="../style.css">
   <link rel="stylesheet" href="chat.css">
   <script src="../comum.js" defer></script>
@@ -46,6 +46,16 @@
       <symbol id="icone-camera-desligada" viewBox="0 0 24 24"><path d="M9 6.5h5a1.5 1.5 0 0 1 1.5 1.5v4M15.5 15.5V16A1.5 1.5 0 0 1 14 17.5H4.5A1.5 1.5 0 0 1 3 16V8a1.5 1.5 0 0 1 1.5-1.5M15.5 10.5l5.5-3.5v10l-3-1.9M3.5 3.5l17 17"/></symbol>
       <symbol id="icone-tela" viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="12" rx="1.5"/><path d="M8.5 20.5h7M12 16.5v4M12 13.5V8M9.5 10.5L12 8l2.5 2.5"/></symbol>
       <symbol id="icone-emoji" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M8.5 14.2a4.2 4.2 0 0 0 7 0"/><circle cx="9.2" cy="9.8" r=".9"/><circle cx="14.8" cy="9.8" r=".9"/></symbol>
+      <!-- Os grupos do seletor de emojis -->
+      <symbol id="icone-grupo-usados" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
+      <symbol id="icone-grupo-pessoas" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M8 13.2a4.6 4.6 0 0 0 8 0Z"/><path d="M8.6 9.6q.7-.9 1.4 0M14 9.6q.7-.9 1.4 0"/></symbol>
+      <symbol id="icone-grupo-natureza" viewBox="0 0 24 24"><path d="M5 19C5 10 10 5 19.5 4.5 19 14 14 19 5 19Z"/><path d="M5 19l9-9M9.5 14.5h3.5M12 12V8.8"/></symbol>
+      <symbol id="icone-grupo-comida" viewBox="0 0 24 24"><path d="M5 8h10v9.5a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2Z"/><path d="M15 10.5h2a2.5 2.5 0 0 1 0 5h-2M7.5 3.5v2M10 2.8v2.7M12.5 3.5v2"/></symbol>
+      <symbol id="icone-grupo-atividades" viewBox="0 0 24 24"><path d="M12 2.8l8 4.6v9.2l-8 4.6-8-4.6V7.4Z"/><path d="M12 7.5l4 7h-8ZM12 2.8v4.7M4 7.4l4 7.1M20 7.4l-4 7.1M8 14.5l-4 2.1M16 14.5l4 2.1M8 14.5l4 6.7 4-6.7"/></symbol>
+      <symbol id="icone-grupo-viagens" viewBox="0 0 24 24"><path d="M6 21V9.5h12V21M4.5 21h15M6 9.5V5.5h2.4v2h2.4v-2h2.4v2h2.4v-2H18v4M10 21v-4a2 2 0 0 1 4 0v4M11.2 12.5h1.6"/></symbol>
+      <symbol id="icone-grupo-objetos" viewBox="0 0 24 24"><path d="M9 10.5h6V20H9ZM6.5 20h11M12 10.5V8.5"/><path d="M12 8.2c-1.7-1.3-1.5-3.2 0-5 1.5 1.8 1.7 3.7 0 5Z"/><path d="M15 13.5c.8 0 1.2.6 1.2 1.5"/></symbol>
+      <symbol id="icone-grupo-simbolos" viewBox="0 0 24 24"><path d="M12 19.5S4 14.6 4 9.2A4.2 4.2 0 0 1 12 7.4a4.2 4.2 0 0 1 8 1.8c0 5.4-8 10.3-8 10.3Z"/></symbol>
+      <symbol id="icone-grupo-bandeiras" viewBox="0 0 24 24"><path d="M5.5 21V3.5M5.5 4.5c3-1.6 5.5 1.4 8.5 0s4.5-.4 4.5-.4v8.4s-1.5-1-4.5.4-5.5-1.6-8.5 0"/></symbol>
       <symbol id="icone-alfinete" viewBox="0 0 24 24"><path d="M9 3.5h6M10 3.5v6l-3.5 4h11l-3.5-4v-6M12 13.5v7"/></symbol>
       <symbol id="icone-desligar" viewBox="0 0 24 24"><path d="M3 13.5c5-4.6 13-4.6 18 0l-2.2 2.6-3.6-1.4v-2.6a12 12 0 0 0-6.4 0v2.6l-3.6 1.4Z"/></symbol>
     </defs>
@@ -380,10 +390,18 @@
 
   <!-- ============ O seletor de emojis (escrever e reagir) ============ -->
   <div id="painel-emojis" class="painel-flutuante painel-emojis" role="dialog" aria-label="Emojis" hidden>
-    <input id="emojis-busca" class="painel-flutuante__busca" type="search" placeholder="Buscar emoji" aria-label="Buscar emoji" autocomplete="off" spellcheck="false">
-    <div id="emojis-abas" class="painel-emojis__abas" role="toolbar" aria-label="Grupos"></div>
-    <div id="emojis-grade" class="painel-emojis__grade"></div>
-    <p id="emojis-nome" class="painel-emojis__nome"></p>
+    <div class="painel-emojis__topo">
+      <input id="emojis-busca" class="painel-flutuante__busca painel-emojis__busca" type="search" placeholder="Buscar emoji" aria-label="Buscar emoji" autocomplete="off" spellcheck="false">
+      <div class="painel-emojis__tom">
+        <button id="emojis-tom" class="painel-emojis__botao-tom" type="button" title="Tom de pele" aria-label="Tom de pele" aria-haspopup="true" aria-expanded="false">✋</button>
+        <div id="emojis-tons" class="painel-emojis__tons" role="group" aria-label="Tom de pele" hidden></div>
+      </div>
+    </div>
+    <div class="painel-emojis__corpo">
+      <div id="emojis-abas" class="painel-emojis__abas" role="toolbar" aria-orientation="vertical" aria-label="Grupos"></div>
+      <div id="emojis-grade" class="painel-emojis__grade"></div>
+    </div>
+    <p id="emojis-nome" class="painel-emojis__nome"><span id="emojis-nome-emoji" class="painel-emojis__nome-emoji"></span><span id="emojis-nome-texto" class="painel-emojis__nome-texto"></span></p>
   </div>
 
   <!-- ============ GIFs (Klipy) ============ -->
