@@ -1391,12 +1391,17 @@ function citaveis(conta) {
       dono: pessoa(achado.c.dono),
     }))
     .sort(porTitulo);
+  return { notas, ...citaveisDoPortal(conta) };
+}
+
+// O "Citar" sem as notas: os personagens, os acontecimentos, as mesas, as memórias e os lugares
+// que a conta vê. Serve também à página dos lugares nos Mapas.
+function citaveisDoPortal(conta) {
   const acontecimentos = (dados.linha?.acontecimentos ?? [])
     .filter((ev) => podeVerAcontecimento(conta, ev))
     .sort((a, b) => chaveDaData(a.data) - chaveDaData(b.data))
     .map((ev) => ({ id: ev.id, titulo: ev.titulo, ano: ev.data.ano }));
   return {
-    notas,
     personagens: personagensVisiveis(conta)
       .map((p) => ({ id: p.id, nome: p.nome }))
       .sort(porNome),
@@ -1605,10 +1610,15 @@ ganchos.excluirConta.push(apagarCadernoDaConta);
 
 // Os endereços /api/caderno/... são desta página. "iniciar" lê os cadernos ao ligar o portal.
 // Os que começam com /api/caderno/publico/ abrem sem login: o servidor.js os passa a "tratarPublico".
+// "lerCodigos", "alvosDosLinks", "conferirLinks" e "citaveisDoPortal" servem à página dos lugares nos Mapas.
 module.exports = {
   prefixo: "/api/caderno",
   tratar: tratarCaderno,
   iniciar: iniciarCadernos,
   prefixoPublico: PREFIXO_PUBLICO,
   tratarPublico,
+  lerCodigos,
+  alvosDosLinks,
+  conferirLinks,
+  citaveisDoPortal,
 };
