@@ -554,6 +554,7 @@
   font-size: 1.28rem;
   line-height: 1.12;
   color: #2a1f15;
+  flex: none;
 }
 
 /* O começo do texto, em 3 ou 4 linhas, sumindo embaixo */

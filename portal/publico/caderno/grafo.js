@@ -1034,4 +1034,7 @@
 
   ganchosDoGrafo.mostrar = mostrar;
   ganchosDoGrafo.fechar = fechar;
+
+    // Link direto para #grafo: se o caderno.js chegou ao endereço antes deste arquivo carregar, o grafo abre agora
+    if (navegacao.grafo) mostrar(navegacao.grafo.id);
 })();
