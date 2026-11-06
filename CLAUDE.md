@@ -46,8 +46,8 @@ O `unzip -o` só cria e substitui arquivos, nunca apaga. Se uma mudança tirar a
 
 ## Cargos
 
-- **Administrador** (`conta.admin`): faz tudo. No chat, só ele cria, renomeia, ordena e apaga canais e escolhe as categorias das mesas. A exceção a "faz tudo": **não lê as mensagens privadas entre outras contas**.
-- **Editor** (`conta.editor`): registra e altera acontecimentos na Linha do Tempo (apagar vira pedido aprovado pelo administrador); cadastra e altera qualquer personagem que vê na galeria (apagar e escolher quem vê ficam com o administrador); marca lugares nos mapas e altera só os que ele marcou.
+- **Administrador** (`conta.admin`): faz tudo. Nos mapas, só ele marca a escala de cada mapa (a régua e o "Medir distância" dependem dela). No chat, só ele cria, renomeia, ordena e apaga canais e escolhe as categorias das mesas. A exceção a "faz tudo": **não lê as mensagens privadas entre outras contas**.
+- **Editor** (`conta.editor`): registra e altera acontecimentos na Linha do Tempo (apagar vira pedido aprovado pelo administrador); cadastra e altera qualquer personagem que vê na galeria (apagar e escolher quem vê ficam com o administrador); marca lugares nos mapas e altera só os que ele marcou; escreve a página de qualquer lugar que vê (quem vê a página fica com o administrador).
 - **Jogador:** só a conta.
 
 Toda conta que não é administrador tem um **Caderno**, que só ela altera (e quem ela deixar editar). O administrador lê todos os cadernos e não altera nenhum.
@@ -114,7 +114,8 @@ portal/
     linha-do-tempo/              index.html, linha.js, linha.css
     regras/                      index.html, regras.js, regras.css
     personagens/                 index.html, personagens.js, personagens.css
-    mapas/                       index.html, visor.js, mapas.js, mapas.css
+    mapas/                       index.html, visor.js, mapas.js (a galeria, os lugares, a página do lugar, a escala,
+                                 a régua e o medir distância com a viagem do Pathfinder 2e), mapas.css
     memorias/                    index.html, memorias.js, memorias.css
     caderno/                     index.html, caderno.js, caderno.css (carrega também ../marcas.js, ../marcas.css,
                                  ../editor-de-marcas.js e ../editor-de-marcas.css)

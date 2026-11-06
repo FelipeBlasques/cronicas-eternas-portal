@@ -480,12 +480,16 @@ A API de mentira ganha as mesmas rotas, com as mesmas regras e os mesmos erros:
   - apagar a página, e as imagens saindo de `uploads/`.
 - **O Caderno depois da 14.2:** escrever uma nota com os botões, o Citar, a imagem colada e o Enter nas listas.
 - **Escala e distâncias:**
-  - marcar a escala no Tyrenar pela régua desenhada no mapa;
+  - marcar a escala no Tyrenar pela régua desenhada no mapa, e depois "Marcar de novo" (a linha guardada aparece apagada) e "Tirar a escala";
+  - o editor e o jogador sem o botão "Escala do mapa"; num mapa sem escala, o "Medir distância" apagado com a dica de cada um;
+  - o formulário do mapa com escala, com o aviso embaixo da imagem;
   - a régua acompanhando o zoom, e o clique trocando km e milhas;
   - medir de uma cidade a outra passando por uma terceira, com um trecho em terreno difícil;
   - conferir o tempo com a tabela;
+  - arrastar um ponto, o Backspace, o Esc (a linha fica) e ligar de novo continuando do último ponto;
   - "Medir daqui";
   - "Copiar";
+  - o deslocamento, a metade e as horas por dia continuando escolhidos depois de recarregar;
   - no celular, a gaveta com a medição.
 
 ## Sessões

@@ -1734,6 +1734,408 @@ body.com-visor .cenario__cinzas {
   display: none;
 }
 
+/* =================================================================
+   A escala, a régua e o medir distância
+   -----------------------------------------------------------------
+   A régua fica no canto de baixo do espaço livre, à esquerda da
+   coluna de ferramentas (o mapas.js põe o right e o bottom). A
+   medição e a linha da escala ficam numa camada SVG dentro da camada
+   dos lugares, em pixels da imagem; o mapas.js divide as espessuras
+   pela escala do zoom.
+   ================================================================= */
+
+/* Medindo ou marcando a escala: o cursor vira mira */
+:is(.visor--medindo, .visor--marcando-escala) .visor__janela:not(.visor--arrastando) {
+  cursor: crosshair;
+}
+
+/* A régua: uma barra de ferro e pergaminho em dois trechos, como nas réguas dos mapas antigos */
+.regua {
+  position: absolute;
+  right: 4.4rem;
+  bottom: 0.9rem;
+  z-index: 2;
+  display: grid;
+  justify-items: start;
+  gap: 0.25rem;
+  padding: 0.4rem 0.55rem 0.3rem;
+  font: inherit;
+  color: var(--pergaminho);
+  background: rgba(12, 10, 9, 0.62);
+  border: 1px solid var(--ferro-fraco);
+  border-radius: var(--raio);
+  box-shadow: 0 10px 22px -14px rgba(0, 0, 0, 0.95);
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.regua:hover {
+  border-color: var(--ferro);
+}
+
+.regua:focus-visible {
+  outline: 2px solid var(--brasa);
+  outline-offset: 2px;
+}
+
+.regua__barra {
+  display: flex;
+  width: var(--largura-regua, 100px);
+  height: 7px;
+  border: 1px solid #0c0a09;
+  box-shadow: 0 0 0 1px rgba(181, 154, 118, 0.45);
+}
+
+.regua__barra span {
+  flex: 1 1 0;
+  background: linear-gradient(180deg, #4a4037, #2a241f);
+}
+
+.regua__barra span + span {
+  background: linear-gradient(180deg, #ece2cd, #cfbd9b);
+}
+
+.regua__texto {
+  font-family: var(--fonte-texto);
+  font-size: 0.82rem;
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--pergaminho-apagado);
+}
+
+/* A camada dos traços: por cima dos lugares, sem pegar o clique */
+.tracos,
+.tracos__desenho {
+  position: absolute;
+  top: 0;
+  left: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.tracos__contorno,
+.tracos__linha {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.tracos__contorno {
+  stroke: rgba(12, 10, 9, 0.82);
+}
+
+.tracos__linha {
+  stroke: var(--pergaminho);
+}
+
+/* A escala guardada, enquanto o diálogo está aberto: mais apagada que a nova */
+.tracos--guardada {
+  opacity: 0.5;
+}
+
+.tracos__ponto {
+  fill: var(--brasa);
+  stroke: rgba(12, 10, 9, 0.9);
+}
+
+/* A área de arrastar um ponto, só com o modo de medir ligado */
+.tracos__alca {
+  fill: transparent;
+  stroke: none;
+}
+
+.visor--medindo .tracos__alca {
+  pointer-events: auto;
+  cursor: grab;
+}
+
+.visor--medindo .tracos__alca:active {
+  cursor: grabbing;
+}
+
+/* A distância de cada trecho, no meio dele, como o rótulo dos lugares, em tamanho de tela */
+.rotulo-trecho {
+  position: absolute;
+  top: 0;
+  left: 0;
+  padding: 0.12rem 0.45rem 0.16rem;
+  font-family: var(--fonte-texto);
+  font-size: 0.85rem;
+  line-height: 1.1;
+  white-space: nowrap;
+  color: #2b2118;
+  background: linear-gradient(180deg, #ece2cd, #cfbd9b);
+  border: 1px solid #8a7356;
+  border-radius: 2px;
+  box-shadow: 0 6px 14px -8px rgba(0, 0, 0, 0.9);
+  transform-origin: 0 0;
+  transform: scale(calc(1 / var(--escala, 1))) translate(-50%, -50%);
+}
+
+/* O total até o mouse, ao lado do cursor */
+.rotulo-trecho--cursor {
+  transform: scale(calc(1 / var(--escala, 1))) translate(14px, 10px);
+  opacity: 0.92;
+}
+
+.visor--arrastando .rotulo-trecho--cursor {
+  visibility: hidden;
+}
+
+/* O painel da medição, no lugar do índice e do detalhe */
+.medicao {
+  display: grid;
+  align-content: start;
+  gap: 0.85rem;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 0.4rem;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ferro) transparent;
+}
+
+.medicao__cabeca {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.medicao__titulo {
+  margin: 0;
+  font-family: var(--fonte-gotica);
+  font-size: 1.55rem;
+  font-weight: 500;
+  line-height: 1.05;
+}
+
+.medicao__explicacao {
+  margin: 0;
+  font-style: italic;
+  color: var(--pergaminho-apagado);
+}
+
+.medicao__resultado {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.medicao__total {
+  margin: 0;
+}
+
+.medicao__total strong {
+  font-family: var(--fonte-gotica);
+  font-size: 2.1rem;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.medicao__total small {
+  font-size: 0.95rem;
+  color: var(--cinza);
+}
+
+.medicao__trechos {
+  display: grid;
+  gap: 0.55rem;
+  margin: 0;
+  padding-left: 1.45rem;
+}
+
+.trecho {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.15rem 0.6rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--ferro-fraco);
+}
+
+.trecho::marker {
+  color: var(--cinza);
+  font-size: 0.9rem;
+}
+
+.trecho__lugares {
+  grid-column: 1 / -1;
+  overflow-wrap: anywhere;
+}
+
+.trecho__distancia {
+  font-size: 0.95rem;
+  color: var(--pergaminho-apagado);
+}
+
+/* As listas pequenas: a do terreno, a do deslocamento e a do diálogo da escala */
+.trecho__terreno,
+.viagem__deslocamento select,
+.escala__linha :is(input, select) {
+  font: inherit;
+  font-size: 0.98rem;
+  color: var(--pergaminho);
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--ferro);
+  border-radius: 0;
+  padding: 0.2rem 0.1rem 0.25rem;
+}
+
+:is(.trecho__terreno, .viagem__deslocamento select, .escala__linha select) {
+  cursor: pointer;
+}
+
+:is(.trecho__terreno, .viagem__deslocamento select, .escala__linha select) option {
+  background: var(--carvao);
+  color: var(--pergaminho);
+}
+
+:is(.trecho__terreno, .viagem__deslocamento select, .escala__linha :is(input, select)):focus-visible {
+  outline: none;
+  border-bottom-color: var(--brasa);
+  box-shadow: 0 1px 0 0 var(--brasa);
+}
+
+/* A viagem no Pathfinder 2e */
+.viagem {
+  display: grid;
+  gap: 0.6rem;
+  padding-top: 0.7rem;
+  border-top: 1px solid var(--ferro-fraco);
+}
+
+.viagem__titulo {
+  margin: 0;
+  font-family: var(--fonte-gotica);
+  font-size: 1.2rem;
+  font-weight: 500;
+}
+
+.viagem__campos {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.viagem__deslocamento {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.viagem__deslocamento select {
+  width: auto;
+}
+
+.viagem__velocidade {
+  font-size: 0.9rem;
+  color: var(--cinza);
+}
+
+.viagem__marcar {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  font-size: 0.98rem;
+  cursor: pointer;
+}
+
+.viagem__marcar input {
+  margin-top: 0.3rem;
+  accent-color: var(--brasa);
+}
+
+.viagem__campos .campo input[type="number"] {
+  width: 5rem;
+}
+
+.viagem__tempo {
+  margin: 0.2rem 0 0;
+}
+
+.viagem__tempo strong {
+  font-family: var(--fonte-gotica);
+  font-size: 1.65rem;
+  font-weight: 600;
+  line-height: 1.05;
+}
+
+.viagem__conta,
+.viagem__fonte {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--cinza);
+}
+
+.viagem__fonte {
+  font-style: italic;
+  line-height: 1.4;
+}
+
+.viagem__tabela summary {
+  cursor: pointer;
+  color: var(--pergaminho-apagado);
+}
+
+.viagem__tabela table {
+  width: 100%;
+  margin-top: 0.5rem;
+  border-collapse: collapse;
+  font-size: 0.86rem;
+}
+
+.viagem__tabela :is(th, td) {
+  padding: 0.25rem 0.3rem;
+  text-align: left;
+  border-bottom: 1px solid var(--ferro-fraco);
+}
+
+.viagem__tabela th {
+  font-weight: 500;
+  font-style: italic;
+  color: var(--pergaminho-apagado);
+}
+
+.viagem__escolhida td {
+  color: var(--pergaminho);
+  background: rgba(196, 106, 53, 0.14);
+}
+
+.viagem__escolhida td:first-child {
+  box-shadow: inset 2px 0 0 var(--brasa);
+}
+
+.medicao__acoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.6rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--ferro-fraco);
+}
+
+/* O diálogo da escala: "Essa linha mede [   ] [km ▾]" */
+.dialogo.dialogo--escala {
+  width: min(30rem, calc(100vw - 2rem));
+}
+
+.escala__linha {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem 0.7rem;
+  margin: 0.4rem 0 0.6rem;
+  font-size: 1.1rem;
+}
+
+.escala__linha input {
+  width: 8rem;
+  font-size: 1.1rem;
+}
+
+.escala__linha select {
+  font-size: 1.1rem;
+}
+
 @media (max-width: 760px) {
   /* A página de um lugar ocupa a tela */
   .dialogo.dialogo--pagina {
@@ -1871,6 +2273,15 @@ body.com-visor .cenario__cinzas {
     padding-top: 0.15rem;
   }
 
+  /* A régua, menor, acima da gaveta */
+  .regua {
+    padding: 0.3rem 0.45rem 0.25rem;
+  }
+
+  .medicao__total strong {
+    font-size: 1.8rem;
+  }
+
   /* No celular, não há a tecla / */
   .busca-lugares__tecla {
     display: none;
@@ -1880,7 +2291,8 @@ body.com-visor .cenario__cinzas {
 @media (prefers-reduced-motion: reduce) {
   .mapa-card,
   .mapa-card__miniatura,
-  .visor__imagem {
+  .visor__imagem,
+  .regua {
     transition: none;
   }
 
