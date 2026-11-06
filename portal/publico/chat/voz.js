@@ -787,6 +787,16 @@ function desenharTudo() {
     voz.assinaturaDaLista = assinatura;
     desenharLista();
   }
+  marcarQuemFalaNaLista();
+}
+
+// O brilho de quem fala na lista da esquerda: só na sala conectada (das outras, não se sabe quem fala)
+function marcarQuemFalaNaLista() {
+  const conectada = salaConectada();
+  const falando = new Set(conectada ? pessoasDaSala().filter((p) => p.falando && !p.mudo).map((p) => p.usuario) : []);
+  for (const linha of document.querySelectorAll("#lista .item-canal__sala li")) {
+    linha.classList.toggle("item-canal__falando", linha.dataset.sala === conectada && falando.has(linha.dataset.usuario));
+  }
 }
 
 // Muitos avisos seguidos do LiveKit: um desenho por quadro da tela
@@ -1019,6 +1029,20 @@ function registroDoQuadro(q) {
   return registro;
 }
 
+// O retrato grande do quadro sem câmera: a classe pelo tipo vai só no <img>; atrás do retrato e da foto,
+// a mesma imagem desfocada cobre o quadro (sai se falhar, ou se o retrato falhar e virar selo)
+function retratoDoQuadro(persona, categoria) {
+  const retrato = retratoDe(persona, categoria, "quadro__retrato");
+  if (retrato.tagName !== "IMG" || persona.tipo === "mestre") return [retrato];
+  retrato.classList.add(persona.tipo === "conta" ? "quadro__retrato--foto" : "quadro__retrato--corpo");
+  const fundo = imagem(persona.imagem, "quadro__fundo");
+  fundo.alt = "";
+  fundo.setAttribute("aria-hidden", "true");
+  fundo.addEventListener("error", () => fundo.remove(), { once: true });
+  retrato.addEventListener("error", () => fundo.remove(), { once: true });
+  return [fundo, retrato];
+}
+
 function atualizarQuadro(registro, q, categoria) {
   const { p } = q;
   const ehTela = q.tipo === "tela";
@@ -1065,7 +1089,7 @@ function atualizarQuadro(registro, q, categoria) {
       const desenho = ehTela ? mapaDeExemplo() : desenhoDeExemplo(corDaConta(p.usuario), "◉", 320, 180);
       registro.midia.replaceChildren(imagem(desenho, "quadro__simulado"));
     } else {
-      registro.midia.replaceChildren(retratoDe(p.persona, categoria, "quadro__retrato"));
+      registro.midia.replaceChildren(...retratoDoQuadro(p.persona, categoria));
     }
   }
 
@@ -1607,6 +1631,7 @@ ganchosDaVoz.mover = ({ canal }) => {
 };
 
 ganchosDaVoz.salaConectada = salaConectada;
+ganchosDaVoz.depoisDaLista = marcarQuemFalaNaLista;
 ganchosDaVoz.encerrar = () => {
   if (voz.sala) sairDaSala();
   voz.assinaturaDaLista = "";

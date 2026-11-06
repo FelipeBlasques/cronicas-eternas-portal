@@ -901,6 +901,7 @@ const ganchosDaVoz = {
   salaConectada: null, // () → o id da sala em que você está, ou null
   encerrar: null, // () → sai da sala (saiu da conta)
   mover: null, // ({ canal }) → o administrador moveu você para outra sala
+  depoisDaLista: null, // () → a lista foi redesenhada (o brilho de quem fala)
 };
 
 const eu = () => estado.dados?.conta.usuario;
@@ -1373,7 +1374,9 @@ function itemDoCanal(canal, categoria) {
         if (estado.dados.conta.admin) linha.draggable = true; // arrastar para outra sala (voz.js)
         const conta = contaPorUsuario(pessoa.usuario);
         if (conta) linha.title = `por ${conta.nome}`;
-        linha.append(retratoDe(pessoa, categoria, "item-canal__retrato"), nomeDaPersona(pessoa, "item-canal__pessoa"));
+        const circulo = criar("span", "item-canal__voz"); // o brilho de quem fala (voz.js) é deste círculo
+        circulo.append(retratoDe(pessoa, categoria, "item-canal__retrato"));
+        linha.append(circulo, nomeDaPersona(pessoa, "item-canal__pessoa"));
         abreCard(linha, () => ({ usuario: pessoa.usuario, persona: personaDaPresencaNaSala(pessoa, categoria), categoria }));
         const icones = criar("span", "item-canal__estados");
         if (pessoa.ensurdecido) icones.append(simbolo("icone-fone-mudo", "estado-voz estado-voz--desligado"));
@@ -1463,6 +1466,7 @@ function desenharLista() {
   lista.replaceChildren(...partes);
   lista.scrollTop = rolagem;
   atualizarTitulo();
+  ganchosDaVoz.depoisDaLista?.();
 }
 
 // (3) Chat · Crônicas Eternas: menções + privadas não lidas
