@@ -914,6 +914,8 @@ async function tratarCaderno(req, res, rota, metodo, conta) {
   if (!resto.length) {
     if (!recurso && metodo === "GET") return enviarJson(res, 200, dadosDoCaderno(conta));
     if (recurso === "contas" && id && !acao && metodo === "GET") return verCadernoDaConta(res, conta, id);
+    if (recurso === "contas" && id && acao === "grafo" && metodo === "GET") return verGrafoDaConta(res, conta, id);
+    if (recurso === "grafo" && !id && metodo === "GET") return verGrafo(res, conta);
     if (recurso === "fixadas" && !id && metodo === "PUT") return mudarFixadas(req, res, conta);
     if (recurso === "busca" && !id && metodo === "GET") return buscar(req, res, conta);
     if (recurso === "citaveis" && !id && metodo === "GET") return enviarJson(res, 200, citaveis(conta));
@@ -958,6 +960,68 @@ function verCadernoDaConta(res, conta, usuario) {
     etiquetas: contarEtiquetas(notasLegiveis(conta, [c])),
     imagens: espacoDe(c),
   });
+}
+
+/* ---------- O grafo ---------- */
+
+// Os ids das notas que só aparecem embutidas no texto, nunca como link comum. O REGEX_LINK casa
+// também dentro do ![[nota:…]]: o link comum é o que sobra depois de tirar as embutidas.
+function soEmbutidas(nota) {
+  const lida = analisar(nota);
+  if (lida.soEmbutidas === undefined) {
+    const vezes = new Map();
+    const protegido = protegerEscapes(nota.texto);
+    for (const [, tipo, id] of protegido.matchAll(REGEX_LINK)) if (tipo === "nota") vezes.set(id, (vezes.get(id) ?? 0) + 1);
+    for (const [, id] of protegido.matchAll(REGEX_EMBUTIDA)) vezes.set(id, (vezes.get(id) ?? 0) - 1);
+    lida.soEmbutidas = new Set(lida.embutidas.size ? [...lida.embutidas].filter((id) => (vezes.get(id) ?? 0) <= 0) : []);
+  }
+  return lida.soEmbutidas;
+}
+
+// As notas da lista, as linhas entre elas e para o portal, e os alvos do portal que a conta vê.
+// Tudo sai do que já se lê das notas; nada é guardado.
+function montarGrafo(conta, lista) {
+  const ids = new Set(lista.map((achado) => achado.item.id));
+  const notas = [];
+  const pares = [];
+  const chavesDoPortal = new Set();
+  for (const { c, item: nota } of lista) {
+    const lida = analisar(nota);
+    notas.push({ id: nota.id, titulo: nota.titulo, dono: pessoa(c.dono), etiquetas: [...lida.etiquetas.values()] });
+    const embutidas = soEmbutidas(nota);
+    for (const chave of lida.links) {
+      if (chave.startsWith("nota:")) {
+        const id = chave.slice(5);
+        if (id === nota.id || !ids.has(id)) continue;
+        pares.push({ de: nota.id, para: chave, embutida: embutidas.has(id) });
+      } else {
+        chavesDoPortal.add(chave);
+        pares.push({ de: nota.id, para: chave, embutida: false });
+      }
+    }
+  }
+  const alvos = alvosDosLinks(conta, chavesDoPortal);
+  const mesas = new Map((dados.campanhas ?? []).map((m) => [m.id, m]));
+  for (const [chave, alvo] of Object.entries(alvos)) {
+    if (chave.startsWith("mesa:")) alvo.cor = mesas.get(chave.slice(5))?.cor ?? null;
+  }
+  // "links" é um Set: cada par já aparece uma vez só
+  const ligacoes = pares.filter((par) => par.para.startsWith("nota:") || Object.hasOwn(alvos, par.para));
+  return { notas, ligacoes, alvos };
+}
+
+// O grafo das notas que a conta lê: as do caderno dela e as compartilhadas com ela
+function verGrafo(res, conta) {
+  if (conta.admin) throw new ErroHttp(403, "O administrador vê o grafo do caderno de cada conta.", "proibido");
+  enviarJson(res, 200, montarGrafo(conta, notasLegiveis(conta)));
+}
+
+// O administrador vê o grafo do caderno de uma conta
+function verGrafoDaConta(res, conta, usuario) {
+  if (!conta.admin) throw new ErroHttp(403, "Só o administrador pode fazer isso.", "proibido");
+  const dona = contaDe(usuario);
+  if (!dona || dona.admin) throw new ErroHttp(404, "Essa conta não existe ou não tem caderno.", "nao-encontrado");
+  enviarJson(res, 200, montarGrafo(conta, notasLegiveis(conta, [cadernoDaConta(dona)])));
 }
 
 /* ---------- Notas ---------- */

@@ -17,7 +17,9 @@
    A dona compartilha notas e pastas com as outras contas e liga o
    link público de uma nota (a leitura pública fica em ../ler/). A
    busca troca as árvores pelos resultados; clicar numa etiqueta
-   busca as notas com ela.
+   busca as notas com ela. O "Grafo" (#grafo e #grafo-<id>) mostra
+   as notas e as ligações entre elas na área da nota: fica no
+   grafo.js, que preenche os ganchosDoGrafo daqui.
 
    No servidor, conversa com o servidor/caderno.js. Aberta fora dele
    (arquivo no PC ou prévia), usa cadernos de exemplo e um painel
@@ -86,6 +88,8 @@ const apiDoServidor = {
     return pedir("POST", "/api/caderno/imagens", formulario);
   },
   citaveis: () => pedir("GET", "/api/caderno/citaveis"),
+  grafo: () => pedir("GET", "/api/caderno/grafo"),
+  grafoDaConta: (usuario) => pedir("GET", `${caminhoDe("/api/caderno/contas", usuario)}/grafo`),
   compartilharNota: (id, contas) => pedir("PUT", `${caminhoDe("/api/caderno/notas", id)}/compartilhada`, { contas }),
   compartilharPasta: (id, contas) => pedir("PUT", `${caminhoDe("/api/caderno/pastas", id)}/compartilhada`, { contas }),
   ligarLink: (id) => pedir("POST", `${caminhoDe("/api/caderno/notas", id)}/link`),
@@ -303,6 +307,42 @@ O código !\[\[nota:id\|…\]\] sozinho na linha mostra a outra nota inteira, nu
         dias: 4,
         texto: "- [ ] Corda nova\n- [x] Óleo para a lanterna\n- [ ] Mapa de Tyrenar",
       }),
+      // As cinco abaixo dão forma ao grafo: links entre elas e para personagens e lugares
+      nota("neia", {
+        id: "nota-6a0f00000061",
+        titulo: "A canção do rio",
+        dias: 2,
+        texto:
+          "[[personagem:npc-1b2c3d4e|Bram]] diz que a canção sobe do rio de [[lugar:mapa-7a1e0c3d/marca-7a1e0003|Hando]] nas noites sem lua. #pistas\n\nOuvimos na [[nota:nota-5e5500000011|Sessão 1]]. Talvez venha de [[nota:nota-6a0f00000062|Westna]].",
+      }),
+      nota("neia", {
+        id: "nota-6a0f00000062",
+        titulo: "Westna",
+        dias: 5,
+        texto:
+          "[[lugar:mapa-7a1e0c3d/marca-7a1e0000|Westna]] fica rio acima. [[personagem:p1|Venti]] nasceu lá. #lugares\n\nVer também [[nota:nota-6a0f00000063|Venti]].",
+      }),
+      nota("neia", {
+        id: "nota-6a0f00000063",
+        titulo: "Venti",
+        dias: 7,
+        texto:
+          "[[personagem:p1|Venti]] joga em [[mesa:ode-to-sleep|Ode to Sleep]]. Voltou de [[nota:nota-6a0f00000062|Westna]] com a lança nova.",
+      }),
+      nota("neia", {
+        id: "nota-6a0f00000064",
+        titulo: "Resumo da viagem",
+        dias: 1,
+        texto:
+          "De [[lugar:mapa-7a1e0c3d/marca-7a1e0003|Hando]] ao Passo Negro, [[evento:e10|depois da ponte]]. O dia a dia está em [[nota:nota-5e5500000012|Sessão 2]].\n\n![[nota:nota-6a0f00000061|A canção do rio]]",
+      }),
+      nota("neia", {
+        id: "nota-6a0f00000065",
+        titulo: "Perguntas para o Mestre",
+        dias: 3,
+        texto:
+          "- Quem é [[personagem:npc-3d4e5f60|a Voz na Torre]]?\n- A [[memoria:mem-0a1b2c3d|carta da hospedaria]] fala da canção?\n- [[nota:nota-6a0f00000061|A canção do rio]] e [[nota:nota-7e0a00000052|a teoria do Takezo]] batem? #pistas",
+      }),
     ],
     // A segunda é do Takezo, compartilhada com a Neia para ver
     fixadas: ["nota-9a1a00000001", "nota-7e0a00000054"],
@@ -381,8 +421,8 @@ O código !\[\[nota:id\|…\]\] sozinho na linha mostra a outra nota inteira, nu
       { id: "e12", titulo: "O culto se move antes do inverno", ano: 366, visibilidade: "admin" },
     ],
     mesas: [
-      { id: "ode-to-sleep", nome: "Ode to Sleep" },
-      { id: "remissao", nome: "Remissão do Flagelo Esvanescente" },
+      { id: "ode-to-sleep", nome: "Ode to Sleep", cor: "#2e3756" },
+      { id: "remissao", nome: "Remissão do Flagelo Esvanescente", cor: "#5c2a2a" },
     ],
     memorias: [{ id: "mem-0a1b2c3d", titulo: "Carta deixada na hospedaria", todos: true, contas: [] }],
     mapas: [
@@ -470,13 +510,18 @@ function criarApiDePrevia() {
     const links = new Set([...protegido.matchAll(REGEX_LINK)].map(([, tipo, id]) => `${tipo}:${id}`));
     const embutidas = new Set([...protegido.matchAll(REGEX_EMBUTIDA)].map(([, id]) => id));
     const imagens = new Set([...protegido.matchAll(REGEX_IMAGEM)].map(([, id]) => id));
+    // As notas só embutidas, sem nenhum link comum (o REGEX_LINK casa também dentro do ![[…]])
+    const vezes = new Map();
+    for (const [, tipo, id] of protegido.matchAll(REGEX_LINK)) if (tipo === "nota") vezes.set(id, (vezes.get(id) ?? 0) + 1);
+    for (const [, id] of protegido.matchAll(REGEX_EMBUTIDA)) vezes.set(id, (vezes.get(id) ?? 0) - 1);
+    const soEmbutidas = new Set([...embutidas].filter((id) => (vezes.get(id) ?? 0) <= 0));
     const etiquetas = new Map();
     for (const [, , nome] of protegido.replace(REGEX_SEM_ETIQUETA, "\u0001").matchAll(REGEX_ETIQUETA)) {
       if (nome.length > 60 || !/\p{L}/u.test(nome)) continue;
       const chave = normalizar(nome);
       if (!etiquetas.has(chave)) etiquetas.set(chave, nome.toLowerCase());
     }
-    return { links, embutidas, imagens, etiquetas };
+    return { links, embutidas, imagens, etiquetas, soEmbutidas };
   }
 
   /* ---------- A árvore ---------- */
@@ -626,6 +671,34 @@ function criarApiDePrevia() {
       juntarImagens(imagens, daOutra, outra.c);
     }
     return { links: alvosDosLinks(leitor, chaves), embutidas, imagens };
+  }
+
+  // O grafo: as notas da lista, as linhas entre elas e para o portal, e os alvos que a conta vê
+  function montarGrafo(leitor, lista) {
+    const ids = new Set(lista.map(({ nota }) => nota.id));
+    const notas = [];
+    const pares = [];
+    const chavesDoPortal = new Set();
+    for (const { dono, nota } of lista) {
+      const lida = lerCodigos(nota.texto);
+      notas.push({ id: nota.id, titulo: nota.titulo, dono: pessoa(dono), etiquetas: [...lida.etiquetas.values()] });
+      for (const chave of lida.links) {
+        if (chave.startsWith("nota:")) {
+          const id = chave.slice(5);
+          if (id === nota.id || !ids.has(id)) continue;
+          pares.push({ de: nota.id, para: chave, embutida: lida.soEmbutidas.has(id) });
+        } else {
+          chavesDoPortal.add(chave);
+          pares.push({ de: nota.id, para: chave, embutida: false });
+        }
+      }
+    }
+    const alvos = alvosDosLinks(leitor, chavesDoPortal);
+    for (const [chave, alvo] of Object.entries(alvos)) {
+      if (chave.startsWith("mesa:")) alvo.cor = banco.mesas.find((m) => `mesa:${m.id}` === chave)?.cor ?? null;
+    }
+    const ligacoes = pares.filter((par) => par.para.startsWith("nota:") || Object.hasOwn(alvos, par.para));
+    return { notas, ligacoes, alvos };
   }
 
   function citadaEm(leitor, nota) {
@@ -1141,6 +1214,20 @@ function criarApiDePrevia() {
         imagens: espacoDe(c),
       });
     },
+    async grafo() {
+      await esperar(120);
+      const leitor = leitorAtual();
+      if (leitor.admin) throw erroComCodigo("O administrador vê o grafo do caderno de cada conta.", "proibido");
+      return copia(montarGrafo(leitor, notasLegiveis(leitor)));
+    },
+    async grafoDaConta(usuario) {
+      await esperar(120);
+      const leitor = leitorAtual();
+      if (!leitor.admin) throw erroComCodigo("Só o administrador pode fazer isso.", "proibido");
+      const dona = contaDe(usuario);
+      if (!dona || dona.admin) throw erroComCodigo("Essa conta não existe ou não tem caderno.", "nao-encontrado");
+      return copia(montarGrafo(leitor, notasLegiveis(leitor, [{ dono: usuario, c: cadernoDe(usuario) }])));
+    },
     async nota(id) {
       await esperar(80);
       const leitor = leitorAtual();
@@ -1306,13 +1393,24 @@ const navegacao = {
   lida: null, // o que o servidor mandou da nota aberta
   pedido: 0, // conta as aberturas, para ignorar a resposta de uma que ficou para trás
   rolagemDaLateral: 0, // no celular, onde a lateral estava antes de abrir a nota
+  grafo: null, // o grafo aberto (#grafo ou #grafo-<id>): { id }, com id null no grafo inteiro
 };
+
+// O grafo fica no grafo.js, que preenche estes ganchos: mostrar(id ou null) e fechar()
+const ganchosDoGrafo = {};
+const TITULO_DO_GRAFO = "Grafo · Caderno";
 
 const ancoraDe = (id) => `#nota-${id}`;
 
 function idDoEndereco() {
   const achado = location.hash.match(/^#nota-([\w-]+)$/);
   return achado ? achado[1] : null;
+}
+
+// #grafo: { id: null }; #grafo-<id>: { id }; outro endereço: null
+function grafoDoEndereco() {
+  const achado = location.hash.match(/^#grafo(?:-([\w-]+))?$/);
+  return achado ? { id: achado[1] ?? null } : null;
 }
 
 const passosDesdeOCaderno = () => (Number.isInteger(history.state?.passos) ? history.state.passos : null);
@@ -1348,7 +1446,59 @@ function voltarAoCaderno() {
   mostrarNota(null);
 }
 
-const aoMudarOEndereco = () => mostrarNota(idDoEndereco());
+// O endereço tem três jeitos: o grafo, uma nota ou nenhum dos dois
+function aoMudarOEndereco() {
+  const grafo = grafoDoEndereco();
+  if (grafo) return mostrarGrafo(grafo.id);
+  mostrarNota(idDoEndereco());
+}
+
+// "Grafo" no alto da lateral (id null) e "Ver no grafo" no "⋯" de uma nota (o grafo local dela)
+function abrirGrafo(id = null) {
+  estado.pastaEscolhida = null;
+  marcarPastaEscolhida();
+  if (!navegacao.id && !navegacao.grafo) navegacao.rolagemDaLateral = window.scrollY;
+  const ancora = id ? `#grafo-${id}` : "#grafo";
+  if (location.hash !== ancora) trocarEndereco(ancora, { nova: true });
+  mostrarGrafo(id, { forcar: true });
+}
+
+// Mostra o grafo na área da nota. Sair da nota em edição salva antes, como abrir outra nota.
+async function mostrarGrafo(id, { forcar = false } = {}) {
+  if (!forcar && navegacao.grafo && navegacao.grafo.id === id) return;
+  if (emEdicao()) {
+    const pedido = ++navegacao.pedido;
+    const pode = await deixarEdicao();
+    if (pedido !== navegacao.pedido) return; // outra coisa foi pedida enquanto isso
+    if (!pode) {
+      trocarEndereco(ancoraDe(edicao.id));
+      marcarNaArvore(edicao.id);
+      return;
+    }
+    encerrarEdicao();
+  }
+  navegacao.pedido++; // a resposta de uma nota que ainda estava a caminho não abre mais nada
+  const focoPerdido = noCelular() && $("#lateral").contains(document.activeElement);
+  navegacao.id = null;
+  navegacao.lida = null;
+  navegacao.grafo = { id };
+  $("#pagina").classList.add("pagina-caderno--com-nota");
+  $("#area-nota").classList.add("area-nota--grafo");
+  marcarNaArvore(null);
+  document.title = TITULO_DO_GRAFO;
+  window.scrollTo(0, 0);
+  ganchosDoGrafo.mostrar?.(id);
+  if (focoPerdido) $("#area-nota").focus({ preventScroll: true });
+}
+
+// Ao abrir uma nota (ou nenhuma), o grafo sai da área
+function fecharGrafo() {
+  if (!navegacao.grafo) return false;
+  navegacao.grafo = null;
+  ganchosDoGrafo.fechar?.();
+  $("#area-nota").classList.remove("area-nota--grafo");
+  return true;
+}
 
 // Mostra a nota (ou nenhuma, com id null). "forcar" pede a nota de novo, mesmo que já esteja aberta.
 // Sair da nota em edição salva antes o que falta; se não salvar e a pessoa preferir ficar, ela fica.
@@ -1366,6 +1516,7 @@ async function mostrarNota(id, { forcar = false, editar = null } = {}) {
     encerrarEdicao();
   }
   if (!id) return mostrarSemNota();
+  fecharGrafo();
   const pedido = ++navegacao.pedido;
   // No celular a lateral some: o foco que estava nela passa para a nota
   const focoPerdido = noCelular() && $("#lateral").contains(document.activeElement);
@@ -1402,6 +1553,7 @@ async function mostrarNota(id, { forcar = false, editar = null } = {}) {
 function mostrarSemNota() {
   navegacao.pedido++; // a resposta de uma nota que ainda estava a caminho não abre mais nada
   const aberta = navegacao.id;
+  const doGrafo = fecharGrafo();
   navegacao.id = null;
   navegacao.lida = null;
   // O caderno sem nota fica marcado no histórico como o ponto de partida (passo 0)
@@ -1416,7 +1568,7 @@ function mostrarSemNota() {
   document.title = TITULO_DA_PAGINA;
   marcarNaArvore(null);
   renderizarVazio();
-  if (!aberta) return;
+  if (!aberta && !doGrafo) return;
   if (noCelular()) window.scrollTo(0, navegacao.rolagemDaLateral);
   // O foco volta para a nota que estava aberta, na árvore
   if (focoNaNota) {
@@ -2153,6 +2305,7 @@ function opcoesDe({ tipo, id, nivel, naBarra = false }) {
     opcao(fixada ? "Desafixar" : "Fixar", () => fixar(id, !fixada));
   }
   if (tipo === "nota") {
+    opcao("Ver no grafo", () => abrirGrafo(id));
     opcao("Baixar .md", () => baixarMd(id));
     opcao("Copiar link", () => copiarLink(id));
   }
@@ -3446,6 +3599,8 @@ async function aoEscolherConta() {
     avisarFalha(falha);
     return;
   }
+  // O grafo aberto passa a ser o do caderno escolhido
+  if (navegacao.grafo) return mostrarGrafo(navegacao.grafo.id, { forcar: true });
   // A nota aberta de outro caderno fecha
   if (navegacao.id && navegacao.lida?.nota.dono.usuario !== usuario) {
     trocarEndereco("");
@@ -3558,6 +3713,7 @@ function configurarEventos() {
   $("#botao-nova-nota").addEventListener("click", () => criarNota());
   $("#botao-nova-pasta").addEventListener("click", () => criarPasta());
   $("#botao-nota-de-hoje").addEventListener("click", () => notaDeHoje());
+  $("#botao-grafo").addEventListener("click", () => abrirGrafo());
   $("#conta-escolhida").addEventListener("change", aoEscolherConta);
 
   // As árvores são montadas de novo a cada mudança: os eventos ficam na lateral
@@ -3607,7 +3763,8 @@ const NOMES_DA_PREVIA = { jogador: "Neia (jogadora)", editor: "Takezo (editor)",
 async function recarregarTudo() {
   estado.pastaEscolhida = null;
   await recarregar();
-  if (navegacao.id) await mostrarNota(navegacao.id, { forcar: true });
+  if (navegacao.grafo) await mostrarGrafo(navegacao.grafo.id, { forcar: true });
+  else if (navegacao.id) await mostrarNota(navegacao.id, { forcar: true });
   else renderizarVazio();
 }
 
@@ -3668,7 +3825,7 @@ async function iniciar() {
   atualizarStatus();
   setInterval(atualizarStatus, CONFIG.intervaloStatus);
 
-  // Link direto para uma nota: já abre. O Voltar e o Avançar do navegador trocam as notas.
+  // Link direto para uma nota (ou para o grafo): já abre. O Voltar e o Avançar do navegador trocam as notas.
   window.addEventListener("popstate", aoMudarOEndereco);
   window.addEventListener("hashchange", aoMudarOEndereco);
   aoMudarOEndereco();
