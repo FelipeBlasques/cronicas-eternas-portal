@@ -535,25 +535,35 @@ button.card--desaparecido:is(:hover, :focus-visible) .card__nevoa {
    presas à borda direita do quadro, como marcadores de livro
    ================================================================= */
 
-/* Altura fixa: trocar de aba não muda o tamanho do quadro, e só a coluna do texto rola.
+/* A altura acompanha a aba aberta (a maior entre o retrato e o texto), e só a coluna do texto
+   rola quando passa do limite. O alto fica parado: o quadro fica preso numa altura que centraliza
+   um quadro do tamanho do retrato e cresce só para baixo, para as abas não saírem do lugar.
+   Com fit-content, e não auto: o <dialog> aberto tem inset-block: 0 e esticaria até a tela toda.
    As abas saem do quadro: o diálogo deixa passar o que sai da borda e fica meia aba
    para a esquerda, para o quadro e as abas ficarem juntos no centro. */
 .dialogo.dialogo--ficha {
   --largura-abas: 6.6rem;
+  /* O alto do quadro: centraliza um quadro da altura do retrato (24,75rem mais as bordas) */
+  --topo-da-ficha: max(1rem, calc((100dvh - 25rem) / 2));
   width: min(52rem, calc(100vw - 2rem - var(--largura-abas)));
-  height: min(42rem, calc(100dvh - 2rem));
-  max-height: calc(100dvh - 2rem);
+  height: fit-content;
+  max-height: none;
+  margin-block: var(--topo-da-ficha) auto;
   padding: 0;
   overflow: visible;
   translate: calc(var(--largura-abas) / -2) 0;
 }
 
-/* Sem position: as abas se posicionam pelo diálogo, e o corte daqui não as alcança */
+/* Sem position: as abas se posicionam pelo diálogo, e o corte daqui não as alcança.
+   O limite da altura fica aqui, e não no diálogo (que deixa passar o que sai da borda):
+   assim a coluna do texto rola em vez de vazar. A altura mínima segura as quatro abas sem retrato. */
 .ficha {
   display: grid;
   grid-template-columns: 16.5rem minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
-  height: 100%;
+  height: auto;
+  min-height: 14rem;
+  max-height: min(42rem, calc(100dvh - var(--topo-da-ficha) - 1rem));
   overflow: hidden;
 }
 
@@ -597,7 +607,7 @@ button.card--desaparecido:is(:hover, :focus-visible) .card__nevoa {
 
 /* O conteúdo da aba: só ele rola; o pé fica embaixo */
 .ficha__corpo {
-  flex: 1;
+  flex: 0 1 auto;
   min-height: 0;
   overflow-y: auto;
   padding: 1.8rem 2.1rem 1rem;
@@ -1501,12 +1511,18 @@ button.card--desaparecido:is(:hover, :focus-visible) .card__nevoa {
      viram uma fileira no alto da coluna de texto, presa no alto ao rolar. */
   .dialogo.dialogo--ficha {
     width: min(52rem, calc(100vw - 2rem));
+    height: min(42rem, calc(100dvh - 2rem));
+    max-height: calc(100dvh - 2rem);
+    margin: auto;
     translate: none;
   }
 
   .ficha {
     display: flex;
     flex-direction: column;
+    height: 100%;
+    min-height: 0;
+    max-height: none;
     overflow-y: auto;
   }
 
