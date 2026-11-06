@@ -9,9 +9,11 @@
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alegreya:ital,wght@0,400;0,500;0,700;1,400;1,500&family=Grenze+Gotisch:wght@400;500;600;700&display=swap">
   <link rel="stylesheet" href="../style.css">
   <link rel="stylesheet" href="../marcas.css">
+  <link rel="stylesheet" href="../editor-de-marcas.css">
   <link rel="stylesheet" href="caderno.css">
   <script src="../comum.js" defer></script>
   <script src="../marcas.js" defer></script>
+  <script src="../editor-de-marcas.js" defer></script>
   <script src="caderno.js" defer></script>
 </head>
 <body class="com-barra" data-pagina="caderno" data-raiz="../">
@@ -140,24 +142,11 @@
 
   <div id="aviso-rapido" class="aviso-rapido" role="status" aria-live="polite" hidden></div>
 
-  <!-- ============ O menu "⋯" dos itens e da nota, e o do botão Título (montado pelo caderno.js) ============ -->
+  <!-- ============ O menu "⋯" dos itens e da nota (montado pelo caderno.js) ============ -->
   <div id="menu" class="menu" role="menu" hidden></div>
 
   <!-- O botão Imagem da edição abre este seletor -->
   <input id="campo-imagens" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/avif" multiple hidden>
-
-  <!-- ============ Citar: links e notas embutidas ============ -->
-  <dialog id="dialogo-citar" class="dialogo dialogo--citar" aria-labelledby="citar-titulo">
-    <h2 id="citar-titulo" class="dialogo__titulo">Citar</h2>
-    <label class="campo">
-      <span id="citar-rotulo" class="campo__rotulo">Buscar</span>
-      <input id="citar-busca" type="search" autocomplete="off" spellcheck="false">
-    </label>
-    <div id="citar-resultados" class="citar__resultados"></div>
-    <div class="dialogo__acoes">
-      <button id="citar-cancelar" class="botao botao--leve" type="button">Cancelar</button>
-    </div>
-  </dialog>
 
   <!-- ============ Mover para… ============ -->
   <dialog id="dialogo-mover" class="dialogo dialogo--mover" aria-labelledby="mover-titulo">

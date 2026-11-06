@@ -651,71 +651,6 @@
   margin-bottom: 0.9rem;
 }
 
-/* A barra de botões das marcas: placas de ferro pequenas, em grupos */
-.ferramentas {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.4rem 0.9rem;
-  margin: 0 0 0.9rem;
-}
-
-.ferramentas__grupo {
-  display: flex;
-  gap: 0.2rem;
-}
-
-.ferramenta {
-  display: grid;
-  place-items: center;
-  width: 2.2rem;
-  height: 2.2rem;
-  padding: 0;
-  font: inherit;
-  font-size: 1.05rem;
-  line-height: 1;
-  color: var(--pergaminho-apagado);
-  background: linear-gradient(180deg, #26201b 0%, #17130f 100%);
-  border: 1px solid var(--ferro-fraco);
-  border-radius: var(--raio);
-  cursor: pointer;
-  transition: color 0.2s, border-color 0.2s;
-}
-
-.ferramenta:hover,
-.ferramenta[aria-expanded="true"] {
-  color: var(--pergaminho);
-  border-color: var(--ferro-forte);
-}
-
-.ferramenta:focus-visible {
-  outline: 2px solid var(--brasa);
-  outline-offset: 2px;
-}
-
-.ferramenta__icone {
-  width: 1.15rem;
-  height: 1.15rem;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.6;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.ferramenta--negrito .ferramenta__letra {
-  font-weight: 700;
-}
-
-.ferramenta--italico .ferramenta__letra {
-  font-style: italic;
-}
-
-.ferramenta--riscado .ferramenta__letra {
-  font-size: 0.92rem;
-  text-decoration: line-through;
-}
-
 /* A área de texto, com as marcas à mostra: cresce com o texto (a altura vem do caderno.js) */
 .nota__campo-texto {
   display: block;
@@ -753,7 +688,7 @@
 }
 
 /* =================================================================
-   O menu "⋯" (e o do botão Título)
+   O menu "⋯"
    ================================================================= */
 
 .menu {
@@ -805,92 +740,6 @@
 .menu__item--perigo:hover,
 .menu__item--perigo:focus-visible {
   color: #f3b3a2;
-}
-
-/* =================================================================
-   Citar: a busca pelas notas e pelas coisas do portal (como nas Memórias)
-   ================================================================= */
-
-.dialogo.dialogo--citar {
-  width: min(32rem, calc(100vw - 2rem));
-}
-
-#citar-busca::-webkit-search-cancel-button {
-  filter: grayscale(1) brightness(1.6);
-}
-
-.citar__resultados {
-  display: grid;
-  gap: 1rem;
-  max-height: min(50vh, 24rem);
-  overflow: auto;
-  margin-top: 1.1rem;
-  padding-right: 0.5rem;
-}
-
-.citar__titulo {
-  margin: 0 0 0.3rem;
-  font-size: 0.86rem;
-  font-weight: 500;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--cinza);
-}
-
-.citar__lista {
-  display: grid;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.citar__item {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 1rem;
-  width: 100%;
-  padding: 0.4rem 0.6rem;
-  font: inherit;
-  text-align: left;
-  color: var(--pergaminho-apagado);
-  background: none;
-  border: 0;
-  border-radius: var(--raio);
-  cursor: pointer;
-  transition: color 0.2s, background-color 0.2s;
-}
-
-.citar__item:hover,
-.citar__item:focus-visible {
-  color: var(--pergaminho);
-  background: rgba(232, 221, 200, 0.06);
-}
-
-.citar__item:focus-visible {
-  outline: 2px solid var(--brasa);
-  outline-offset: -2px;
-}
-
-.citar__nome {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-.citar__extra {
-  flex: none;
-  max-width: 50%;
-  font-size: 0.9rem;
-  font-style: italic;
-  text-align: right;
-  color: var(--cinza);
-  overflow-wrap: anywhere;
-}
-
-.citar__vazio {
-  margin: 0;
-  font-style: italic;
-  color: var(--cinza);
 }
 
 /* =================================================================
@@ -1111,19 +960,6 @@
     min-height: 2.5rem;
   }
 
-  /* A barra de botões rola de lado, sem empurrar a página */
-  .ferramentas {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    padding-bottom: 0.35rem;
-    scrollbar-width: thin;
-    scrollbar-color: var(--ferro) transparent;
-  }
-
-  .ferramentas__grupo {
-    flex: none;
-  }
-
   .nota__campo-texto {
     min-height: 16rem;
     padding: 0.7rem 0.75rem 1rem;
@@ -1135,10 +971,8 @@
   .arvore__linha,
   .arvore__mais,
   .lateral__link,
-  .ferramenta,
   .nota__campo-titulo,
   .nota__campo-texto,
-  .citar__item,
   .mover__destino,
   .lateral__limpar {
     transition: none;

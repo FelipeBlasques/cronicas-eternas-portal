@@ -24,8 +24,9 @@
    para ver a página como Neia, Takezo ou o Mestre.
 
    Usa o comum.js, carregado antes (pedir(), criar(), botao(),
-   simbolo(), avisos, barra lateral, status do Foundry e cinzas), e
-   o desenharMarcas() do marcas.js.
+   simbolo(), avisos, barra lateral, status do Foundry e cinzas), o
+   desenharMarcas() do marcas.js e o criarEditorDeMarcas() do
+   editor-de-marcas.js.
    ================================================================= */
 
 const CONFIG = {
@@ -1169,7 +1170,6 @@ const estado = {
   escolhida: null, // só o administrador: o usuário do caderno que ele lê
   vista: null, // só o administrador: o caderno escolhido ({ dono, caderno, etiquetas, imagens })
   pastaEscolhida: null, // a última pasta clicada ou com o foco na árvore: "+ Nota" e "+ Pasta" criam nela
-  citaveis: null, // o que o Citar oferece, pedido de novo cada vez que ele abre
 };
 
 const ehAdmin = () => estado.conta?.cargo === "admin";
@@ -1264,9 +1264,6 @@ const listaDeNomes = (usuarios) =>
   new Intl.ListFormat("pt-BR", { style: "long", type: "conjunction" }).format(usuarios.map(nomeDaConta).sort(porNomeNatural));
 
 const noCelular = () => window.matchMedia("(max-width: 760px)").matches;
-
-// Um colchete no nome fecharia o código [[…]] antes da hora: vira parêntese
-const semColchetes = (texto) => texto.replace(/\[/g, "(").replace(/\]/g, ")");
 
 // Para "Não salvou: <motivo>.": a mensagem do servidor no meio da frase
 const minuscula = (texto) => texto.charAt(0).toLowerCase() + texto.slice(1);
@@ -1667,6 +1664,19 @@ const campoDoTitulo = () => $("#campo-titulo");
 const campoDoTexto = () => $("#campo-texto");
 const naTela = () => ({ titulo: campoDoTitulo().value, texto: campoDoTexto().value });
 
+// O editor das marcas (../editor-de-marcas.js): a barra de botões, as teclas, o Citar e o pôr a imagem.
+// No Citar, cada nota mostra o caminho e, se for de outra conta, "de <nome>".
+const editor = criarEditorDeMarcas({
+  area: campoDoTexto,
+  citaveis: () => api.citaveis(),
+  notas: {
+    atual: () => edicao.id,
+    extra: (n) => [n.caminho.map((p) => p.nome).join(" › "), ehMinha(n.dono) ? "" : `de ${n.dono.nome}`].filter(Boolean).join(" · "),
+  },
+  tarefas: true,
+  imagens: { escolher: () => $("#campo-imagens").click() },
+});
+
 function temMudanca() {
   if (!emEdicao() || !campoDoTexto() || !campoDoTitulo()) return false;
   const { titulo, texto } = naTela();
@@ -1734,8 +1744,9 @@ function renderizarEdicao(lida, foco) {
   texto.placeholder = "Escreva aqui…";
   texto.setAttribute("aria-label", "Texto da nota");
 
-  folha.append(cabeca, barraDaNota(nota, { editando: true }), barraDeFerramentas(), texto);
+  folha.append(cabeca, barraDaNota(nota, { editando: true }), texto);
   $("#area-nota").replaceChildren(botaoVoltar(), folha);
+  texto.before(editor.barra()); // depois de a área estar na página: a barra diz que controla o #campo-texto
   ajustarAltura();
   mostrarSituacao(edicao.situacao, edicao.motivo);
   if (foco === "titulo") {
@@ -1980,450 +1991,6 @@ function configurarConflito() {
   dialogo.addEventListener("cancel", (evento) => evento.preventDefault());
 }
 
-/* ---------- A barra de botões ---------- */
-
-const TABELA_NOVA = "| Coluna 1 | Coluna 2 |\n| --- | --- |\n|  |  |\n|  |  |";
-
-// Cada botão age na área de texto. O clique não tira o foco dela (o mousedown fica parado), e as setas
-// andam entre os botões, como numa barra de ferramentas.
-function barraDeFerramentas() {
-  const barra = criar("div", "ferramentas");
-  barra.setAttribute("role", "toolbar");
-  barra.setAttribute("aria-label", "Marcas do texto");
-  barra.setAttribute("aria-controls", "campo-texto");
-
-  const ferramenta = (rotulo, desenho, acao, { classe = "", menu: abreMenu = false } = {}) => {
-    const botaoDaFerramenta = criar("button", classe ? `ferramenta ${classe}` : "ferramenta");
-    botaoDaFerramenta.type = "button";
-    botaoDaFerramenta.title = rotulo;
-    botaoDaFerramenta.tabIndex = -1;
-    botaoDaFerramenta.setAttribute("aria-label", rotulo);
-    if (desenho.startsWith("icone-")) botaoDaFerramenta.append(simbolo(desenho, "ferramenta__icone"));
-    else {
-      const letra = criar("span", "ferramenta__letra", desenho);
-      letra.setAttribute("aria-hidden", "true");
-      botaoDaFerramenta.append(letra);
-    }
-    if (abreMenu) {
-      botaoDaFerramenta.setAttribute("aria-haspopup", "menu");
-      botaoDaFerramenta.setAttribute("aria-expanded", "false");
-    }
-    botaoDaFerramenta.addEventListener("mousedown", (evento) => evento.preventDefault());
-    botaoDaFerramenta.addEventListener("click", () => {
-      const area = campoDoTexto();
-      if (area) acao(area, botaoDaFerramenta);
-    });
-    return botaoDaFerramenta;
-  };
-  const grupo = (...botoes) => {
-    const caixa = criar("span", "ferramentas__grupo");
-    caixa.append(...botoes);
-    return caixa;
-  };
-  const nasLinhas = (tipo) => (area) => aplicarTroca(area, trocaDeLinhas(area.value, area.selectionStart, area.selectionEnd, tipo));
-  const bloco = (texto, selecionar) => (area) =>
-    aplicarTroca(area, trocaDeBloco(area.value, area.selectionStart, area.selectionEnd, texto, { emVolta: true, selecionar }));
-
-  barra.append(
-    grupo(
-      ferramenta("Negrito (Ctrl+B)", "N", (area) => envolver(area, "**"), { classe: "ferramenta--negrito" }),
-      ferramenta("Itálico (Ctrl+I)", "I", (area) => envolver(area, "*"), { classe: "ferramenta--italico" }),
-      ferramenta("Riscado", "abc", (area) => envolver(area, "~~"), { classe: "ferramenta--riscado" }),
-      ferramenta("Título", "icone-titulo", abrirMenuDeTitulo, { menu: true }),
-    ),
-    grupo(
-      ferramenta("Lista", "icone-lista", nasLinhas("lista")),
-      ferramenta("Lista numerada", "icone-numerada", nasLinhas("numerada")),
-      ferramenta("Tarefa", "icone-tarefa", nasLinhas("tarefa")),
-      ferramenta("Citação", "icone-citacao", nasLinhas("citacao")),
-    ),
-    grupo(ferramenta("Tabela", "icone-tabela", bloco(TABELA_NOVA, [2, 10])), ferramenta("Separador", "icone-separador", bloco("---"))),
-    grupo(
-      ferramenta("Imagem", "icone-imagem", () => $("#campo-imagens").click()),
-      ferramenta("Link", "icone-elo", (area) => abrirCitar(area)),
-      ferramenta("Embutir nota", "icone-embutir", (area) => abrirCitar(area, { soNotas: true, embutir: true })),
-    ),
-  );
-  barra.querySelector(".ferramenta").tabIndex = 0;
-
-  barra.addEventListener("keydown", (evento) => {
-    const botoes = [...barra.querySelectorAll(".ferramenta")];
-    const i = botoes.indexOf(document.activeElement);
-    if (i < 0) return;
-    const destinos = { ArrowRight: (i + 1) % botoes.length, ArrowLeft: (i - 1 + botoes.length) % botoes.length, Home: 0, End: botoes.length - 1 };
-    if (!Object.hasOwn(destinos, evento.key)) return;
-    evento.preventDefault();
-    botoes[i].tabIndex = -1;
-    botoes[destinos[evento.key]].tabIndex = 0;
-    botoes[destinos[evento.key]].focus();
-  });
-  return barra;
-}
-
-const envolver = (area, marca) => aplicarTroca(area, trocaDeEnvolver(area.value, area.selectionStart, area.selectionEnd, marca));
-
-function abrirMenuDeTitulo(area, botaoDoTitulo) {
-  if (menu.botao === botaoDoTitulo) return fecharMenu();
-  const opcao = (nivel, texto) => ({
-    texto,
-    acao: () => aplicarTroca(area, trocaDeTitulo(area.value, area.selectionStart, area.selectionEnd, nivel)),
-  });
-  abrirMenu(botaoDoTitulo, [opcao(1, "Título 1"), opcao(2, "Título 2"), opcao(3, "Título 3"), opcao(0, "Texto")], { rotulo: "Título" });
-}
-
-/* ---------- As trocas no texto ----------
-   Cada botão calcula uma troca: o pedaço [inicio, fim) do texto vira
-   "novo", e a seleção fica em "selecao" (no texto novo). Essas contas
-   não mexem na página; aplicarTroca() é que põe na área de texto. */
-
-// Toda troca passa por aqui: com "insertText", o Ctrl+Z desfaz o que os botões fizeram; quando o
-// navegador não aceita (ou a área não está com o foco), setRangeText e o aviso de mudança à mão
-function aplicarTroca(area, troca, { foco = true } = {}) {
-  let foi = false;
-  if (foco) {
-    area.focus({ preventScroll: true });
-    area.setSelectionRange(troca.inicio, troca.fim);
-    try {
-      foi = document.execCommand("insertText", false, troca.novo);
-    } catch {
-      foi = false;
-    }
-  }
-  if (!foi) {
-    area.setRangeText(troca.novo, troca.inicio, troca.fim, "end");
-    area.dispatchEvent(new Event("input", { bubbles: true }));
-  }
-  area.setSelectionRange(troca.selecao[0], troca.selecao[1]);
-}
-
-// O começo da primeira linha e o fim da última que a seleção toca (sem a linha em que ela só encosta)
-function linhasDaSelecao(texto, inicio, fim) {
-  const ultimo = fim > inicio && texto[fim - 1] === "\n" ? fim - 1 : fim;
-  const de = inicio > 0 ? texto.lastIndexOf("\n", inicio - 1) + 1 : 0;
-  const quebra = texto.indexOf("\n", Math.max(ultimo, de));
-  return { de, ate: quebra < 0 ? texto.length : quebra };
-}
-
-// Numa linha que só mudou no começo, onde fica uma posição dela depois da troca
-function mapaDaLinha(antiga, nova) {
-  let comum = 0;
-  while (comum < antiga.length && comum < nova.length && antiga[antiga.length - 1 - comum] === nova[nova.length - 1 - comum]) comum++;
-  const antes = antiga.length - comum;
-  const depois = nova.length - comum;
-  return (posicao) => (posicao < antes ? depois : posicao - antes + depois);
-}
-
-// As linhas trocadas: numa linha só, a seleção acompanha o texto; em várias, fica o bloco todo
-function trocaDasLinhas(inicio, fim, de, ate, linhas, novas) {
-  const novo = novas.join("\n");
-  if (linhas.length === 1) {
-    const mapa = mapaDaLinha(linhas[0], novas[0]);
-    return { inicio: de, fim: ate, novo, selecao: [de + mapa(inicio - de), de + mapa(fim - de)] };
-  }
-  return { inicio: de, fim: ate, novo, selecao: [de, de + novo.length] };
-}
-
-// O começo de uma linha antes do texto: o recuo, as citações, o "#" do título e a marca de item
-const REGEX_COMECO = /^[ \t]*(?:>[ \t]?)*[ \t]*(?:#+[ \t]+|(?:[-*]|\d{1,9}\.)[ \t]+(?:\[[ xX]\](?:[ \t]+|$))?)?/;
-
-// Negrito, itálico e riscado: as marcas em volta da seleção, linha por linha, deixando de fora os
-// espaços das pontas e o começo da linha. Sem seleção, as duas marcas com o cursor no meio.
-function trocaDeEnvolver(texto, inicio, fim, marca) {
-  if (inicio === fim) return { inicio, fim, novo: marca + marca, selecao: [inicio + marca.length, inicio + marca.length] };
-  const pedacos = texto.slice(inicio, fim).split("\n");
-  let dentro = null; // numa linha só: onde ficou o texto envolvido, para continuar selecionado
-  const novos = pedacos.map((pedaco, i) => {
-    const doComeco = i > 0 || inicio === 0 || texto[inicio - 1] === "\n";
-    const comeco = doComeco ? REGEX_COMECO.exec(pedaco)[0] : "";
-    const [, espacoAntes, meio, espacoDepois] = /^(\s*)(.*?)(\s*)$/.exec(pedaco.slice(comeco.length));
-    if (!meio) return pedaco;
-    const antes = comeco + espacoAntes + marca;
-    if (pedacos.length === 1) dentro = [inicio + antes.length, inicio + antes.length + meio.length];
-    return antes + meio + marca + espacoDepois;
-  });
-  const novo = novos.join("\n");
-  return { inicio, fim, novo, selecao: dentro ?? [inicio, inicio + novo.length] };
-}
-
-// Lista, lista numerada e tarefa no começo de uma linha (também dentro de "> ")
-const REGEX_ITEM = /^((?:[ \t]*>[ \t]?)*)([ \t]*)(?:([-*])[ \t]+(\[[ xX]\](?:[ \t]+|$))?|(\d{1,9})\.[ \t]+)?/;
-
-function lerItem(linha) {
-  const achado = REGEX_ITEM.exec(linha);
-  const tipo = achado[4] ? "tarefa" : achado[3] ? "lista" : achado[5] ? "numerada" : null;
-  return { citacoes: achado[1], recuo: achado[2], tipo, resto: linha.slice(achado[0].length) };
-}
-
-// Lista, Lista numerada, Tarefa e Citação: se todas as linhas já têm a marca, ela sai; senão, entra
-// (no lugar de outra marca de lista). A numerada conta 1., 2., 3.; o recuo fica.
-function trocaDeLinhas(texto, inicio, fim, tipo) {
-  const { de, ate } = linhasDaSelecao(texto, inicio, fim);
-  const linhas = texto.slice(de, ate).split("\n");
-  const cheias = linhas.filter((linha) => linha.trim());
-  let novas;
-  if (tipo === "citacao") {
-    const tira = cheias.length > 0 && cheias.every((linha) => /^[ \t]*>/.test(linha));
-    novas = linhas.map((linha) => {
-      if (tira) return linha.replace(/^[ \t]*>[ \t]?/, "");
-      if (!cheias.length) return `> ${linha}`;
-      return linha.trim() ? `> ${linha}` : ">";
-    });
-  } else {
-    const tira = cheias.length > 0 && cheias.every((linha) => lerItem(linha).tipo === tipo);
-    let numero = 0;
-    novas = linhas.map((linha) => {
-      if (cheias.length && !linha.trim()) return linha;
-      const item = lerItem(linha);
-      if (tira) return item.citacoes + item.recuo + item.resto;
-      if (tipo === "tarefa" && item.tipo === "tarefa") return linha; // a feita continua feita
-      numero += 1;
-      const marca = tipo === "lista" ? "- " : tipo === "tarefa" ? "- [ ] " : `${numero}. `;
-      return item.citacoes + item.recuo + marca + item.resto;
-    });
-  }
-  return trocaDasLinhas(inicio, fim, de, ate, linhas, novas);
-}
-
-// Título 1, 2 ou 3 (nível 0: "Texto") no começo das linhas
-function trocaDeTitulo(texto, inicio, fim, nivel) {
-  const { de, ate } = linhasDaSelecao(texto, inicio, fim);
-  const linhas = texto.slice(de, ate).split("\n");
-  const cheias = linhas.filter((linha) => linha.trim());
-  const novas = linhas.map((linha) => {
-    if (cheias.length && !linha.trim()) return linha;
-    const resto = linha.replace(/^[ \t]*(?:#+[ \t]+)?/, "");
-    return nivel ? `${"#".repeat(nivel)} ${resto}` : resto;
-  });
-  return trocaDasLinhas(inicio, fim, de, ate, linhas, novas);
-}
-
-// Um bloco numa linha só dele (a tabela, o separador, a nota embutida, a imagem), com uma linha em
-// branco em volta quando "emVolta". "selecionar": o pedaço do bloco que fica selecionado; sem ele,
-// o cursor fica logo depois.
-function trocaDeBloco(texto, inicio, fim, bloco, { emVolta = false, selecionar = null } = {}) {
-  const antes = texto.slice(0, inicio);
-  const depois = texto.slice(fim);
-  let prefixo = antes && !antes.endsWith("\n") ? "\n" : "";
-  if (emVolta && antes.trim() && !(antes + prefixo).endsWith("\n\n")) prefixo += "\n";
-  let sufixo = depois.startsWith("\n") ? "" : "\n";
-  if (emVolta && !(sufixo + depois).startsWith("\n\n")) sufixo += "\n";
-  const novo = prefixo + bloco + sufixo;
-  const comeco = inicio + prefixo.length;
-  const selecao = selecionar ? [comeco + selecionar[0], comeco + selecionar[1]] : [inicio + novo.length, inicio + novo.length];
-  return { inicio, fim, novo, selecao };
-}
-
-// Enter num item de lista: o próximo item com a mesma marca ("- ", o próximo número, "- [ ] ").
-// Num item vazio, a marca sai e a lista termina. null: o Enter de sempre.
-const REGEX_MARCA_DE_ITEM = /^((?:[ \t]*>[ \t]?)*)([ \t]*)(?:([-*])([ \t]+)(\[[ xX]\](?:[ \t]+|$))?|(\d{1,9})\.([ \t]+))/;
-
-function trocaDoEnter(texto, inicio, fim) {
-  if (inicio !== fim) return null;
-  const de = inicio > 0 ? texto.lastIndexOf("\n", inicio - 1) + 1 : 0;
-  const quebra = texto.indexOf("\n", inicio);
-  const ate = quebra < 0 ? texto.length : quebra;
-  const linha = texto.slice(de, ate);
-  const achado = REGEX_MARCA_DE_ITEM.exec(linha);
-  if (!achado || inicio - de < achado[0].length) return null;
-  const [inteira, citacoes, recuo, traco, espaco, caixinha, numero, espacoDoNumero] = achado;
-  if (!linha.slice(inteira.length).trim()) {
-    return { inicio: de, fim: ate, novo: citacoes, selecao: [de + citacoes.length, de + citacoes.length] };
-  }
-  const marca = numero !== undefined ? `${Number(numero) + 1}.${espacoDoNumero}` : `${traco}${espaco}${caixinha ? "[ ] " : ""}`;
-  const novo = `\n${citacoes}${recuo}${marca}`;
-  return { inicio, fim, novo, selecao: [inicio + novo.length, inicio + novo.length] };
-}
-
-// Na área de texto: Ctrl+B, Ctrl+I e o Enter nas listas
-function teclaNoTexto(evento) {
-  const area = evento.target;
-  const comando = (evento.ctrlKey || evento.metaKey) && !evento.altKey && !evento.shiftKey;
-  const tecla = evento.key.toLowerCase();
-  if (comando && (tecla === "b" || tecla === "i")) {
-    evento.preventDefault();
-    envolver(area, tecla === "b" ? "**" : "*");
-    return;
-  }
-  if (evento.key !== "Enter" || evento.shiftKey || evento.ctrlKey || evento.metaKey || evento.altKey || evento.isComposing) return;
-  const troca = trocaDoEnter(area.value, area.selectionStart, area.selectionEnd);
-  if (!troca) return;
-  evento.preventDefault();
-  aplicarTroca(area, troca);
-}
-
-// Digitar [[ abre o Citar; ![[, o Citar só com as notas, para embutir
-function aoDigitarColchete(area, evento) {
-  if (evento.inputType !== "insertText" || evento.data !== "[") return;
-  const posicao = area.selectionStart;
-  if (posicao !== area.selectionEnd || area.value.slice(posicao - 2, posicao) !== "[[") return;
-  const antes = area.value[posicao - 3];
-  if (antes === "[" || antes === "\\") return;
-  const embutir = antes === "!";
-  abrirCitar(area, { inicio: posicao - (embutir ? 3 : 2), fim: posicao, soNotas: embutir, embutir, digitado: true });
-}
-
-/* =================================================================
-   Citar: links e notas embutidas
-   -----------------------------------------------------------------
-   O diálogo das Memórias, com os grupos Notas, Personagens,
-   Acontecimentos, Mesas, Memórias e Lugares. Escolher um põe
-   [[tipo:<id>|nome]] onde estava o cursor; o "o que aparece" pode
-   ser mudado depois, no próprio texto. Aberto por [[ ou ![[
-   digitados, escolher troca o que foi digitado pelo código inteiro.
-   ================================================================= */
-
-const citacao = {
-  area: null, // a área de texto que recebe o link
-  inicio: 0, // o pedaço do texto que o link substitui (a seleção, ou o [[ digitado)
-  fim: 0,
-  soNotas: false, // só as notas, para embutir
-  embutir: false, // o código fica ![[nota:…]]
-  digitado: false, // aberto pelo [[ ou ![[ digitado
-  escolhido: false,
-};
-
-function abrirCitar(area, { inicio = area.selectionStart, fim = area.selectionEnd, soNotas = false, embutir = false, digitado = false } = {}) {
-  Object.assign(citacao, { area, inicio, fim, soNotas, embutir, digitado, escolhido: false });
-  $("#citar-titulo").textContent = embutir ? "Embutir nota" : "Citar";
-  $("#citar-rotulo").textContent = soNotas ? "Buscar uma nota" : "Buscar uma nota, personagem, acontecimento, mesa, memória ou lugar";
-  const busca = $("#citar-busca");
-  busca.value = "";
-  renderizarCitaveis();
-  $("#dialogo-citar").showModal();
-  $("#citar-resultados").scrollTop = 0;
-  busca.focus();
-  carregarCitaveis();
-}
-
-// A lista é pedida de novo cada vez (as notas mudam); enquanto isso, fica a da última vez
-async function carregarCitaveis() {
-  try {
-    estado.citaveis = await api.citaveis();
-  } catch (falha) {
-    if (!estado.citaveis && $("#dialogo-citar").open) $("#citar-resultados").replaceChildren(criar("p", "citar__vazio", falha.message));
-    return;
-  }
-  if ($("#dialogo-citar").open) renderizarCitaveis();
-}
-
-function itemCitavel(nome, extra, codigo) {
-  const item = criar("button", "citar__item");
-  item.type = "button";
-  item.append(criar("span", "citar__nome", nome));
-  if (extra) item.append(criar("span", "citar__extra", extra));
-  item.addEventListener("click", () => inserirCitacao(codigo));
-  const linha = criar("li");
-  linha.append(item);
-  return linha;
-}
-
-function grupoCitavel(titulo, itens) {
-  if (!itens.length) return [];
-  const lista = criar("ul", "citar__lista");
-  lista.append(...itens);
-  const grupo = criar("section", "citar__grupo");
-  grupo.append(criar("h3", "citar__titulo", titulo), lista);
-  return [grupo];
-}
-
-// O "o que aparece" do link: numa linha, sem colchetes, sem barra invertida no fim e no máximo 120 caracteres
-const textoDoLink = (texto) =>
-  semColchetes(texto).replace(/\s+/g, " ").trim().slice(0, LIMITES.link).replace(/\\+$/, "").trim() || "…";
-
-// Sem acentos e sem diferença de maiúsculas
-function renderizarCitaveis() {
-  const resultados = $("#citar-resultados");
-  const focoNaLista = resultados.contains(document.activeElement);
-  const citaveis = estado.citaveis;
-  if (!citaveis) {
-    resultados.replaceChildren(criar("p", "citar__vazio", "Carregando…"));
-    return;
-  }
-  const termo = normalizar($("#citar-busca").value.trim());
-  const achou = (...textos) => !termo || textos.some((texto) => normalizar(texto).includes(termo));
-  const link = (tipo, id, texto) => `[[${tipo}:${id}|${textoDoLink(texto)}]]`;
-
-  const notas = citaveis.notas
-    .filter((n) => n.id !== edicao.id && achou(n.titulo))
-    .map((n) => {
-      const onde = [n.caminho.map((p) => p.nome).join(" › "), ehMinha(n.dono) ? "" : `de ${n.dono.nome}`].filter(Boolean).join(" · ");
-      return itemCitavel(n.titulo, onde, `${citacao.soNotas ? "!" : ""}${link("nota", n.id, n.titulo)}`);
-    });
-  const grupos = [["Notas", notas]];
-  if (!citacao.soNotas) {
-    grupos.push(
-      ["Personagens", citaveis.personagens.filter((p) => achou(p.nome)).map((p) => itemCitavel(p.nome, "", link("personagem", p.id, p.nome)))],
-      [
-        "Acontecimentos",
-        citaveis.acontecimentos
-          .filter((ev) => achou(ev.titulo))
-          .map((ev) => itemCitavel(ev.titulo, Number.isFinite(ev.ano) ? `${ev.ano} ED` : "", link("evento", ev.id, ev.titulo))),
-      ],
-      ["Mesas", citaveis.mesas.filter((m) => achou(m.nome)).map((m) => itemCitavel(m.nome, "", link("mesa", m.id, m.nome)))],
-      ["Memórias", citaveis.memorias.filter((m) => achou(m.titulo)).map((m) => itemCitavel(m.titulo, "", link("memoria", m.id, m.titulo)))],
-      ["Lugares", citaveis.lugares.filter((l) => achou(l.nome, l.mapa)).map((l) => itemCitavel(l.nome, l.mapa, link("lugar", l.id, l.nome)))],
-    );
-  }
-
-  const blocos = grupos.flatMap(([titulo, itens]) => grupoCitavel(titulo, itens));
-  if (blocos.length) resultados.replaceChildren(...blocos);
-  else {
-    const nada = termo ? "Nada encontrado." : citacao.soNotas ? "Nenhuma outra nota para embutir ainda." : "Nada para citar ainda.";
-    resultados.replaceChildren(criar("p", "citar__vazio", nada));
-  }
-  if (focoNaLista) $("#citar-busca").focus();
-}
-
-// O link entra onde estava o cursor (ou no lugar do que estava selecionado, ou do [[ digitado), e o
-// cursor fica depois dele. A nota embutida pelo botão entra numa linha só dela.
-function inserirCitacao(codigo) {
-  const { area, inicio, fim, embutir, digitado } = citacao;
-  citacao.escolhido = true;
-  $("#dialogo-citar").close();
-  if (!area?.isConnected) return;
-  const troca =
-    embutir && !digitado
-      ? trocaDeBloco(area.value, inicio, fim, codigo)
-      : { inicio, fim, novo: codigo, selecao: [inicio + codigo.length, inicio + codigo.length] };
-  aplicarTroca(area, troca);
-}
-
-function configurarCitar() {
-  const dialogo = $("#dialogo-citar");
-  const busca = $("#citar-busca");
-  const itens = () => [...document.querySelectorAll("#citar-resultados .citar__item")];
-  busca.addEventListener("input", renderizarCitaveis);
-  // Enter escolhe o primeiro achado; a seta para baixo desce para a lista
-  busca.addEventListener("keydown", (evento) => {
-    const primeiro = itens()[0];
-    if (!primeiro || (evento.key !== "Enter" && evento.key !== "ArrowDown")) return;
-    evento.preventDefault();
-    if (evento.key === "Enter") primeiro.click();
-    else primeiro.focus();
-  });
-  // Na lista, as setas andam de um achado para o outro; acima do primeiro, volta para a busca
-  $("#citar-resultados").addEventListener("keydown", (evento) => {
-    if (evento.key !== "ArrowDown" && evento.key !== "ArrowUp") return;
-    const lista = itens();
-    const i = lista.indexOf(document.activeElement);
-    if (i < 0) return;
-    evento.preventDefault();
-    const proximo = lista[evento.key === "ArrowDown" ? i + 1 : i - 1];
-    if (proximo) proximo.focus();
-    else if (evento.key === "ArrowUp") busca.focus();
-  });
-  $("#citar-cancelar").addEventListener("click", () => dialogo.close());
-  fecharAoClicarFora(dialogo);
-  // Esc e Cancelar: o que foi digitado fica, e o cursor volta para onde estava
-  dialogo.addEventListener("close", () => {
-    const { area, inicio, fim, digitado, escolhido } = citacao;
-    citacao.area = null;
-    if (escolhido || !area?.isConnected) return;
-    area.focus({ preventScroll: true });
-    area.setSelectionRange(digitado ? fim : inicio, fim);
-  });
-}
-
 /* =================================================================
    Imagens: pelo botão, por colar e por arrastar
    -----------------------------------------------------------------
@@ -2431,11 +1998,6 @@ function configurarCitar() {
    em edição e entra numa linha só dela onde está o cursor, como
    ![[imagem:<id>|legenda]], com o nome do arquivo de legenda.
    ================================================================= */
-
-function conferirImagem(arquivo) {
-  if (!TIPOS_DE_IMAGEM.includes(arquivo.type)) throw new Error("Use imagens PNG, JPG, WEBP, GIF ou AVIF.");
-  if (arquivo.size > LIMITES.imagem) throw new Error(`Cada imagem pode ter no máximo ${emBytes(LIMITES.imagem)}.`);
-}
 
 function enviarImagens(arquivos) {
   const lista = [...arquivos];
@@ -2458,7 +2020,7 @@ async function enviarUmaImagem(arquivo, sessao) {
   let imagem = null;
   let falha = null;
   try {
-    conferirImagem(arquivo);
+    editor.conferirImagem(arquivo);
     ({ imagem } = await api.enviarImagem(edicao.id, arquivo));
   } catch (erro) {
     falha = erro;
@@ -2468,21 +2030,10 @@ async function enviarUmaImagem(arquivo, sessao) {
   if (imagem) {
     edicao.imagens[imagem.id] = imagem.endereco;
     if (navegacao.lida?.nota.id === edicao.id) navegacao.lida.imagens[imagem.id] = imagem.endereco;
-    porImagemNoTexto(imagem.id, arquivo.name || "");
+    editor.porImagem(imagem.id, arquivo.name || "");
   }
   mostrarSituacao(edicao.situacao, edicao.motivo);
   if (falha) await avisarFalha(falha);
-}
-
-// A legenda começa com o nome do arquivo sem a extensão. Se a área não está com o foco, a imagem entra
-// do mesmo jeito, sem tirar o foco de onde a pessoa está.
-function porImagemNoTexto(id, nomeOriginal) {
-  const area = campoDoTexto();
-  if (!area) return;
-  const legenda = textoDoLink(nomeOriginal.replace(/\.[^.]*$/, "")).replace(/^…$/, "");
-  const codigo = legenda ? `![[imagem:${id}|${legenda}]]` : `![[imagem:${id}]]`;
-  const posicao = area.selectionEnd;
-  aplicarTroca(area, trocaDeBloco(area.value, posicao, posicao, codigo), { foco: document.activeElement === area });
 }
 
 // Colar: só quando a área de transferência tem imagens e nenhum texto junto
@@ -2497,7 +2048,7 @@ function aoColar(evento) {
 const levaArquivos = (evento) => emEdicao() && Array.from(evento.dataTransfer?.types ?? []).includes("Files");
 
 /* =================================================================
-   O menu: o "⋯" dos itens da árvore e da nota, e o botão Título
+   O menu: o "⋯" dos itens da árvore e da nota
    -----------------------------------------------------------------
    Um elemento só (#menu), aberto junto do botão. As setas andam,
    Home e End vão às pontas; Esc e Tab fecham e devolvem o foco; o
@@ -3946,11 +3497,11 @@ function configurarEdicao() {
     if (evento.target.id === "campo-texto") {
       ajustarAltura();
       aoMudarNaEdicao();
-      aoDigitarColchete(evento.target, evento);
+      editor.digitou(evento);
     } else if (evento.target.id === "campo-titulo") aoMudarNaEdicao();
   });
   area.addEventListener("keydown", (evento) => {
-    if (evento.target.id === "campo-texto") return teclaNoTexto(evento);
+    if (evento.target.id === "campo-texto") return editor.tecla(evento);
     // Enter no título passa para o texto
     if (evento.target.id === "campo-titulo" && evento.key === "Enter" && !evento.isComposing) {
       evento.preventDefault();
@@ -3990,6 +3541,7 @@ function configurarEdicao() {
     if (document.querySelector("dialog[open]") || !podeAlterarNota(navegacao.lida?.nota)) return;
     evento.preventDefault();
     fecharMenu({ devolverFoco: false });
+    editor.fechar();
     if (emEdicao()) lerDeNovo();
     else comecarEdicao();
   });
@@ -4028,7 +3580,6 @@ function configurarEventos() {
   configurarArraste();
   configurarEdicao();
   configurarMenu();
-  configurarCitar();
   configurarConflito();
   configurarCompartilhar();
   configurarBusca();
@@ -4054,7 +3605,6 @@ const NOMES_DA_PREVIA = { jogador: "Neia (jogadora)", editor: "Takezo (editor)",
 // Depois de trocar a conta ou restaurar os exemplos, a nota aberta é pedida de novo:
 // a outra conta pode não poder lê-la (e aí ela "não existe")
 async function recarregarTudo() {
-  estado.citaveis = null;
   estado.pastaEscolhida = null;
   await recarregar();
   if (navegacao.id) await mostrarNota(navegacao.id, { forcar: true });
@@ -4078,6 +3628,7 @@ function configurarSimulacao() {
     api.trocarConta(seletor.value);
     resumo();
     fecharMenu({ devolverFoco: false });
+    editor.fechar();
     for (const dialogo of document.querySelectorAll("dialog[open]")) dialogo.close();
     await recarregarTudo();
     avisoRapido(`Agora você vê a página como ${NOMES_DA_PREVIA[seletor.value]}.`);
