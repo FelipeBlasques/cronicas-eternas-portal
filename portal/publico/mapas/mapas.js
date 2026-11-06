@@ -95,6 +95,7 @@ const apiDoServidor = {
   alterarMarcador: (mapa, marca, dados) => pedir("PUT", caminhoDe(marcadoresDe(mapa), marca), dados),
   apagarMarcador: (mapa, marca) => pedir("DELETE", caminhoDe(marcadoresDe(mapa), marca)),
   importarLugares: (mapa, lugares) => pedir("POST", `${marcadoresDe(mapa)}/importar`, { lugares }),
+  marcarEscala: (mapa, escala) => pedir("PUT", `${caminhoDe("/api/mapas", mapa)}/escala`, { escala }),
   // A página de um lugar
   pagina: (mapa, marca) => pedir("GET", paginaDe(mapa, marca)),
   gravarPagina: (mapa, marca, dados) => pedir("PUT", paginaDe(mapa, marca), dados),
@@ -638,6 +639,14 @@ function exemplosDaPrevia() {
         miniatura: "previa-tyrenar.webp",
         largura: 1600,
         altura: 1200,
+        // Uma linha de 208 px da imagem mede 100 km: o mapa todo tem perto de 770 km de largura
+        escala: {
+          distancia: 100,
+          unidade: "km",
+          de: { x: 0.06, y: 0.94 },
+          ate: { x: 0.19, y: 0.94 },
+          alteradaEm: "2026-10-20T12:00:00.000Z",
+        },
         visibilidade: "todos",
         criadoEm: "2026-10-20T12:00:00.000Z",
         alteradoEm: "2026-10-20T12:00:00.000Z",
@@ -955,6 +964,7 @@ function criarApiDePrevia() {
         miniatura,
         largura,
         altura,
+        escala: null,
         visibilidade: valores.visibilidade,
         criadoEm: quando,
         alteradoEm: quando,
@@ -977,6 +987,36 @@ function criarApiDePrevia() {
       const mapa = acharMapa(id);
       banco.mapas = banco.mapas.filter((m) => m !== mapa);
       return { ok: true };
+    },
+    // { escala } ou null, que tira a escala; as mesmas conferências do servidor
+    async marcarEscala(id, escala) {
+      await esperar(250);
+      if (conta.cargo !== "admin") throw proibido();
+      const mapa = acharMapa(id);
+      if (escala === undefined) throw erroComCodigo("Envie a escala do mapa.");
+      if (escala === null) {
+        mapa.escala = null;
+        return { escala: null };
+      }
+      if (!escala || typeof escala !== "object" || Array.isArray(escala)) throw erroComCodigo("A escala não está num formato válido.");
+      const distancia = typeof escala.distancia === "number" && Number.isFinite(escala.distancia) ? Math.round(escala.distancia * 100) / 100 : NaN;
+      if (!(distancia > 0 && distancia <= 100000)) {
+        throw erroComCodigo("A distância precisa ser um número maior que zero e de no máximo 100.000.");
+      }
+      if (escala.unidade !== "km" && escala.unidade !== "mi") throw erroComCodigo("Escolha a unidade da escala: km ou milhas.");
+      const ponta = (p) => {
+        if (!p || typeof p !== "object" || !entre(p.x, 0, 1) || !entre(p.y, 0, 1)) {
+          throw erroComCodigo("As pontas da linha da escala precisam estar dentro do mapa.");
+        }
+        return { x: proporcao(p.x), y: proporcao(p.y) };
+      };
+      const de = ponta(escala.de);
+      const ate = ponta(escala.ate);
+      if (Math.hypot((ate.x - de.x) * mapa.largura, (ate.y - de.y) * mapa.altura) < 20) {
+        throw erroComCodigo("A linha da escala precisa ser mais comprida.");
+      }
+      mapa.escala = { distancia, unidade: escala.unidade, de, ate, alteradaEm: new Date().toISOString() };
+      return { escala: structuredClone(mapa.escala) };
     },
     async criarMarcador(idMapa, dados) {
       await esperar(250);
@@ -1344,10 +1384,13 @@ const visor = criarVisor({
   lugares: $("#visor-lugares"),
   botoes: { aproximar: $("#visor-aproximar"), afastar: $("#visor-afastar"), inteiro: $("#visor-inteiro") },
   espacoOcupado: espacoDoPainel,
-  // O halo e o rótulo têm medidas que dependem do zoom; o resto dos lugares acompanha pelo --escala
+  // O halo, o rótulo, a régua e os traços da medição têm medidas que dependem do zoom;
+  // o resto dos lugares acompanha pelo --escala
   aoMudar: () => {
     desenharHalo();
     posicionarRotulo();
+    atualizarRegua();
+    desenharTracos();
   },
 });
 
@@ -1534,7 +1577,11 @@ function alvoDoLugar(m, classe) {
     if (rotulo.id === m.id) esconderRotulo();
   });
   alvo.addEventListener("click", () => {
-    if (!cliqueDoArraste) selecionarLugar(m.id);
+    if (cliqueDoArraste || engolirCliqueDoPonto) return;
+    // Medindo, o lugar vira um ponto do caminho; marcando a escala, o clique vale como no resto do mapa
+    if (medicao.ligada) return porLugarNaMedicao(m);
+    if (marcacaoDaEscala.ligada) return;
+    selecionarLugar(m.id);
   });
   return alvo;
 }
@@ -1594,12 +1641,19 @@ function mostrarLugares(mapa, { novo = false } = {}) {
   const itens = [...mapa.marcadores].sort((a, b) => Number(!a.impresso) - Number(!b.impresso)).map((m) => montarLugar(m, mapa));
   lugares.porId = new Map(itens.map((item) => [item.marcador.id, item]));
   $("#visor-lugares").replaceChildren(...itens.map((item) => item.elemento));
+  porCamadaDosTracos();
 
   const quantos = mapa.marcadores.length;
   $("#painel-contagem").textContent = quantos === 1 ? "1 lugar" : `${quantos} lugares`;
   renderizarLista();
   if (selecionado && lugares.porId.has(selecionado)) selecionarLugar(selecionado, { mover: false, endereco: false, gaveta: false });
   else if (selecionado) fecharDetalhe();
+
+  // A escala pode ter mudado: a régua, o "Medir distância" e a medição acompanham
+  atualizarBotaoDeMedir();
+  conferirMedicao();
+  atualizarRegua();
+  desenharTracos();
 }
 
 function limparLugares() {
@@ -1608,6 +1662,12 @@ function limparLugares() {
   arrasteDoLugar = null;
   ligarEdicao(false);
   if ($("#dialogo-lugar").open) $("#dialogo-lugar").close();
+  // A medição não fica guardada: trocar de mapa ou fechar o visor apaga
+  if ($("#dialogo-escala").open) $("#dialogo-escala").close();
+  ligarMarcacaoDaEscala(false);
+  apagarMedicao();
+  ligarMedicao(false);
+  mostrarMedicaoNoPainel(false);
   Object.assign(lugares, { mapa: null, porId: new Map(), aceso: { lista: null, mapa: null }, busca: "" });
   $("#busca-lugares").value = "";
   $("#visor-lugares").replaceChildren();
@@ -1616,6 +1676,7 @@ function limparLugares() {
   $("#detalhe-lugar").replaceChildren();
   $("#detalhe-lugar").hidden = true;
   abrirGaveta(false);
+  atualizarRegua();
 }
 
 /* ---------- O anel aceso e o rótulo ---------- */
@@ -1775,6 +1836,8 @@ function fecharDetalhe({ endereco = true, focar = false } = {}) {
   $("#detalhe-lugar").replaceChildren();
   $("#detalhe-lugar").hidden = true;
   $("#lista-lugares").hidden = false;
+  // Com uma medição em curso, o painel volta para ela
+  if (medicao.ligada || medicao.pontos.length) mostrarMedicaoNoPainel(true);
   if (endereco && lugares.mapa) trocarEndereco(`#${lugares.mapa.id}`);
   if (focar) ($(`#lista-lugares [data-id="${id}"]`) ?? $("#busca-lugares")).focus();
 }
@@ -1916,10 +1979,12 @@ function mostrarDetalhe(m, { focar = false } = {}) {
     botaoDoDetalhe("Centralizar", "icone-alvo", () => visor.centralizar(m.x, m.y)),
     botaoDoDetalhe("Copiar link", "icone-corrente", () => copiarLink(m)),
   );
+  if (temEscala()) acoes.append(botaoDoDetalhe("Medir daqui", "icone-compasso", () => medirDaqui(m)));
   partes.push(acoes);
 
   detalhe.replaceChildren(...partes);
   detalhe.setAttribute("aria-labelledby", nome.id);
+  mostrarMedicaoNoPainel(false);
   $("#lista-lugares").hidden = true;
   detalhe.hidden = false;
   detalhe.scrollTop = 0;
@@ -2008,6 +2073,10 @@ function pontoNoMapa(evento) {
 /* ---------- O modo "Editar lugares" ---------- */
 
 function ligarEdicao(ligada, { avisar = false } = {}) {
+  if (ligada) {
+    ligarMedicao(false);
+    ligarMarcacaoDaEscala(false);
+  }
   lugares.editando = ligada;
   $("#visor-editar").setAttribute("aria-pressed", String(ligada));
   $("#visor").classList.toggle("visor--editando", ligada);
@@ -2023,12 +2092,16 @@ function ligarEdicao(ligada, { avisar = false } = {}) {
 function atualizarFerramentasDeEdicao() {
   $("#visor-editar").hidden = !podeEditarLugares();
   $("#visor-importar").hidden = !ehAdmin();
+  $("#visor-escala").hidden = !ehAdmin();
   if (lugares.editando && !podeEditarLugares()) ligarEdicao(false);
+  if (marcacaoDaEscala.ligada && !ehAdmin()) ligarMarcacaoDaEscala(false);
+  atualizarBotaoDeMedir();
 }
 
 // Um ponto vazio do mapa, com a edição ligada: um lugar novo ali.
 // O clique que termina um arraste do mapa nem chega aqui: o visor.js engole.
 function aoClicarNoMapa(evento) {
+  if (cliqueDosTracos(evento)) return;
   if (!lugares.editando || !lugares.mapa || evento.target.closest(".lugar__alvo")) return;
   const { x, y } = pontoNoMapa(evento);
   if (x < 0 || x > 1 || y < 0 || y > 1) return;
@@ -2255,6 +2328,785 @@ function configurarEdicaoDosLugares() {
 }
 
 /* =================================================================
+   A escala, a régua e o medir distância
+   -----------------------------------------------------------------
+   A escala do mapa é uma linha de tamanho conhecido, marcada pelo
+   administrador (as pontas em proporção da imagem, como os lugares).
+   Com ela, as unidades por pixel da imagem são a distância dividida
+   pelo comprimento da linha.
+
+   A régua fica no canto de baixo do espaço livre, à esquerda da
+   coluna de ferramentas, e acompanha o zoom. Clicar nela troca entre
+   km e milhas, só para quem clicou; a mesma escolha vale para a
+   medição.
+
+   A medição e a linha da escala sendo marcada ficam numa camada SVG
+   dentro da camada dos lugares, em pixels da imagem. As medidas de
+   tela (espessura, raio, tracejado) são divididas pela escala do
+   zoom e refeitas no aoMudar do visor, como o halo. A medição não
+   fica guardada em lugar nenhum: trocar de mapa ou fechar o visor
+   apaga.
+   ================================================================= */
+
+const KM_POR_MILHA = 1.609344;
+const MEDIDAS_DOS_TRACOS = {
+  contorno: 4.6, // o contorno escuro por baixo da linha
+  linha: 2.2,
+  previa: 1.4, // o trecho fino que acompanha o mouse
+  ponto: 4.6, // o raio do ponto em brasa
+  alca: 12, // o raio da área de arrastar o ponto
+  tracejado: [9, 6], // terreno difícil
+  pontilhado: [0.1, 5.5], // terreno difícil maior (com a ponta redonda, viram pontos)
+  ponta: 7, // os tracinhos nas pontas da linha da escala
+};
+const REGUA = { minimo: 80, maximo: 160 }; // px da barra na tela
+const TERRENOS = [
+  { id: "normal", nome: "Normal", fator: 1 },
+  { id: "dificil", nome: "Difícil", fator: 1 / 2 },
+  { id: "maior", nome: "Difícil maior", fator: 1 / 3 },
+];
+const DESLOCAMENTOS = [10, 15, 20, 25, 30, 35, 40, 50, 60]; // em pés, os da tabela de viagem
+const VIAGEM_PADRAO = { pes: 25, metade: false, horas: 8 };
+
+/* ---------- O que fica guardado no navegador ---------- */
+
+function lerDoNavegador(chave) {
+  try {
+    return localStorage.getItem(chave);
+  } catch {
+    return null;
+  }
+}
+
+function guardarNoNavegador(chave, valor) {
+  try {
+    localStorage.setItem(chave, valor);
+  } catch {
+    // sem localStorage (janela anônima, por exemplo): a escolha vale só até recarregar
+  }
+}
+
+let unidadeEscolhida = ["km", "mi"].includes(lerDoNavegador("mapas:unidade")) ? lerDoNavegador("mapas:unidade") : null;
+
+function lerViagem() {
+  try {
+    const guardada = JSON.parse(lerDoNavegador("mapas:viagem"));
+    return {
+      pes: DESLOCAMENTOS.includes(guardada?.pes) ? guardada.pes : VIAGEM_PADRAO.pes,
+      metade: guardada?.metade === true,
+      horas: Number.isInteger(guardada?.horas) && guardada.horas >= 1 && guardada.horas <= 24 ? guardada.horas : VIAGEM_PADRAO.horas,
+    };
+  } catch {
+    return { ...VIAGEM_PADRAO };
+  }
+}
+
+const viagem = lerViagem();
+
+/* ---------- As contas ---------- */
+
+const temEscala = () => Boolean(lugares.mapa?.escala);
+
+// A unidade em que a página mostra as distâncias: a escolhida na régua ou, sem escolha, a do mapa
+const unidadeDeExibicao = () => unidadeEscolhida ?? lugares.mapa?.escala?.unidade ?? "km";
+const outraUnidade = (unidade) => (unidade === "km" ? "mi" : "km");
+const nomeDaUnidade = (unidade, { curto = false } = {}) => (unidade === "km" ? "km" : curto ? "mi" : "milhas");
+
+function converter(valor, de, para) {
+  if (de === para) return valor;
+  return de === "km" ? valor / KM_POR_MILHA : valor * KM_POR_MILHA;
+}
+
+// O comprimento entre dois pontos (em proporção da imagem), em pixels da imagem
+function pixelsEntre(a, b, mapa = lugares.mapa) {
+  return Math.hypot((b.x - a.x) * mapa.largura, (b.y - a.y) * mapa.altura);
+}
+
+// Quanto vale um pixel da imagem, na unidade pedida
+function unidadesPorPixel(unidade = unidadeDeExibicao(), mapa = lugares.mapa) {
+  const escala = mapa.escala;
+  return converter(escala.distancia / pixelsEntre(escala.de, escala.ate, mapa), escala.unidade, unidade);
+}
+
+// Em português: uma casa abaixo de 100 ("78,3"), nenhuma de 100 para cima ("126")
+const numero = (valor) => valor.toLocaleString("pt-BR", { maximumFractionDigits: Math.abs(valor) < 100 ? 1 : 0 });
+const distanciaEmTexto = (valor, unidade, opcoes) => `${numero(valor)} ${nomeDaUnidade(unidade, opcoes)}`;
+
+// O fim da régua: o maior número redondo (1, 2 ou 5 vezes uma potência de 10) que cabe no máximo da barra
+function fimDaRegua(unidadesPorPxDaTela) {
+  const limite = REGUA.maximo * unidadesPorPxDaTela;
+  const potencia = 10 ** Math.floor(Math.log10(limite));
+  for (const vezes of [5, 2, 1]) {
+    if (vezes * potencia <= limite) return vezes * potencia;
+  }
+  return potencia;
+}
+
+/* ---------- A régua ---------- */
+
+function atualizarRegua() {
+  const regua = $("#visor-regua");
+  if (!navegacao.aberto || !temEscala()) {
+    regua.hidden = true;
+    return;
+  }
+  const unidade = unidadeDeExibicao();
+  const porPx = unidadesPorPixel(unidade) / visor.escala;
+  const fim = fimDaRegua(porPx);
+  const pequeno = (valor) => valor.toLocaleString("pt-BR", { maximumFractionDigits: 3 });
+  regua.style.setProperty("--largura-regua", `${fim / porPx}px`);
+  $("#regua-texto").textContent = `0 · ${pequeno(fim / 2)} · ${pequeno(fim)} ${nomeDaUnidade(unidade, { curto: true })}`;
+  const troca = unidade === "km" ? "Trocar para milhas" : "Trocar para quilômetros";
+  regua.title = troca;
+  regua.setAttribute("aria-label", `Régua: ${pequeno(fim)} ${nomeDaUnidade(unidade)}. ${troca}.`);
+
+  // No canto de baixo do espaço livre (acima da gaveta, no celular), à esquerda da coluna de ferramentas
+  const moldura = $(".visor__moldura").getBoundingClientRect();
+  const ferramentas = $(".visor__ferramentas").getBoundingClientRect();
+  const folga = TELA_DE_GAVETA.matches ? 10 : 14;
+  regua.style.setProperty("right", `${Math.max(folga, moldura.right - ferramentas.left + folga)}px`);
+  regua.style.setProperty("bottom", `${(espacoDoPainel().baixo ?? 0) + folga}px`);
+  regua.hidden = false;
+}
+
+function trocarUnidade() {
+  unidadeEscolhida = outraUnidade(unidadeDeExibicao());
+  guardarNoNavegador("mapas:unidade", unidadeEscolhida);
+  atualizarRegua();
+  desenharTracos();
+  renderizarMedicao();
+}
+
+/* ---------- O estado ---------- */
+
+const medicao = {
+  ligada: false, // o modo de medir: cada clique no mapa põe um ponto
+  pontos: [], // { x, y, lugar }: em proporção da imagem; lugar é o id do lugar clicado, ou null
+  terrenos: [], // um por trecho: "normal", "dificil" ou "maior"
+  cursor: null, // { x, y } do mouse, para o trecho que acompanha
+  arraste: null, // { indice, ponteiro, andou }
+};
+
+const marcacaoDaEscala = {
+  ligada: false,
+  de: null, // a primeira ponta
+  ate: null, // a segunda, com o diálogo aberto
+  cursor: null,
+  continuar: false, // "Marcar de novo": o diálogo fecha e o modo continua
+};
+
+let engolirCliqueDoPonto = false; // logo depois de apertar um ponto, o clique não vira ponto novo
+
+/* ---------- A camada dos traços ---------- */
+
+const tracos = {
+  camada: criar("div", "tracos"),
+  svg: document.createElementNS(SVG, "svg"),
+  rotulos: criar("div", "tracos__rotulos"),
+};
+tracos.camada.setAttribute("aria-hidden", "true");
+tracos.svg.setAttribute("class", "tracos__desenho");
+tracos.camada.append(tracos.svg, tracos.rotulos);
+
+// Põe a camada por cima dos lugares, do tamanho da imagem
+function porCamadaDosTracos() {
+  const mapa = lugares.mapa;
+  if (!mapa) return;
+  tracos.svg.setAttribute("width", mapa.largura);
+  tracos.svg.setAttribute("height", mapa.altura);
+  tracos.svg.setAttribute("viewBox", `0 0 ${mapa.largura} ${mapa.altura}`);
+  $("#visor-lugares").append(tracos.camada);
+}
+
+function elementoSvg(tag, atributos) {
+  const elemento = document.createElementNS(SVG, tag);
+  for (const [nome, valor] of Object.entries(atributos)) elemento.setAttribute(nome, valor);
+  return elemento;
+}
+
+function rotuloDoTraco(ponto, texto, classe = "") {
+  const rotulo = criar("span", `rotulo-trecho ${classe}`.trim(), texto);
+  rotulo.style.setProperty("left", `${ponto.x * lugares.mapa.largura}px`);
+  rotulo.style.setProperty("top", `${ponto.y * lugares.mapa.altura}px`);
+  return rotulo;
+}
+
+// Um trecho: o contorno escuro e, por cima, a linha de pergaminho; os dois com o mesmo tracejado
+function desenharTrecho(a, b, { k, terreno = "normal", previa = false, classe = "" }) {
+  const { largura, altura } = lugares.mapa;
+  const { contorno, linha, previa: fina, tracejado, pontilhado } = MEDIDAS_DOS_TRACOS;
+  const padrao = terreno === "dificil" ? tracejado : terreno === "maior" ? pontilhado : null;
+  const coordenadas = { x1: a.x * largura, y1: a.y * altura, x2: b.x * largura, y2: b.y * altura };
+  const espessura = previa ? fina : linha;
+  const partes = [
+    elementoSvg("line", { ...coordenadas, class: `tracos__contorno ${classe}`.trim(), "stroke-width": (espessura + contorno - linha) * k }),
+    elementoSvg("line", { ...coordenadas, class: `tracos__linha ${classe}`.trim(), "stroke-width": espessura * k }),
+  ];
+  if (padrao) {
+    // O contorno acompanha o tracejado, com a sobra dele em volta de cada traço
+    for (const parte of partes) parte.setAttribute("stroke-dasharray", padrao.map((v) => v * k).join(" "));
+  }
+  return partes;
+}
+
+// Os tracinhos nas pontas da linha da escala, de través
+function pontasDaEscala(a, b, { k, classe = "" }) {
+  const { largura, altura } = lugares.mapa;
+  const ax = a.x * largura;
+  const ay = a.y * altura;
+  const bx = b.x * largura;
+  const by = b.y * altura;
+  const comprimento = Math.hypot(bx - ax, by - ay) || 1;
+  const nx = (-(by - ay) / comprimento) * MEDIDAS_DOS_TRACOS.ponta * k;
+  const ny = ((bx - ax) / comprimento) * MEDIDAS_DOS_TRACOS.ponta * k;
+  const d = `M${ax - nx} ${ay - ny}L${ax + nx} ${ay + ny}M${bx - nx} ${by - ny}L${bx + nx} ${by + ny}`;
+  return [
+    elementoSvg("path", { d, class: `tracos__contorno ${classe}`.trim(), "stroke-width": MEDIDAS_DOS_TRACOS.contorno * k }),
+    elementoSvg("path", { d, class: `tracos__linha ${classe}`.trim(), "stroke-width": MEDIDAS_DOS_TRACOS.linha * k }),
+  ];
+}
+
+function desenharTracos() {
+  const mapa = lugares.mapa;
+  if (!mapa) {
+    tracos.svg.replaceChildren();
+    tracos.rotulos.replaceChildren();
+    return;
+  }
+  const k = 1 / visor.escala;
+  const desenhos = [];
+  const rotulos = [];
+
+  // A escala guardada, enquanto o diálogo da escala está aberto, e a linha sendo marcada
+  if (mapa.escala && $("#dialogo-escala").open) {
+    const { de, ate } = mapa.escala;
+    desenhos.push(...desenharTrecho(de, ate, { k, classe: "tracos--guardada" }), ...pontasDaEscala(de, ate, { k, classe: "tracos--guardada" }));
+  }
+  if (marcacaoDaEscala.ligada && marcacaoDaEscala.de) {
+    const fim = marcacaoDaEscala.ate ?? marcacaoDaEscala.cursor;
+    if (fim) desenhos.push(...desenharTrecho(marcacaoDaEscala.de, fim, { k }), ...pontasDaEscala(marcacaoDaEscala.de, fim, { k }));
+    else desenhos.push(elementoSvg("circle", { cx: marcacaoDaEscala.de.x * mapa.largura, cy: marcacaoDaEscala.de.y * mapa.altura, r: MEDIDAS_DOS_TRACOS.ponto * k, class: "tracos__ponto", "stroke-width": 1.5 * k }));
+  }
+
+  // A medição: os trechos, o que acompanha o mouse, os pontos e as distâncias
+  if (temEscala() && medicao.pontos.length) {
+    const unidade = unidadeDeExibicao();
+    const porPixel = unidadesPorPixel(unidade);
+    const pontos = medicao.pontos;
+    for (let i = 1; i < pontos.length; i++) {
+      desenhos.push(...desenharTrecho(pontos[i - 1], pontos[i], { k, terreno: medicao.terrenos[i - 1] }));
+      const meio = { x: (pontos[i - 1].x + pontos[i].x) / 2, y: (pontos[i - 1].y + pontos[i].y) / 2 };
+      rotulos.push(rotuloDoTraco(meio, distanciaEmTexto(pixelsEntre(pontos[i - 1], pontos[i]) * porPixel, unidade, { curto: true })));
+    }
+    const ultimo = pontos[pontos.length - 1];
+    if (medicao.ligada && medicao.cursor && !medicao.arraste) {
+      desenhos.push(...desenharTrecho(ultimo, medicao.cursor, { k, previa: true }));
+      const total = (pixelsDoCaminho() + pixelsEntre(ultimo, medicao.cursor)) * porPixel;
+      rotulos.push(rotuloDoTraco(medicao.cursor, distanciaEmTexto(total, unidade, { curto: true }), "rotulo-trecho--cursor"));
+    }
+    pontos.forEach((ponto, indice) => {
+      const centro = { cx: ponto.x * mapa.largura, cy: ponto.y * mapa.altura };
+      desenhos.push(elementoSvg("circle", { ...centro, r: MEDIDAS_DOS_TRACOS.ponto * k, class: "tracos__ponto", "stroke-width": 1.5 * k }));
+      desenhos.push(elementoSvg("circle", { ...centro, r: MEDIDAS_DOS_TRACOS.alca * k, class: "tracos__alca", "data-indice": indice }));
+    });
+  }
+  tracos.svg.replaceChildren(...desenhos);
+  tracos.rotulos.replaceChildren(...rotulos);
+}
+
+/* ---------- Os modos: editar lugares, medir e marcar a escala, um de cada vez ---------- */
+
+function ligarMedicao(ligada) {
+  if (ligada && !temEscala()) return;
+  if (ligada) {
+    ligarEdicao(false);
+    ligarMarcacaoDaEscala(false);
+  }
+  medicao.ligada = ligada;
+  medicao.cursor = null;
+  $("#visor-medir").setAttribute("aria-pressed", String(ligada));
+  $("#visor").classList.toggle("visor--medindo", ligada);
+  if (ligada) {
+    if (lugares.selecionado) fecharDetalhe();
+    mostrarMedicaoNoPainel(true);
+    if (TELA_DE_GAVETA.matches) abrirGaveta(true);
+  } else if (!medicao.pontos.length && !$("#medicao").hidden) {
+    voltarAoIndice();
+  }
+  renderizarMedicao();
+  desenharTracos();
+}
+
+function ligarMarcacaoDaEscala(ligada, { avisar = false } = {}) {
+  if (ligada && !ehAdmin()) return;
+  if (ligada) {
+    ligarEdicao(false);
+    ligarMedicao(false);
+  }
+  Object.assign(marcacaoDaEscala, { ligada, de: null, ate: null, cursor: null, continuar: false });
+  $("#visor-escala").setAttribute("aria-pressed", String(ligada));
+  $("#visor").classList.toggle("visor--marcando-escala", ligada);
+  if (ligada && avisar) avisoRapido("Clique no começo e no fim de uma distância que você conhece, como a régua desenhada no mapa.");
+  desenharTracos();
+}
+
+// "Medir distância": sem escala, o botão fica apagado, com a dica
+function dicaDoMedir() {
+  if (temEscala()) return "Medir distância";
+  return ehAdmin() ? "Marque a escala do mapa para medir." : "Este mapa ainda não tem escala.";
+}
+
+function atualizarBotaoDeMedir() {
+  const medir = $("#visor-medir");
+  medir.setAttribute("aria-disabled", String(!temEscala()));
+  medir.title = dicaDoMedir();
+  if (!temEscala() && medicao.ligada) ligarMedicao(false);
+}
+
+/* ---------- Medir ---------- */
+
+function pixelsDoCaminho() {
+  let soma = 0;
+  for (let i = 1; i < medicao.pontos.length; i++) soma += pixelsEntre(medicao.pontos[i - 1], medicao.pontos[i]);
+  return soma;
+}
+
+function porPontoDaMedicao(ponto) {
+  medicao.pontos.push(ponto);
+  if (medicao.pontos.length > 1) medicao.terrenos.push("normal");
+  renderizarMedicao();
+  desenharTracos();
+}
+
+// Clicar num lugar põe o ponto no centro dele, com o nome nos trechos
+const porLugarNaMedicao = (m) => porPontoDaMedicao({ x: m.x, y: m.y, lugar: m.id });
+
+function desfazerPonto() {
+  if (!medicao.pontos.length) return;
+  medicao.pontos.pop();
+  medicao.terrenos.length = Math.max(0, medicao.pontos.length - 1);
+  renderizarMedicao();
+  desenharTracos();
+}
+
+function apagarMedicao() {
+  Object.assign(medicao, { pontos: [], terrenos: [], cursor: null, arraste: null });
+  renderizarMedicao();
+  desenharTracos();
+}
+
+// "Fechar": apaga tudo, sai do modo e volta ao índice
+function fecharMedicao() {
+  apagarMedicao();
+  ligarMedicao(false);
+  voltarAoIndice();
+}
+
+// "Medir daqui", no painel de um lugar: o modo começa com o primeiro ponto nele
+function medirDaqui(m) {
+  apagarMedicao();
+  ligarMedicao(true);
+  porLugarNaMedicao(m);
+}
+
+// No painel, a medição fica no lugar do índice e do detalhe (e da busca)
+function mostrarMedicaoNoPainel(visivel) {
+  $("#medicao").hidden = !visivel;
+  $(".busca-lugares").hidden = visivel;
+  if (visivel) {
+    $("#lista-lugares").hidden = true;
+    $("#detalhe-lugar").hidden = true;
+  }
+}
+
+function voltarAoIndice() {
+  mostrarMedicaoNoPainel(false);
+  if (!lugares.selecionado) $("#lista-lugares").hidden = false;
+}
+
+// Ao recarregar os dados: os lugares que sumiram viram "ponto N"; sem escala, a medição sai
+function conferirMedicao() {
+  if (!temEscala()) {
+    if (medicao.pontos.length || medicao.ligada || !$("#medicao").hidden) fecharMedicao();
+    return;
+  }
+  for (const ponto of medicao.pontos) {
+    if (ponto.lugar && !lugares.porId.has(ponto.lugar)) ponto.lugar = null;
+  }
+  renderizarMedicao();
+}
+
+/* ---------- O mouse e o teclado no mapa ---------- */
+
+function aoMoverNoMapa(evento) {
+  if (evento.pointerType !== "mouse" || evento.buttons) return;
+  if (medicao.ligada && medicao.pontos.length) {
+    medicao.cursor = pontoNoMapa(evento);
+    desenharTracos();
+  } else if (marcacaoDaEscala.ligada && marcacaoDaEscala.de && !marcacaoDaEscala.ate) {
+    marcacaoDaEscala.cursor = pontoNoMapa(evento);
+    desenharTracos();
+  }
+}
+
+function aoSairDoMapa() {
+  if (!medicao.cursor && !marcacaoDaEscala.cursor) return;
+  medicao.cursor = null;
+  marcacaoDaEscala.cursor = null;
+  desenharTracos();
+}
+
+// Os pontos da medição se arrastam como os marcadores visíveis: o mapa não anda junto
+function aoApertarPonto(evento) {
+  const alca = evento.target.closest?.(".tracos__alca");
+  if (!alca || !medicao.ligada || !evento.isPrimary || (evento.pointerType === "mouse" && evento.button !== 0)) return;
+  evento.stopPropagation();
+  engolirCliqueDoPonto = true;
+  try {
+    $("#visor-janela").setPointerCapture(evento.pointerId);
+  } catch {
+    // o dedo já saiu
+  }
+  medicao.arraste = { indice: Number(alca.dataset.indice), ponteiro: evento.pointerId, inicio: { x: evento.clientX, y: evento.clientY }, andou: false };
+}
+
+function aoArrastarPonto(evento) {
+  const arraste = medicao.arraste;
+  if (!arraste || arraste.ponteiro !== evento.pointerId) return;
+  if (!arraste.andou) {
+    if (Math.hypot(evento.clientX - arraste.inicio.x, evento.clientY - arraste.inicio.y) < AJUSTES_DO_VISOR.limiarDoArraste) return;
+    arraste.andou = true;
+  }
+  const ponto = pontoNoMapa(evento);
+  medicao.pontos[arraste.indice] = { x: Math.min(1, Math.max(0, ponto.x)), y: Math.min(1, Math.max(0, ponto.y)), lugar: null };
+  desenharTracos();
+}
+
+function aoSoltarPonto(evento) {
+  const arraste = medicao.arraste;
+  if (!arraste || arraste.ponteiro !== evento.pointerId) return;
+  medicao.arraste = null;
+  setTimeout(() => (engolirCliqueDoPonto = false));
+  if (arraste.andou) renderizarMedicao();
+  desenharTracos();
+}
+
+// Um clique no mapa, com o modo de medir ou o de marcar a escala ligado. Devolve true se tratou o clique.
+function cliqueDosTracos(evento) {
+  if (engolirCliqueDoPonto) return true;
+  if (medicao.ligada) {
+    // O clique num lugar já virou ponto no próprio lugar
+    if (evento.target.closest(".lugar__alvo")) return true;
+    const ponto = pontoNoMapa(evento);
+    if (ponto.x >= 0 && ponto.x <= 1 && ponto.y >= 0 && ponto.y <= 1) porPontoDaMedicao({ ...ponto, lugar: null });
+    return true;
+  }
+  if (marcacaoDaEscala.ligada) {
+    const ponto = pontoNoMapa(evento);
+    if (ponto.x < 0 || ponto.x > 1 || ponto.y < 0 || ponto.y > 1 || marcacaoDaEscala.ate) return true;
+    if (!marcacaoDaEscala.de) marcacaoDaEscala.de = ponto;
+    else {
+      marcacaoDaEscala.ate = ponto;
+      marcacaoDaEscala.cursor = null;
+      abrirDialogoDaEscala();
+    }
+    desenharTracos();
+    return true;
+  }
+  return false;
+}
+
+// Esc sai do modo (a medição fica); Backspace tira o último ponto
+function aoTeclarNaMedicao(evento) {
+  if (!navegacao.aberto || evento.defaultPrevented || evento.ctrlKey || evento.metaKey || evento.altKey) return;
+  if (document.querySelector("dialog[open]")) return;
+  if (evento.target.closest?.("input, textarea, select, [contenteditable]")) return;
+  if (evento.key === "Escape" && marcacaoDaEscala.ligada) ligarMarcacaoDaEscala(false);
+  else if (evento.key === "Escape" && medicao.ligada) ligarMedicao(false);
+  else if (evento.key === "Backspace" && medicao.ligada) desfazerPonto();
+  else return;
+  evento.preventDefault();
+}
+
+/* ---------- O painel da medição ---------- */
+
+const nomeDoPonto = (indice) => {
+  const lugar = medicao.pontos[indice].lugar;
+  return (lugar && lugares.porId.get(lugar)?.marcador.nome) || `ponto ${indice + 1}`;
+};
+
+// As horas de viagem do caminho, num deslocamento (em pés), com os terrenos e a metade escolhidos
+function horasDoCaminho(pes) {
+  const porPixel = unidadesPorPixel("mi");
+  const milhasPorHora = (pes / 10) * (viagem.metade ? 1 / 2 : 1);
+  let horas = 0;
+  for (let i = 1; i < medicao.pontos.length; i++) {
+    const fator = TERRENOS.find((t) => t.id === medicao.terrenos[i - 1])?.fator ?? 1;
+    horas += (pixelsEntre(medicao.pontos[i - 1], medicao.pontos[i]) * porPixel) / (milhasPorHora * fator);
+  }
+  return horas;
+}
+
+// "7 h", "7 h 20 min" ou "45 min", em minutos já arredondados a 5
+function horasEmTexto(minutos) {
+  if (!minutos) return "menos de 5 min";
+  const horas = Math.floor(minutos / 60);
+  const resto = minutos % 60;
+  if (!horas) return `${resto} min`;
+  const texto = `${horas.toLocaleString("pt-BR")} h`;
+  return resto ? `${texto} ${resto} min` : texto;
+}
+
+const arredondarA5 = (horas) => Math.round((horas * 60) / 5) * 5;
+
+// "3 dias e 7 h": os dias de viagem para baixo, e as horas que sobram arredondadas a 5 minutos
+function tempoEmTexto(horas, horasPorDia) {
+  let dias = Math.floor(horas / horasPorDia);
+  let resto = arredondarA5(horas - dias * horasPorDia);
+  if (resto >= horasPorDia * 60) {
+    dias += 1;
+    resto = 0;
+  }
+  if (!dias) return horasEmTexto(resto);
+  const texto = dias === 1 ? "1 dia" : `${dias.toLocaleString("pt-BR")} dias`;
+  return resto ? `${texto} e ${horasEmTexto(resto)}` : texto;
+}
+
+function montarTrecho(indice) {
+  const unidade = unidadeDeExibicao();
+  const item = criar("li", "trecho");
+  const lugaresDoTrecho = criar("span", "trecho__lugares", `${nomeDoPonto(indice)} → ${nomeDoPonto(indice + 1)}`);
+  const distancia = pixelsEntre(medicao.pontos[indice], medicao.pontos[indice + 1]) * unidadesPorPixel(unidade);
+  const terreno = criar("select", "trecho__terreno");
+  terreno.setAttribute("aria-label", `Terreno do trecho ${indice + 1}`);
+  for (const t of TERRENOS) {
+    const opcao = criar("option", null, t.nome);
+    opcao.value = t.id;
+    terreno.append(opcao);
+  }
+  terreno.value = medicao.terrenos[indice];
+  terreno.addEventListener("change", () => {
+    medicao.terrenos[indice] = terreno.value;
+    desenharTracos();
+    atualizarViagem();
+  });
+  item.append(lugaresDoTrecho, criar("span", "trecho__distancia", distanciaEmTexto(distancia, unidade)), terreno);
+  return item;
+}
+
+function renderizarMedicao() {
+  const pontos = medicao.pontos.length;
+  $("#medicao-explicacao").hidden = pontos >= 2;
+  $("#medicao-resultado").hidden = pontos < 2;
+  $("#medicao-desfazer").disabled = !pontos;
+  $("#medicao-limpar").disabled = !pontos;
+  $("#medicao-copiar").disabled = pontos < 2;
+  if (pontos < 2 || !temEscala()) {
+    $("#medicao-trechos").replaceChildren();
+    return;
+  }
+  const unidade = unidadeDeExibicao();
+  const outra = outraUnidade(unidade);
+  const pixels = pixelsDoCaminho();
+  $("#medicao-total").textContent = distanciaEmTexto(pixels * unidadesPorPixel(unidade), unidade);
+  $("#medicao-outra").textContent = `(${distanciaEmTexto(pixels * unidadesPorPixel(outra), outra)})`;
+  $("#medicao-trechos").replaceChildren(...medicao.pontos.slice(1).map((_, i) => montarTrecho(i)));
+  atualizarViagem();
+}
+
+// O tempo de viagem, a conta embaixo e a tabela; refeitos ao mudar o terreno ou as escolhas da viagem
+function atualizarViagem() {
+  if (medicao.pontos.length < 2 || !temEscala()) return;
+  const unidade = unidadeDeExibicao();
+  const milhasPorHora = viagem.pes / 10;
+  $("#viagem-velocidade").textContent = `· ${numero(milhasPorHora * KM_POR_MILHA)} km/h`;
+  const horas = horasDoCaminho(viagem.pes);
+  $("#viagem-tempo").textContent = tempoEmTexto(horas, viagem.horas);
+  const velocidade = converter(milhasPorHora * (viagem.metade ? 1 / 2 : 1), "mi", unidade);
+  const porHora = unidade === "km" ? "km por hora" : velocidade === 1 ? "milha por hora" : "milhas por hora";
+  $("#viagem-conta").textContent = `${horasEmTexto(arredondarA5(horas))} de viagem a ${numero(velocidade)} ${porHora}`;
+  $("#viagem-linhas").replaceChildren(
+    ...DESLOCAMENTOS.map((pes) => {
+      const linha = criar("tr", pes === viagem.pes ? "viagem__escolhida" : null);
+      const celula = (texto) => criar("td", null, texto);
+      linha.append(
+        celula(`${pes} pés`),
+        celula(numero(pes / 10)),
+        celula(numero((pes / 10) * 8)),
+        celula(tempoEmTexto(horasDoCaminho(pes), viagem.horas)),
+      );
+      return linha;
+    }),
+  );
+}
+
+function guardarViagem() {
+  guardarNoNavegador("mapas:viagem", JSON.stringify(viagem));
+  atualizarViagem();
+}
+
+// O resumo em texto: os trechos, o total e o tempo, com o deslocamento escolhido
+async function copiarMedicao() {
+  if (medicao.pontos.length < 2) return;
+  const unidade = unidadeDeExibicao();
+  const outra = outraUnidade(unidade);
+  const linhas = [`Distância em ${lugares.mapa.nome}`];
+  for (let i = 1; i < medicao.pontos.length; i++) {
+    const distancia = pixelsEntre(medicao.pontos[i - 1], medicao.pontos[i]) * unidadesPorPixel(unidade);
+    const terreno = TERRENOS.find((t) => t.id === medicao.terrenos[i - 1]).nome;
+    linhas.push(`${i}. ${nomeDoPonto(i - 1)} → ${nomeDoPonto(i)}: ${distanciaEmTexto(distancia, unidade)} (${terreno})`);
+  }
+  const pixels = pixelsDoCaminho();
+  linhas.push(`Total: ${distanciaEmTexto(pixels * unidadesPorPixel(unidade), unidade)} (${distanciaEmTexto(pixels * unidadesPorPixel(outra), outra)})`);
+  const escolhas = [`deslocamento de ${viagem.pes} pés`, `${viagem.horas} h de viagem por dia`];
+  if (viagem.metade) escolhas.push("metade da velocidade");
+  linhas.push(`Viagem: ${tempoEmTexto(horasDoCaminho(viagem.pes), viagem.horas)} (${escolhas.join(", ")})`);
+  const texto = linhas.join("\n");
+  try {
+    await navigator.clipboard.writeText(texto);
+    avisoRapido("Medição copiada.");
+  } catch {
+    avisoRapido(texto);
+  }
+}
+
+/* ---------- Marcar a escala (só o administrador) ---------- */
+
+function mostrarErroDaEscala(texto) {
+  const erro = $("#erro-escala");
+  erro.textContent = texto;
+  erro.hidden = !texto;
+}
+
+// Com escala, o diálogo já vem com a distância e a unidade de agora, e a linha guardada aparece no mapa
+function abrirDialogoDaEscala() {
+  const escala = lugares.mapa.escala;
+  const form = $("#form-escala");
+  form.distancia.value = escala ? String(escala.distancia) : "";
+  form.unidade.value = escala?.unidade ?? "km";
+  $("#escala-tirar").hidden = !escala;
+  mostrarErroDaEscala("");
+  $("#dialogo-escala").showModal();
+  desenharTracos();
+  form.distancia.focus();
+  form.distancia.select();
+}
+
+// O mesmo que o servidor confere
+function escalaDoFormulario() {
+  const form = $("#form-escala");
+  const distancia = Math.round(form.distancia.valueAsNumber * 100) / 100;
+  if (!(distancia > 0 && distancia <= 100000)) throw new Error("A distância precisa ser um número maior que zero e de no máximo 100.000.");
+  const { de, ate } = marcacaoDaEscala;
+  if (pixelsEntre(de, ate) < 20) throw new Error("A linha da escala precisa ser mais comprida.");
+  return { distancia, unidade: form.unidade.value, de, ate };
+}
+
+async function salvarEscala(evento) {
+  evento.preventDefault();
+  mostrarErroDaEscala("");
+  const salvar = $("#escala-salvar");
+  salvar.disabled = true;
+  try {
+    await api.marcarEscala(lugares.mapa.id, escalaDoFormulario());
+    $("#dialogo-escala").close();
+    await recarregar();
+    avisoRapido("Escala salva.");
+  } catch (falha) {
+    mostrarErroDaEscala(falha.message);
+  } finally {
+    salvar.disabled = false;
+  }
+}
+
+async function tirarEscala() {
+  const confirmado = await perguntar({
+    titulo: "Tirar a escala?",
+    texto: "O mapa fica sem a régua e sem o medir distância, até alguém marcar a escala de novo.",
+    confirmar: "Tirar",
+    cancelar: "Cancelar",
+    perigo: true,
+  });
+  if (!confirmado) return;
+  try {
+    await api.marcarEscala(lugares.mapa.id, null);
+    if ($("#dialogo-escala").open) $("#dialogo-escala").close();
+    await recarregar();
+    avisoRapido("Escala tirada.");
+  } catch (falha) {
+    if ($("#dialogo-escala").open) mostrarErroDaEscala(falha.message);
+    else avisarFalha(falha);
+  }
+}
+
+function configurarMedicao() {
+  const janela = $("#visor-janela");
+  janela.addEventListener("pointermove", aoMoverNoMapa);
+  janela.addEventListener("pointerleave", aoSairDoMapa);
+  janela.addEventListener("pointermove", aoArrastarPonto);
+  janela.addEventListener("pointerup", aoSoltarPonto);
+  janela.addEventListener("pointercancel", aoSoltarPonto);
+  // Antes do visor.js: apertar um ponto não começa o arraste do mapa
+  tracos.svg.addEventListener("pointerdown", aoApertarPonto);
+  document.addEventListener("keydown", aoTeclarNaMedicao);
+
+  $("#visor-regua").addEventListener("click", trocarUnidade);
+  $("#visor-medir").addEventListener("click", () => {
+    if (!temEscala()) return avisoRapido(dicaDoMedir());
+    ligarMedicao(!medicao.ligada);
+  });
+  $("#visor-escala").addEventListener("click", () => ligarMarcacaoDaEscala(!marcacaoDaEscala.ligada, { avisar: true }));
+
+  $("#medicao-fechar").addEventListener("click", fecharMedicao);
+  $("#medicao-desfazer").addEventListener("click", desfazerPonto);
+  $("#medicao-limpar").addEventListener("click", apagarMedicao);
+  $("#medicao-copiar").addEventListener("click", copiarMedicao);
+
+  // As escolhas da viagem
+  const deslocamento = $("#viagem-deslocamento");
+  deslocamento.replaceChildren(
+    ...DESLOCAMENTOS.map((pes) => {
+      const opcao = criar("option", null, `${pes} pés`);
+      opcao.value = String(pes);
+      return opcao;
+    }),
+  );
+  deslocamento.value = String(viagem.pes);
+  deslocamento.addEventListener("change", () => {
+    viagem.pes = Number(deslocamento.value);
+    guardarViagem();
+  });
+  $("#viagem-metade").checked = viagem.metade;
+  $("#viagem-metade").addEventListener("change", (evento) => {
+    viagem.metade = evento.target.checked;
+    guardarViagem();
+  });
+  const horas = $("#viagem-horas");
+  horas.value = String(viagem.horas);
+  horas.addEventListener("change", () => {
+    const valor = Math.round(horas.valueAsNumber);
+    if (valor >= 1 && valor <= 24) viagem.horas = valor;
+    horas.value = String(viagem.horas);
+    guardarViagem();
+  });
+
+  // O diálogo da escala
+  $("#form-escala").addEventListener("submit", salvarEscala);
+  $("#escala-cancelar").addEventListener("click", () => $("#dialogo-escala").close());
+  $("#escala-de-novo").addEventListener("click", () => {
+    marcacaoDaEscala.continuar = true;
+    $("#dialogo-escala").close();
+  });
+  $("#escala-tirar").addEventListener("click", tirarEscala);
+  // Fechar sem salvar (Cancelar, Esc) sai do modo; "Marcar de novo" continua nele, sem a linha
+  $("#dialogo-escala").addEventListener("close", () => {
+    if (marcacaoDaEscala.continuar) Object.assign(marcacaoDaEscala, { de: null, ate: null, cursor: null, continuar: false });
+    else ligarMarcacaoDaEscala(false);
+    desenharTracos();
+  });
+}
+
+/* =================================================================
    A imagem do mapa: medida e reduzida aqui mesmo
    -----------------------------------------------------------------
    O servidor não tem bibliotecas para mexer em imagens. Então o
@@ -2397,6 +3249,7 @@ function abrirEdicao(mapa = null) {
   $("#ajuda-imagem").textContent = mapa
     ? "Escolha outra imagem só para trocar o mapa. Os lugares continuam onde estão."
     : "PNG, JPG ou WEBP, até 25 MB. A miniatura da galeria é feita aqui mesmo, na hora.";
+  $("#ajuda-escala").hidden = !mapa?.escala;
 
   form.nome.value = mapa?.nome ?? "";
   form.descricao.value = mapa?.descricao ?? "";
@@ -3155,6 +4008,7 @@ async function iniciar() {
   medirAlturas();
   configurarEventos();
   configurarEdicao();
+  configurarMedicao(); // antes dos lugares: o Esc sai primeiro do modo de medir ou de marcar a escala
   configurarLugares();
   configurarEdicaoDosLugares();
   configurarPagina();

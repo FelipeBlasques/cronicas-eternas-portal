@@ -45,6 +45,8 @@
       <symbol id="icone-marcar" viewBox="0 0 24 24"><path d="M12 21.5s-6.5-6.2-6.5-11.5a6.5 6.5 0 0 1 13 0c0 5.3-6.5 11.5-6.5 11.5Z"/><path d="M12 7v6M9 10h6"/></symbol>
       <symbol id="icone-importar" viewBox="0 0 24 24"><path d="M12 3v11M7.5 9.5 12 14l4.5-4.5M4 15.5v4.5h16v-4.5"/></symbol>
       <symbol id="icone-livro" viewBox="0 0 24 24"><path d="M12 6.5C10 5 7 4.5 3 4.8v13.4c4-.3 7 .2 9 1.7c2-1.5 5-2 9-1.7V4.8c-4-.3-7 .2-9 1.7ZM12 6.5v13.4"/></symbol>
+      <symbol id="icone-regua" viewBox="0 0 24 24"><path d="M2.5 8.5h19v7h-19ZM6.5 8.5v3M10.5 8.5v2M14.5 8.5v3M18.5 8.5v2"/></symbol>
+      <symbol id="icone-compasso" viewBox="0 0 24 24"><circle cx="12" cy="4.6" r="1.8"/><path d="M12 2.8V1.5M11.1 6.2 5.5 21.5M12.9 6.2l5.6 15.3M7.6 15.8c2.8 1.4 6 1.4 8.8 0"/></symbol>
       <symbol id="icone-ver" viewBox="0 0 24 24"><path d="M2.5 12C5.5 7.4 8.6 5.6 12 5.6S18.5 7.4 21.5 12C18.5 16.6 15.4 18.4 12 18.4S5.5 16.6 2.5 12Z"/><circle cx="12" cy="12" r="3.2"/></symbol>
 
       <!-- A barra de botões do editor das marcas, na página do lugar -->
@@ -166,6 +168,59 @@
 
             <!-- O lugar escolhido, no mapa ou na lista -->
             <article id="detalhe-lugar" class="detalhe-lugar" hidden></article>
+
+            <!-- Medir distância: o caminho, os trechos e a viagem -->
+            <section id="medicao" class="medicao" hidden aria-labelledby="medicao-titulo">
+              <header class="medicao__cabeca">
+                <h2 id="medicao-titulo" class="medicao__titulo">Medir distância</h2>
+                <button id="medicao-fechar" class="botao botao--leve" type="button">Fechar</button>
+              </header>
+              <p id="medicao-explicacao" class="medicao__explicacao">Clique no mapa para marcar o caminho. Clique num lugar para começar ou passar por ele.</p>
+
+              <div id="medicao-resultado" class="medicao__resultado" hidden>
+                <p class="medicao__total"><strong id="medicao-total"></strong> <small id="medicao-outra"></small></p>
+                <ol id="medicao-trechos" class="medicao__trechos"></ol>
+
+                <section class="viagem" aria-labelledby="viagem-titulo">
+                  <h3 id="viagem-titulo" class="viagem__titulo">A viagem no Pathfinder 2e</h3>
+                  <div class="viagem__campos">
+                    <label class="campo">
+                      <span class="campo__rotulo">Deslocamento</span>
+                      <span class="viagem__deslocamento">
+                        <select id="viagem-deslocamento"></select>
+                        <small id="viagem-velocidade" class="viagem__velocidade"></small>
+                      </span>
+                    </label>
+                    <label class="viagem__marcar">
+                      <input id="viagem-metade" type="checkbox">
+                      <span>Metade da velocidade (atividade de exploração)</span>
+                    </label>
+                    <label class="campo">
+                      <span class="campo__rotulo">Horas de viagem por dia</span>
+                      <input id="viagem-horas" type="number" min="1" max="24" step="1" inputmode="numeric">
+                    </label>
+                  </div>
+                  <p class="viagem__tempo"><strong id="viagem-tempo"></strong> de viagem</p>
+                  <p id="viagem-conta" class="viagem__conta"></p>
+                  <details class="viagem__tabela">
+                    <summary>Tabela de viagem</summary>
+                    <table>
+                      <thead>
+                        <tr><th scope="col">Deslocamento</th><th scope="col">Milhas por hora</th><th scope="col">Milhas por dia</th><th scope="col">Este caminho</th></tr>
+                      </thead>
+                      <tbody id="viagem-linhas"></tbody>
+                    </table>
+                  </details>
+                  <p class="viagem__fonte">Tabela de viagem do Pathfinder 2e (Player Core, p. 438). Terreno difícil: metade da velocidade; difícil maior: um terço.</p>
+                </section>
+              </div>
+
+              <div class="medicao__acoes">
+                <button id="medicao-desfazer" class="botao botao--leve" type="button">Desfazer</button>
+                <button id="medicao-limpar" class="botao botao--leve" type="button">Limpar</button>
+                <button id="medicao-copiar" class="botao botao--leve" type="button">Copiar</button>
+              </div>
+            </section>
           </div>
         </aside>
       </div>
@@ -183,6 +238,10 @@
         <button id="visor-destacar" class="botao visor__ferramenta visor__ferramenta--separada" type="button" title="Destacar lugares" aria-label="Destacar lugares" aria-pressed="false">
           <svg aria-hidden="true"><use href="#icone-destacar"/></svg>
         </button>
+        <!-- Com a escala do mapa; sem ela, fica apagado -->
+        <button id="visor-medir" class="botao visor__ferramenta" type="button" title="Medir distância" aria-label="Medir distância" aria-pressed="false">
+          <svg aria-hidden="true"><use href="#icone-compasso"/></svg>
+        </button>
         <!-- Só para o administrador e os editores; importar, só o administrador -->
         <button id="visor-editar" class="botao visor__ferramenta visor__ferramenta--separada" type="button" title="Editar lugares" aria-label="Editar lugares" aria-pressed="false" hidden>
           <svg aria-hidden="true"><use href="#icone-marcar"/></svg>
@@ -190,8 +249,17 @@
         <button id="visor-importar" class="botao visor__ferramenta" type="button" title="Importar lugares" aria-label="Importar lugares" hidden>
           <svg aria-hidden="true"><use href="#icone-importar"/></svg>
         </button>
+        <button id="visor-escala" class="botao visor__ferramenta" type="button" title="Escala do mapa" aria-label="Escala do mapa" aria-pressed="false" hidden>
+          <svg aria-hidden="true"><use href="#icone-regua"/></svg>
+        </button>
         <input id="arquivo-lugares" type="file" accept=".json,application/json" hidden>
       </div>
+
+      <!-- A régua, com a escala do mapa: clicar troca entre km e milhas -->
+      <button id="visor-regua" class="regua" type="button" hidden>
+        <span class="regua__barra" aria-hidden="true"><span></span><span></span></span>
+        <span id="regua-texto" class="regua__texto"></span>
+      </button>
 
       <p id="visor-ajuda" class="sr">Arraste para mover o mapa. A roda do mouse ou a pinça aproximam. No teclado: + e − para o zoom, as setas para mover e 0 para ver o mapa inteiro. Os lugares do mapa estão no painel; a tecla / leva à busca e Esc fecha o lugar aberto.</p>
     </div>
@@ -216,6 +284,7 @@
           </div>
           <input id="campo-imagem" name="imagem" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/avif">
           <span id="ajuda-imagem" class="campo__ajuda"></span>
+          <span id="ajuda-escala" class="campo__ajuda" hidden>Este mapa tem escala. Trocar a imagem a mantém; se o desenho novo tiver outro enquadramento, marque a escala de novo.</span>
         </div>
 
         <fieldset class="grupo">
@@ -307,6 +376,28 @@
         <button id="lugar-apagar" class="botao botao--leve botao--perigo dialogo__apagar" type="button" hidden>Apagar</button>
         <button id="lugar-cancelar" class="botao botao--leve" type="button">Cancelar</button>
         <button id="lugar-enviar" class="botao botao--principal" type="submit">Marcar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- ============ A escala do mapa (só o administrador) ============ -->
+  <dialog id="dialogo-escala" class="dialogo dialogo--escala" aria-labelledby="escala-titulo">
+    <form id="form-escala" class="dialogo__form" novalidate>
+      <h2 id="escala-titulo" class="dialogo__titulo">Escala do mapa</h2>
+      <div class="escala__linha">
+        <label for="escala-distancia">Essa linha mede</label>
+        <input id="escala-distancia" name="distancia" type="number" min="0.01" max="100000" step="0.01" inputmode="decimal" required>
+        <select id="escala-unidade" name="unidade" aria-label="Unidade">
+          <option value="km">km</option>
+          <option value="mi">milhas</option>
+        </select>
+      </div>
+      <p id="erro-escala" class="mensagem-erro" role="alert" hidden></p>
+      <div class="dialogo__acoes">
+        <button id="escala-tirar" class="botao botao--leve botao--perigo dialogo__apagar" type="button" hidden>Tirar a escala</button>
+        <button id="escala-de-novo" class="botao botao--leve" type="button">Marcar de novo</button>
+        <button id="escala-cancelar" class="botao botao--leve" type="button">Cancelar</button>
+        <button id="escala-salvar" class="botao botao--principal" type="submit">Salvar</button>
       </div>
     </form>
   </dialog>
