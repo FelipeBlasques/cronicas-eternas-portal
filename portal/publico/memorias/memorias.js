@@ -2,8 +2,10 @@
    Crônicas Eternas: Memórias de Draevor
    -----------------------------------------------------------------
    Os textos do cenário: cartas, contos, recortes, livros e outros
-   escritos que os personagens encontram. A lista mostra só o nome
-   de cada memória; clicar num nome troca a lista pela leitura, com
+   escritos que os personagens encontram. A entrada é uma biblioteca:
+   os livros numa estante e os outros escritos numa mesa, cada um
+   com a cara da classificação; clicar num deles troca a biblioteca
+   pela leitura, com
    endereço próprio (#memoria-<id>, e #memoria-<id>-capitulo-<n>
    nos capítulos de um livro). O texto pode mencionar acontecimentos
    da Linha do Tempo e personagens da galeria com links. Só o
@@ -188,6 +190,62 @@ function exemplosDaPrevia() {
         alterada: 9,
       }),
       memoria({
+        id: "mem-a1b2c3d4",
+        titulo: "Cantigas do caminho",
+        tipo: "livro",
+        data: { ano: 364, aprox: true },
+        capitulos: [
+          "A partida",
+          "O primeiro poço",
+          "A ponte velha",
+          "O vale de cinza",
+          "A estalagem do corvo",
+          "A chuva",
+          "O desvio",
+          "A torre ao longe",
+          "O rio sem nome",
+          "A vigília",
+          "O passo",
+          "A chegada",
+        ].map((titulo, i) => ({
+          titulo,
+          texto: `Dia ${i + 1} de estrada. Andamos até o sol baixar e paramos perto de ${titulo.toLowerCase()}.\n\nNinguém falou muito.`,
+        })),
+        revelacao: { todos: null, contas: { neia: diasAtras(2) } },
+        alterada: 2,
+      }),
+      memoria({
+        id: "mem-b2c3d4e5",
+        titulo: "Tratado completo sobre as luas, as marés e os sonhos dos homens que vivem perto do mar",
+        tipo: "livro",
+        capitulos: [
+          { titulo: "Das luas", texto: "São duas as luas de Draevor, e nenhuma delas é gentil." },
+          { titulo: "Das marés", texto: "As marés obedecem às duas, e por isso nunca descansam." },
+        ],
+        revelacao: paraTodos(25),
+        alterada: 26,
+      }),
+      memoria({
+        id: "mem-c3d4e5f6",
+        titulo: "Bilhete sob a porta",
+        tipo: "carta",
+        data: { ano: 365, mes: 6, dia: 2, aprox: false },
+        detalhe: "M.",
+        texto: "Não confie no barqueiro. Ele cobra a travessia duas vezes: uma em prata, outra em segredos.\n\nQueime este bilhete.",
+        revelacao: paraTodos(15),
+        alterada: 16,
+      }),
+      memoria({
+        id: "mem-d4e5f607",
+        titulo: "Diário de viagem, quarta semana",
+        tipo: "diario",
+        data: { ano: 362, mes: 7, dia: 16, aprox: false },
+        texto:
+          "O sol voltou. Secamos as botas numa pedra quente e o guia, pela primeira vez, sorriu.\n\nDo alto do passo dá para ver a torre. Ninguém quis comentar.",
+        revelacao: paraTodos(10),
+        alterada: 11,
+      }),
+      memoria({
         id: "mem-60718293",
         titulo: "Canção de ninar da torre",
         tipo: "poema",
@@ -304,6 +362,20 @@ function criarApiDePrevia() {
     aprox: Boolean(data.aprox),
   });
 
+  // O começo do texto para a lista: sem as marcas e sem os códigos dos links, as linhas juntas
+  // (no Poema, com " / ") e cortado no fim de uma palavra
+  function inicioDoTexto(textoDaMemoria, versos) {
+    const linhas = textoDaMemoria
+      .replace(REGEX_LINK, (_, alvo, id, aparece) => aparece)
+      .split("\n")
+      .map((linha) => linha.replace(/^\s*(?:-|\d+\.)\s+/, "").replace(/\*\*|\*/g, "").trim())
+      .filter(Boolean);
+    const junto = linhas.join(versos ? " / " : " ").replace(/\s+/g, " ").trim();
+    if (junto.length <= LIMITES.inicio) return junto;
+    const corte = junto.lastIndexOf(" ", LIMITES.inicio);
+    return `${junto.slice(0, corte > 0 ? corte : LIMITES.inicio).replace(/[\s/]+$/, "")}…`;
+  }
+
   function memoriaPublica(m) {
     const publica = {
       id: m.id,
@@ -321,7 +393,7 @@ function criarApiDePrevia() {
 
   // As mesmas conferências e mensagens do servidor/memorias.js
   const ANO_ATUAL = 366; // o ano atual da prévia da Linha do Tempo
-  const LIMITES = { memorias: 500, capitulos: 80, texto: 100000, livro: 1000000, link: 120 };
+  const LIMITES = { memorias: 500, capitulos: 80, texto: 100000, livro: 1000000, link: 120, inicio: 160 };
 
   function exigirAdmin() {
     if (!contaEhAdmin()) throw erroComCodigo("Só o administrador pode fazer isso.", "proibido");
@@ -441,8 +513,17 @@ function criarApiDePrevia() {
       const memorias = banco.memorias
         .filter(podeLer)
         .map((m) => {
-          const item = { id: m.id, titulo: m.titulo, reveladaEm: reveladaEm(m) };
-          if (contaEhAdmin()) Object.assign(item, { tipo: m.tipo, alteradoEm: m.alteradoEm, revelacao: revelacaoPublica(m) });
+          const item = {
+            id: m.id,
+            titulo: m.titulo,
+            tipo: m.tipo,
+            data: m.data ? dataPublica(m.data) : null,
+            detalhe: tipoDeMemoria(m.tipo)?.detalhe ? m.detalhe || "" : "",
+          };
+          if (m.tipo === "livro") item.capitulos = m.capitulos.length;
+          else item.inicio = inicioDoTexto(m.texto, m.tipo === "poema");
+          item.reveladaEm = reveladaEm(m);
+          if (contaEhAdmin()) Object.assign(item, { alteradoEm: m.alteradoEm, revelacao: revelacaoPublica(m) });
           return item;
         })
         .sort(ordemDaLista);
@@ -526,6 +607,8 @@ const estado = {
   memorias: [],
   contas: [], // só para o administrador: as contas que podem receber uma memória
   citaveis: { acontecimentos: [], personagens: [] }, // só para o administrador: o que o "Citar" oferece
+  busca: "", // o "Procurar pelo título" da biblioteca
+  filtro: "todos", // a classificação escolhida na mesa dos Escritos (não fica guardada)
 };
 
 const ehAdmin = () => estado.conta?.cargo === "admin";
@@ -678,19 +761,23 @@ function mostrarLista() {
   $("#vista-lista").hidden = false;
   document.title = TITULO_DA_PAGINA;
   window.scrollTo(0, navegacao.rolagemDaLista);
-  // O foco volta ao nome da memória que estava aberta
+  // O foco volta ao livro ou ao papel da memória que estava aberta
   if (focoNaLeitura) {
-    const link = [...document.querySelectorAll(".memoria-item__link")].find((l) => l.dataset.id === aberta.id);
+    const link = [...document.querySelectorAll(".lombada, .papel-link")].find((l) => l.dataset.id === aberta.id);
     link?.focus({ preventScroll: true });
   }
 }
 
 /* =================================================================
-   A lista
+   A biblioteca: a estante dos Livros e a mesa dos Escritos
+   -----------------------------------------------------------------
+   Os livros são lombadas em pé numa prateleira; os outros escritos,
+   papéis em miniatura com a cara da classificação. O "Procurar pelo
+   título" filtra as duas partes; as classificações filtram a mesa.
    ================================================================= */
 
 // Para o administrador: "Escondida" (com o olho riscado) ou "Só para Neia e Takezo".
-// As reveladas para todos não levam nada na lista; na leitura, "Revelada para todos".
+// As reveladas para todos não levam nada na biblioteca; na leitura, "Revelada para todos".
 function sinalDaRevelacao(revelacao, { todos = false } = {}) {
   if (revelacao.para === "ninguem") {
     const selo = criar("span", "selo-oculto");
@@ -701,25 +788,251 @@ function sinalDaRevelacao(revelacao, { todos = false } = {}) {
   return todos ? criar("span", "memoria-estado", "Revelada para todos") : null;
 }
 
-function itemDaLista(m) {
-  const link = linkDaLeitura({ id: m.id, capitulo: null }, "memoria-item__link");
-  link.dataset.id = m.id;
-  link.append(criar("span", "memoria-item__titulo", m.titulo));
-  const sinal = ehAdmin() && m.revelacao ? sinalDaRevelacao(m.revelacao) : null;
-  if (sinal) link.append(sinal);
-  const item = criar("li", "memoria-item");
-  item.append(link);
-  return item;
+// O estado, em texto: "Escondida" ou "Só para Neia e Takezo" (as reveladas para todos, nada)
+function estadoEmTexto(revelacao) {
+  if (!revelacao || revelacao.para === "todos") return "";
+  return revelacao.para === "ninguem" ? "Escondida" : `Só para ${listaDeNomes(revelacao.contas)}`;
 }
+
+// Um número tirado do id, sempre o mesmo para a mesma memória: dele saem o tamanho e a cor
+// do livro, a inclinação do papel e o número da página do Trecho de livro
+function numeroDoId(id) {
+  let soma = 7;
+  for (const letra of id) soma = (soma * 31 + letra.charCodeAt(0)) % 9973;
+  return soma;
+}
+
+const SETE_DIAS = 7 * 86400000;
+
+// Revelada para a conta nos últimos 7 dias (o administrador não vê a marca)
+const reveladaHaPouco = (m) => !ehAdmin() && Boolean(m.reveladaEm) && Date.now() - Date.parse(m.reveladaEm) < SETE_DIAS;
+
+const quantosCapitulos = (n) => `${n} ${n === 1 ? "capítulo" : "capítulos"}`;
+
+// O nome do link: "Livro: <título>, 12 capítulos" ou "Carta: <título>", e o estado para o administrador
+function nomeDoLink(m) {
+  const partes = [`${tipoDeMemoria(m.tipo)?.nome ?? "Memória"}: ${m.titulo}`];
+  if (m.tipo === "livro") partes.push(quantosCapitulos(m.capitulos));
+  const estadoDela = ehAdmin() ? estadoEmTexto(m.revelacao) : "";
+  if (estadoDela) partes.push(estadoDela.charAt(0).toLowerCase() + estadoDela.slice(1));
+  return partes.join(", ");
+}
+
+// O link de um livro ou de um papel: abre a leitura e guarda o id para o foco voltar a ele
+function linkDaBiblioteca(m, classe) {
+  const link = linkDaLeitura({ id: m.id, capitulo: null }, classe);
+  link.dataset.id = m.id;
+  link.setAttribute("aria-label", nomeDoLink(m));
+  return link;
+}
+
+/* ---------- A estante: os Livros ---------- */
+
+const CORES_DO_COURO = ["vinho", "musgo", "noite", "castanho", "fuligem", "ocre"];
+const MAXIMO_DE_CAPITULOS_NA_LARGURA = 40;
+
+// A etiqueta fica centralizada no livro, mas sem passar das bordas da estante
+function ajustarEtiqueta(livro) {
+  const etiqueta = livro.querySelector(".lombada__etiqueta");
+  const estante = livro.closest(".estante");
+  if (!etiqueta || !estante) return;
+  etiqueta.style.setProperty("--desvio", "0px");
+  const caixa = etiqueta.getBoundingClientRect();
+  const limite = estante.getBoundingClientRect();
+  let desvio = 0;
+  if (caixa.left < limite.left) desvio = limite.left - caixa.left;
+  else if (caixa.right > limite.right) desvio = limite.right - caixa.right;
+  etiqueta.style.setProperty("--desvio", `${Math.round(desvio)}px`);
+}
+
+function lombada(m) {
+  const numero = numeroDoId(m.id);
+  const link = linkDaBiblioteca(m, `lombada lombada--${CORES_DO_COURO[Math.floor(numero / 31) % CORES_DO_COURO.length]}`);
+  link.style.setProperty("--capitulos", String(Math.min(m.capitulos, MAXIMO_DE_CAPITULOS_NA_LARGURA)));
+  link.style.setProperty("--altura", `${14 + (numero % 31) / 10}rem`);
+
+  link.append(criar("span", "lombada__titulo", m.titulo), enfeite("lombada__ponteiras"));
+  if (reveladaHaPouco(m)) link.append(enfeite("lombada__fita"));
+  if (ehAdmin() && m.revelacao?.para === "ninguem") {
+    const veu = enfeite("lombada__veu");
+    veu.append(simbolo("icone-oculto"));
+    link.append(veu);
+  }
+
+  // A etiqueta de pergaminho que aparece acima do livro: só visual, o nome do link já diz tudo
+  const etiqueta = enfeite("lombada__etiqueta");
+  etiqueta.append(criar("span", "lombada__etiqueta-titulo", m.titulo));
+  const linha = [quantosCapitulos(m.capitulos), m.data ? textoDaData(m.data) : ""].filter(Boolean).join(" · ");
+  etiqueta.append(criar("span", "lombada__etiqueta-linha", linha));
+  const estadoDele = ehAdmin() ? estadoEmTexto(m.revelacao) : "";
+  if (estadoDele) etiqueta.append(criar("span", "lombada__etiqueta-estado", estadoDele));
+  link.append(etiqueta);
+  link.addEventListener("mouseenter", () => ajustarEtiqueta(link));
+  link.addEventListener("focus", () => ajustarEtiqueta(link));
+
+  const vaga = criar("li", "estante__vaga");
+  vaga.append(link);
+  return vaga;
+}
+
+/* ---------- A mesa: os Escritos ---------- */
+
+const PLURAIS = {
+  carta: "Cartas",
+  conto: "Contos",
+  diario: "Diários",
+  recorte: "Recortes",
+  trecho: "Trechos de livro",
+  poema: "Poemas e canções",
+  documento: "Documentos",
+  inscricao: "Inscrições",
+};
+
+// O começo do texto. No Poema, cada " / " volta a ser uma quebra de linha.
+function inicioNoPapel(m) {
+  const inicio = criar("p", "papel__inicio");
+  if (m.tipo !== "poema") {
+    inicio.textContent = m.inicio || "";
+    return inicio;
+  }
+  (m.inicio || "").split(" / ").forEach((verso, i) => {
+    if (i) inicio.append(document.createElement("br"));
+    inicio.append(verso);
+  });
+  return inicio;
+}
+
+// O que vai no papel de cada classificação, em miniatura da cara da leitura
+function pecasDoPapel(m) {
+  const se = (valor, classe) => (valor ? [criar("p", classe, valor)] : []);
+  const tipo = enfeite("papel__tipo", tipoDeMemoria(m.tipo)?.nome ?? "");
+  const titulo = criar("p", "papel__titulo", m.titulo);
+  const inicio = inicioNoPapel(m);
+  const data = se(m.data ? textoDaData(m.data) : "", "papel__data");
+  const detalhe = m.detalhe || "";
+
+  switch (m.tipo) {
+    case "carta":
+      return [tipo, ...data, titulo, inicio, ...se(detalhe, "papel__assinatura"), enfeite("lacre papel__lacre")];
+    case "conto":
+      return [tipo, titulo, inicio, ...data, enfeite("papel__ornamento")];
+    case "diario":
+      return [tipo, ...data, titulo, inicio];
+    case "recorte":
+      return [tipo, ...se(detalhe, "papel__jornal"), titulo, inicio, ...data];
+    case "trecho":
+      return [tipo, ...se(detalhe, "papel__cabeca"), titulo, inicio, ...data, enfeite("papel__pagina", String(numeroDaPagina(m.id)))];
+    case "documento":
+      return [tipo, titulo, ...data, inicio, ...se(detalhe, "papel__emissor"), enfeite("lacre lacre--selo papel__selo")];
+    default:
+      return [tipo, titulo, inicio, ...data];
+  }
+}
+
+function papel(m) {
+  const link = linkDaBiblioteca(m, "papel-link");
+  link.style.setProperty("--inclinacao", `${((numeroDoId(m.id) % 41) - 20) / 10}deg`);
+  const folha = criar("div", `papel papel--${m.tipo}`);
+  folha.append(...pecasDoPapel(m));
+
+  if (ehAdmin() && m.revelacao) {
+    if (m.revelacao.para === "ninguem") folha.append(enfeite("papel__veu"));
+    const sinal = sinalDaRevelacao(m.revelacao);
+    if (sinal) {
+      sinal.classList.add("papel__estado");
+      folha.classList.add("papel--com-estado");
+      folha.append(sinal);
+    }
+  }
+  if (reveladaHaPouco(m)) folha.append(enfeite("papel__nova", "Nova"));
+  link.append(folha);
+  // Na Inscrição, o "Onde está gravada" fica abaixo da pedra
+  if (m.tipo === "inscricao" && m.detalhe) link.append(enfeite("papel__lugar", m.detalhe));
+
+  const vaga = criar("li", "mesa__vaga");
+  vaga.append(link);
+  return vaga;
+}
+
+// "Todos" e cada classificação que existe na lista, com o número; a escolha não fica guardada
+function renderizarFiltros(escritos) {
+  const contagem = new Map();
+  for (const m of escritos) contagem.set(m.tipo, (contagem.get(m.tipo) ?? 0) + 1);
+  if (estado.filtro !== "todos" && !contagem.has(estado.filtro)) estado.filtro = "todos";
+  const opcoes = [{ id: "todos", nome: "Todos", n: escritos.length }];
+  for (const t of TIPOS_DE_MEMORIA) {
+    if (contagem.has(t.id)) {
+      const n = contagem.get(t.id);
+      opcoes.push({ id: t.id, nome: n === 1 ? t.nome : PLURAIS[t.id] ?? t.nome, n });
+    }
+  }
+  $("#filtros-escritos").replaceChildren(
+    ...opcoes.map((opcao) => {
+      const filtro = criar("button", "filtro-escritos");
+      filtro.type = "button";
+      filtro.dataset.tipo = opcao.id;
+      filtro.setAttribute("aria-pressed", String(estado.filtro === opcao.id));
+      filtro.append(opcao.nome, " ", criar("span", "filtro-escritos__numero", String(opcao.n)));
+      return filtro;
+    }),
+  );
+}
+
+/* ---------- A biblioteca inteira ---------- */
 
 function renderizarLista() {
   $("#botao-nova").hidden = !ehAdmin();
-  const lista = $("#lista-memorias");
+  const todas = estado.memorias;
   const vazio = $("#memorias-vazio");
-  lista.replaceChildren(...estado.memorias.map(itemDaLista));
-  lista.hidden = !estado.memorias.length;
-  vazio.hidden = estado.memorias.length > 0;
+  vazio.hidden = todas.length > 0;
   vazio.textContent = ehAdmin() ? "Nenhuma memória escrita ainda." : "Nenhuma memória foi revelada ainda.";
+  $("#biblioteca").hidden = !todas.length;
+  if (!todas.length) return;
+
+  carregarFontes(todas.flatMap((m) => tipoDeMemoria(m.tipo)?.fontes ?? []));
+
+  const busca = normalizar(estado.busca.trim());
+  const achada = (m) => !busca || normalizar(m.titulo).includes(busca);
+  const livros = todas.filter((m) => m.tipo === "livro");
+  const escritos = todas.filter((m) => m.tipo !== "livro");
+
+  // A estante: sem livros na lista (ou na busca), a seção não aparece
+  const livrosAchados = livros.filter(achada);
+  $("#secao-livros").hidden = !livrosAchados.length;
+  $("#numero-livros").textContent = String(livrosAchados.length);
+  $("#estante").replaceChildren(...livrosAchados.map(lombada));
+
+  // A mesa
+  const escritosAchados = escritos.filter(achada);
+  const semEscritos = !escritos.length;
+  // Sem escritos na lista, a seção fica com o aviso (menos durante a busca); na busca sem nada, some
+  $("#secao-escritos").hidden = semEscritos ? Boolean(busca) : !escritosAchados.length;
+  renderizarFiltros(escritos);
+  $("#filtros-escritos").hidden = semEscritos;
+  const filtrados = escritosAchados.filter((m) => estado.filtro === "todos" || m.tipo === estado.filtro);
+  $("#numero-escritos").textContent = String(semEscritos ? 0 : filtrados.length);
+  $("#mesa").replaceChildren(...filtrados.map(papel));
+  $("#mesa").hidden = !filtrados.length;
+  const escritosVazio = $("#escritos-vazio");
+  escritosVazio.hidden = filtrados.length > 0;
+  if (semEscritos) escritosVazio.textContent = ehAdmin() ? "Nenhum escrito ainda." : "Nenhum escrito revelado ainda.";
+  else escritosVazio.textContent = "Nenhuma memória com esse nome."; // a classificação escolhida, sem nada na busca
+
+  $("#busca-vazia").hidden = Boolean(livrosAchados.length || escritosAchados.length);
+}
+
+function configurarBiblioteca() {
+  $("#busca-memorias").addEventListener("input", (evento) => {
+    estado.busca = evento.target.value;
+    renderizarLista();
+  });
+  $("#filtros-escritos").addEventListener("click", (evento) => {
+    const filtro = evento.target.closest(".filtro-escritos");
+    if (!filtro || filtro.dataset.tipo === estado.filtro) return;
+    estado.filtro = filtro.dataset.tipo;
+    renderizarLista();
+    $(`.filtro-escritos[data-tipo="${estado.filtro}"]`)?.focus();
+  });
 }
 
 /* =================================================================
@@ -872,9 +1185,7 @@ function enfeite(classe, texto) {
 // O número de página de mentira do Trecho de livro, tirado do id: sempre o mesmo para a
 // mesma memória, entre 12 e 399
 function numeroDaPagina(id) {
-  let soma = 7;
-  for (const letra of id) soma = (soma * 31 + letra.charCodeAt(0)) % 9973;
-  return 12 + (soma % 388);
+  return 12 + (numeroDoId(id) % 388);
 }
 
 // A folha de cada classificação (o Livro tem as dele, logo abaixo). Devolve o que vem depois
@@ -1947,6 +2258,7 @@ function configurarSimulacao() {
 async function iniciar() {
   medirAlturas();
   configurarEventos();
+  configurarBiblioteca();
   configurarEdicao();
   configurarCitar();
   configurarRevelacao();
@@ -1958,7 +2270,7 @@ async function iniciar() {
   } catch (falha) {
     if (falha.codigo === "sem-sessao") return irParaEntrada({ voltar: true });
     $("#pagina").hidden = false;
-    $("#lista-memorias").hidden = true;
+    $("#biblioteca").hidden = true;
     const vazio = $("#memorias-vazio");
     vazio.textContent = falha.message;
     vazio.hidden = false;

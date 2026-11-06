@@ -66,7 +66,26 @@
         <span class="cabeca-memorias__regua" aria-hidden="true"></span>
       </div>
 
-      <ul id="lista-memorias" class="lista-memorias" aria-label="Memórias"></ul>
+      <!-- A biblioteca: a estante dos Livros e a mesa dos Escritos -->
+      <div id="biblioteca" class="biblioteca" hidden>
+        <label class="campo busca-memorias">
+          <span class="campo__rotulo">Procurar pelo título</span>
+          <input id="busca-memorias" type="search" autocomplete="off" spellcheck="false">
+        </label>
+        <p id="busca-vazia" class="memorias-vazio" role="status" hidden>Nenhuma memória com esse nome.</p>
+
+        <section id="secao-livros" class="secao-biblioteca" aria-labelledby="titulo-livros">
+          <h2 id="titulo-livros" class="secao-biblioteca__titulo">Livros <span id="numero-livros" class="secao-biblioteca__numero"></span></h2>
+          <ul id="estante" class="estante" aria-label="Livros"></ul>
+        </section>
+
+        <section id="secao-escritos" class="secao-biblioteca" aria-labelledby="titulo-escritos">
+          <h2 id="titulo-escritos" class="secao-biblioteca__titulo">Escritos <span id="numero-escritos" class="secao-biblioteca__numero"></span></h2>
+          <div id="filtros-escritos" class="filtros-escritos" role="group" aria-label="Classificações"></div>
+          <ul id="mesa" class="mesa" aria-label="Escritos"></ul>
+          <p id="escritos-vazio" class="memorias-vazio" hidden></p>
+        </section>
+      </div>
       <p id="memorias-vazio" class="memorias-vazio" hidden></p>
     </section>
 
