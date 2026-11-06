@@ -414,6 +414,27 @@ body.chat--sem-conexao .lado__topo::after {
   font-size: 0.7rem;
 }
 
+/* O círculo da imagem: acende em quem fala, na sala em que você está (voz.js) */
+.item-canal__voz {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  transition: box-shadow 0.12s;
+}
+
+.item-canal__falando .item-canal__voz {
+  box-shadow: 0 0 0 2px var(--brasa), 0 0 9px 2px var(--brasa-brilho);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .item-canal__voz {
+    transition: none;
+  }
+}
+
 /* O número de menções */
 .contador-chat {
   flex: none;
@@ -1731,11 +1752,13 @@ button.seletor-persona:focus-visible {
 }
 
 .quadro__midia {
+  position: relative;
   display: grid;
   flex: 1;
   place-items: center;
   min-width: 0;
   min-height: 0;
+  container-type: size;
 }
 
 .quadro__video,
@@ -1755,16 +1778,58 @@ button.seletor-persona:focus-visible {
   transform: scaleX(-1);
 }
 
+/* Sem câmera: a imagem do tamanho que o quadro deixa (as medidas acompanham o .quadro__midia) */
 .quadro__retrato {
-  width: min(96px, 45%);
-  height: auto;
-  aspect-ratio: 1;
-  font-size: 2.4rem;
+  position: relative;
 }
 
-.sala__chamada--destaque .sala__grade .quadro__retrato {
-  width: 52px;
-  font-size: 1.4rem;
+/* Personagem e outro personagem: o retrato em 2:3, como na galeria */
+.quadro__retrato--corpo {
+  width: auto;
+  height: min(calc(100cqh - 1rem), calc((100cqw - 1rem) * 1.5));
+  aspect-ratio: 2 / 3;
+  object-fit: cover;
+  object-position: center top;
+  border: 1px solid var(--ferro);
+  border-radius: var(--raio);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.55);
+}
+
+/* Conta com foto: um círculo grande */
+.quadro__retrato--foto {
+  width: min(62cqmin, 260px);
+  height: min(62cqmin, 260px);
+  aspect-ratio: 1;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.55);
+}
+
+/* O Mestre: o logo da mesa inteiro */
+.quadro__retrato.retrato--logo {
+  width: auto;
+  height: auto;
+  max-width: 70cqw;
+  max-height: 55cqh;
+  object-fit: contain;
+}
+
+/* Sem imagem: o selo com a inicial, num círculo grande */
+.quadro__retrato.retrato--selo {
+  --lado-do-selo: min(50cqmin, 200px);
+  width: var(--lado-do-selo);
+  height: var(--lado-do-selo);
+  font-size: calc(var(--lado-do-selo) * 0.42);
+}
+
+/* Atrás do retrato e da foto: a mesma imagem cobrindo o quadro, desfocada e escura */
+.quadro__fundo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: blur(20px) brightness(0.4) saturate(1.1);
+  transform: scale(1.2);
+  pointer-events: none;
 }
 
 .quadro__rotulo {
