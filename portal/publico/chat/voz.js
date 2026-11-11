@@ -45,7 +45,8 @@
    personaDaPresencaNaSala() (o card de quem está na sala), abrirMenu()
    (o menu da qualidade da tela) e
    prepararSom() / contextoDoSom (os sons); e o comum.js: pedir(), criar(),
-   simbolo(), perguntar(), avisarFalha(), avisoRapido().
+   simbolo(), perguntar(), avisarFalha(), avisoRapido() e o ganchosDoUso
+   (o emChamada, para o tempo no portal).
    ================================================================= */
 
 const CONFIG_DA_VOZ = {
@@ -2118,6 +2119,9 @@ ganchosDaVoz.mover = ({ canal }) => {
 };
 
 ganchosDaVoz.salaConectada = salaConectada;
+
+// O tempo no portal (comum.js): numa chamada, a página pulsa mesmo escondida e sem mexer
+ganchosDoUso.emChamada = emChamada;
 ganchosDaVoz.abrirConfiguracoes = abrirConfiguracoesDeVoz;
 ganchosDaVoz.depoisDaLista = marcarQuemFalaNaLista;
 ganchosDaVoz.encerrar = () => {

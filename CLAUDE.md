@@ -8,6 +8,7 @@ Portal do grupo de RPG em https://cronicaseternas.com. Cada jogador tem conta, v
 - O portal é a pasta `portal/` deste repositório, instalada em `/opt/portal`. É Node 24 **sem dependências**. Roda como `portal.service` na porta 3000, atrás do nginx.
 - Os dados ficam fora do código, em `/var/lib/portal`: `dados.json`, `segredo` e `uploads/`. Eles nunca entram no repositório.
 - Os cadernos ficam em `/var/lib/portal/cadernos/` (`<usuario>/caderno.json` e `<usuario>/imagens/`), fora do `dados.json`.
+- O tempo no portal de cada conta (o painel do Mural) fica em `/var/lib/portal/uso.json`, fora do `dados.json`.
 - As imagens fixas das campanhas (`publico/imagens/`) não estão no repositório. Se existirem no servidor, a atualização não as apaga.
 - O **chat** abre em chat.cronicaseternas.com, servido pelo mesmo portal (porta 3000), num bloco próprio do nginx. As mensagens ficam em `/var/lib/portal/chat/` (`canais/`, `privadas/`, `estado.json`, `reacoes.json`, `fixadas.json` e `imagens/`), fora do `dados.json`; só a estrutura (categorias e canais) e os perfis do chat (`dados.chat.perfis`, com a foto e a faixa em `uploads/`) ficam em `dados.chat`.
 - Os **emojis** do chat usam a fonte Noto Color Emoji, do Google Fonts (como as outras fontes), só no chat. Sem acesso ao Google Fonts, aparecem os do sistema.
@@ -102,6 +103,10 @@ portal/
                     sem as notas) e para o Mural notasDoMural, notasParaPregar e LIMITE_NO_MURAL
     mural.js        /api/mural (o mural como a conta o lê, com os perfis de quem pregou) e /api/mural/minhas
                     (as notas da conta para pregar). Sem dados próprios: pregar e tirar são rotas do caderno.js
+    uso.js          /api/uso (o tempo no portal de cada conta, para o painel do Mural) e POST /api/uso/pulso (o pulso
+                    das páginas: até 90 s depois do anterior soma o tempo desde ele, senão 30 s; duas janelas não
+                    contam em dobro). Em uso.json, fora do dados.json, com o total e os dias de Brasília; o último
+                    pulso só na memória; grava a cada minuto, se mudou; os ganchos de conta renomeiam e apagam
   publico/
     comum.js        lista PAGINAS (com o Mural depois do Caderno) e barra lateral, pedir(), $, criar(), botao(), imagem(),
                     simbolo(), perguntar(), avisoRapido(), avisarFalha(), fecharAoClicarFora(),
@@ -109,7 +114,9 @@ portal/
                     corVisivel(), FONTES e aplicarFonte(), montarCardComMoldura(),
                     iniciarCinzas(), irParaEntrada(), marcarNaBarra(); o botão Chat do topo
                     (montarBotaoDoChat(), à esquerda do #nome-conta, com a marca de não lidas do
-                    /api/barra em marcarChat())
+                    /api/barra em marcarChat()); o pulso do tempo no portal (POST /api/uso/pulso a cada 30 s,
+                    com a página à vista e em uso ou numa chamada; só nas páginas com a barra lateral e no chat,
+                    fora da prévia) e o ganchosDoUso (emChamada, que o voz.js troca)
     calendario.js   o Ciclo de Sylara: MESES, textoDaData(), textoDoPeriodo(), faseDaLua(), somarDias(),
                     idadeEntre() e textoDaIdade() (a idade dos Personagens, contada do Nascimento)...
     marcas.js       as marcas do texto das notas do Caderno (tipo Markdown, com os links, as embutidas e as
@@ -136,7 +143,8 @@ portal/
                                  #grafo e #grafo-<id>: o canvas, a simulação por forças e o painel; usa o estado,
                                  a api, o abrirNota e o buscarEtiqueta do caderno.js e preenche os ganchosDoGrafo)
     mural/                       index.html, mural.js, mural.css: o Mural (o quadro de avisos com os papéis, a leitura
-                                 em #nota-<id> e o "Pregar uma nota"); carrega também ../marcas.js e ../marcas.css
+                                 em #nota-<id>, o "Pregar uma nota" e o painel "Tempo no portal", do GET /api/uso);
+                                 carrega também ../marcas.js e ../marcas.css
     ler/                         index.html, ler.js, ler.css: a leitura pública de uma nota do Caderno (/ler/#<token>),
                                  sem login e sem a barra lateral; carrega também ../marcas.js e ../marcas.css
     chat/                        index.html, chat.js (texto: lista, mensagens, privadas, eventos, administração,
@@ -144,7 +152,8 @@ portal/
                                  app (cronicasEternasApp.avisar), o som e a prévia), chat.css: a página do chat, com
                                  login próprio, sem a barra lateral e sem as cinzas; voz.js (voz e vídeo: o painel, a sala, as configurações de aparelhos, o volume
                                  por pessoa (voz e tela), o "mover" do administrador, os sons da chamada (com os de mudo e fala), o atalho
-                                 do microfone (com o do app, cronicasEternasApp.atalhoDoMicrofone), a captura
+                                 do microfone (com o do app, cronicasEternasApp.atalhoDoMicrofone), o
+                                 ganchosDoUso.emChamada do tempo no portal, a captura
                                  própria da tela (getDisplayMedia e publishTrack: a qualidade, o som sem as vozes
                                  da chamada e a pergunta "As vozes da chamada vão junto"), a tela cheia num quadro
                                  de tela e a voz simulada da prévia; usa o estado e os ganchosDaVoz do chat.js); portao-de-ruido.js

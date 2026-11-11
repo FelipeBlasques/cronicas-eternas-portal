@@ -20,6 +20,7 @@
      caderno.js   Caderno (cada conta tem o seu, fora do dados.json)
      mural.js     Mural (as notas pregadas do Caderno, para todos lerem)
      chat.js      Chat (canais, privadas e eventos; as mensagens ficam fora do dados.json)
+     uso.js       o tempo no portal de cada conta (os pulsos das páginas; fica em uso.json)
 
    Comandos:
      node servidor.js                     inicia o portal
@@ -76,6 +77,7 @@ const PAGINAS = [
   require("./servidor/caderno"),
   require("./servidor/mural"),
   require("./servidor/chat"),
+  require("./servidor/uso"),
 ];
 
 /* =================================================================
