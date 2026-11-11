@@ -1863,6 +1863,51 @@ button.seletor-persona:focus-visible {
   color: var(--pergaminho-apagado);
 }
 
+/* Tela cheia, num quadro de tela: o botão no canto de cima, à direita */
+.quadro__tela-cheia {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  color: var(--pergaminho);
+  background: rgba(14, 12, 11, 0.78);
+}
+
+.quadro__tela-cheia:hover:not(:disabled) {
+  background: rgba(14, 12, 11, 0.92);
+}
+
+.quadro:fullscreen {
+  background: #000;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  cursor: default;
+}
+
+.quadro:fullscreen .quadro__video,
+.quadro:fullscreen .quadro__simulado {
+  object-fit: contain;
+  background: #000;
+}
+
+/* O menu da qualidade da tela: o nome em negrito e a explicação menor, embaixo */
+.menu-tela__item {
+  display: grid;
+  gap: 0.1rem;
+  text-align: left;
+}
+
+.menu-tela__nome {
+  font-weight: 700;
+}
+
+.menu-tela__explicacao {
+  font-size: 0.86rem;
+  line-height: 1.35;
+  white-space: normal;
+  color: var(--pergaminho-apagado);
+}
+
 /* Configurações de voz */
 .voz-teste {
   display: flex;

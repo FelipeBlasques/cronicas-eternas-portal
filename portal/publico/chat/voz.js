@@ -19,6 +19,13 @@
      AudioWorklet), que cala o som abaixo do corte escolhido.
    - Sons curtos ao entrar e sair, quando alguém entra ou sai da sua
      sala e quando o microfone liga ou desliga, feitos com Web Audio.
+   - A tela compartilhada: o botão abre o menu da qualidade (Nítida,
+     Fluida ou Máxima); a captura é feita aqui (getDisplayMedia) e as
+     trilhas vão para o LiveKit com publishTrack. O som da tela vai sem
+     as vozes da chamada: o sistema tira (restrictOwnAudio, no Windows 11
+     e no Mac) ou o cancelamento de eco ("remote-only"), conforme a
+     escolha "Som da tela compartilhada"; se as vozes forem junto, a
+     pergunta oferece tirar o som. Quem assiste tem o botão de tela cheia.
    - O atalho do microfone, escolhido nas Configurações de voz: vale
      numa chamada, com o chat na frente (keydown no document); no app
      novo (cronicasEternasApp.atalhoDoMicrofone), em qualquer janela,
@@ -35,7 +42,8 @@
    Usa o chat.js (carregado antes): estado, ganchosDaVoz, acharCanal(),
    retratoDe(), nomeDaPersona(), personaEscolhidaDa(), desenharLista(),
    lerLocal(), gravarLocal(), eu(), personaDaContaDe(), abreCard(),
-   personaDaPresencaNaSala() (o card de quem está na sala) e
+   personaDaPresencaNaSala() (o card de quem está na sala), abrirMenu()
+   (o menu da qualidade da tela) e
    prepararSom() / contextoDoSom (os sons); e o comum.js: pedir(), criar(),
    simbolo(), perguntar(), avisarFalha(), avisoRapido().
    ================================================================= */
@@ -49,12 +57,48 @@ const CONFIG_DA_VOZ = {
   chaveDoPortao: "chat:voz:portao",
   chaveDosSons: "chat:voz:sons",
   chaveDoAtalho: "chat:voz:atalho",
+  chaveDasVozesNaTela: "chat:voz:tela:vozes",
+  chaveDaQualidadeDaTela: "chat:voz:tela:qualidade",
   cortePadrao: -50, // dB
   volumeDosSons: 0.06,
 };
 
 const DICA_DA_TELA =
-  "Para levar o som, escolha a tela inteira (com 'Compartilhar áudio do sistema') ou uma aba. Uma janela sozinha não leva som.";
+  "Para levar o som: a tela inteira (marque 'Compartilhar áudio do sistema'), uma aba ou, no Windows 11, uma janela com o áudio dela.";
+
+// As qualidades da tela compartilhada: a captura (largura, altura, quadros) e o envio (bitrate, quadros)
+const QUALIDADES_DA_TELA = {
+  nitida: {
+    nome: "Nítida",
+    explicacao: "para texto e mapas",
+    largura: 1920,
+    altura: 1080,
+    quadros: 15,
+    bitrate: 2_500_000,
+    dica: "detail",
+    preferencia: "maintain-resolution",
+  },
+  fluida: {
+    nome: "Fluida",
+    explicacao: "para vídeos e jogos",
+    largura: 1280,
+    altura: 720,
+    quadros: 30,
+    bitrate: 2_500_000,
+    dica: "motion",
+    preferencia: "maintain-framerate",
+  },
+  maxima: {
+    nome: "Máxima",
+    explicacao: "1080p a 30 quadros, pede uma internet boa",
+    largura: 1920,
+    altura: 1080,
+    quadros: 30,
+    bitrate: 5_000_000,
+    dica: "motion",
+    preferencia: "maintain-framerate",
+  },
+};
 
 const TEXTO_DA_SITUACAO = {
   conectando: "Conectando…",
@@ -197,11 +241,110 @@ function textoDaFalhaDeAparelho(falha, aparelho) {
 }
 
 /* =================================================================
+   A tela compartilhada: as opções, o sistema e o som sem as vozes
+   ================================================================= */
+
+// A qualidade escolhida por último (a Nítida, se nada valer)
+function qualidadeDaTela() {
+  const guardada = lerLocal(CONFIG_DA_VOZ.chaveDaQualidadeDaTela);
+  return Object.hasOwn(QUALIDADES_DA_TELA, guardada) ? guardada : "nitida";
+}
+
+// "auto" | "sempre" | "nunca"
+function vozesNaTela() {
+  const guardada = lerLocal(CONFIG_DA_VOZ.chaveDasVozesNaTela);
+  return guardada === "sempre" || guardada === "nunca" ? guardada : "auto";
+}
+
+// As opções do getDisplayMedia (captura) e das duas publicações (video e som), e o contentHint (dica).
+// Sem o "source": quem publica põe o Track.Source do LiveKit.
+function opcoesDaTela(qualidade, tirarAsVozes) {
+  const q = QUALIDADES_DA_TELA[qualidade] ?? QUALIDADES_DA_TELA.nitida;
+  return {
+    captura: {
+      video: { width: { ideal: q.largura }, height: { ideal: q.altura }, frameRate: { ideal: q.quadros } },
+      audio: {
+        restrictOwnAudio: true,
+        echoCancellation: tirarAsVozes ? "remote-only" : false,
+        noiseSuppression: false,
+        autoGainControl: false,
+        channelCount: 2,
+      },
+      systemAudio: "include",
+      windowAudio: "window",
+      selfBrowserSurface: "exclude",
+      surfaceSwitching: "include",
+    },
+    dica: q.dica,
+    video: {
+      name: "tela",
+      screenShareEncoding: { maxBitrate: q.bitrate, maxFramerate: q.quadros },
+      degradationPreference: q.preferencia,
+    },
+    som: {
+      name: "som-da-tela",
+      audioPreset: { maxBitrate: 128_000 },
+      dtx: false,
+      red: false,
+      forceStereo: true,
+    },
+  };
+}
+
+// O Automático: no Windows 11 (platformVersion 13 ou mais) e no macOS, o sistema tira as vozes
+// (restrictOwnAudio) e não precisa do cancelamento; em qualquer outro caso, com cancelamento
+function tirarAsVozesNoAutomatico(plataforma, versao) {
+  if (plataforma === "macOS") return false;
+  if (plataforma === "Windows" && Number.parseInt(String(versao ?? "").split(".")[0], 10) >= 13) return false;
+  return true;
+}
+
+// O sistema deste computador, lido uma vez por página: { plataforma, versao } ("" quando não se sabe)
+let sistemaLido = null;
+function lerSistema() {
+  sistemaLido ??= (async () => {
+    let plataforma = "";
+    let versao = "";
+    try {
+      const dados = navigator.userAgentData;
+      plataforma = dados?.platform || "";
+      if (dados) versao = (await dados.getHighEntropyValues(["platformVersion"])).platformVersion || "";
+    } catch {
+      // sem a versão, vale o caso comum (com cancelamento)
+    }
+    return { plataforma, versao };
+  })();
+  return sistemaLido;
+}
+
+// O sistema tira as vozes sozinho (Windows 11 ou Mac)?
+async function sistemaTiraAsVozes() {
+  const { plataforma, versao } = await lerSistema();
+  return !tirarAsVozesNoAutomatico(plataforma, versao);
+}
+
+// A escolha de agora, com o Automático resolvido: true = com o cancelamento de eco no som da tela
+async function tirarAsVozesAgora() {
+  const escolha = vozesNaTela();
+  if (escolha === "sempre") return true;
+  if (escolha === "nunca") return false;
+  return !(await sistemaTiraAsVozes());
+}
+
+// O som da tela vai sem as vozes da chamada? (ajustes = som.getSettings())
+function somDaTelaLimpo(ajustes, superficie, sistemaTira) {
+  if (superficie !== "monitor") return true; // uma aba ou uma janela levam só o som delas
+  if (ajustes?.restrictOwnAudio === true && sistemaTira) return true;
+  return Boolean(ajustes?.echoCancellation);
+}
+
+/* =================================================================
    O motor do LiveKit
    -----------------------------------------------------------------
    Os dois motores (este e o simulado da prévia) têm os mesmos nomes:
    conectar({ microfone }), pessoas(), definirMicrofone(), definirCamera(),
-   definirTela(), aplicarVolumes(), trocarAparelho(),
+   definirTela(ligada, { qualidade, tirarAsVozes }), tirarSomDaTela(),
+   aplicarVolumes(), trocarAparelho(),
    reiniciarMicrofone(), aplicarPortao(), liberarSom() e sair(). Cada
    pessoa é { usuario, persona, local, mudo, camera, tela, telaComSom,
    falando, trilhaCamera, trilhaTela }.
@@ -479,18 +622,47 @@ function criarMotorDoLivekit(idSala, avisos) {
     },
     definirMicrofone: (ligado) => sala?.localParticipant.setMicrophoneEnabled(ligado, opcoesDoMicrofone()),
     definirCamera: (ligada) => sala?.localParticipant.setCameraEnabled(ligada, opcoesDaCamera()),
-    // O som vai junto, sem o som desta aba (as vozes da chamada), quando o navegador deixa
-    definirTela: (ligada) =>
-      sala?.localParticipant.setScreenShareEnabled(
-        ligada,
-        ligada
-          ? {
-              audio: { restrictOwnAudio: true, echoCancellation: false, noiseSuppression: false, autoGainControl: false },
-              systemAudio: "include",
-              selfBrowserSurface: "exclude",
-            }
-          : undefined,
-      ),
+    // A captura é feita aqui (o LiveKit não repassa o windowAudio). Parar tira a tela e o som juntos.
+    // Com som, devolve { ajustes, superficie } para conferir se as vozes da chamada foram junto.
+    async definirTela(ligada, { qualidade, tirarAsVozes = true } = {}) {
+      if (!sala) return null;
+      if (!ligada) {
+        await sala.localParticipant.setScreenShareEnabled(false);
+        return null;
+      }
+      const opcoes = opcoesDaTela(qualidade, tirarAsVozes);
+      const fluxo = await navigator.mediaDevices.getDisplayMedia(opcoes.captura);
+      const pararTudo = () => fluxo.getTracks().forEach((trilha) => trilha.stop());
+      if (saindo || !sala || sala.state === "disconnected") {
+        pararTudo();
+        return null;
+      }
+      const [video] = fluxo.getVideoTracks();
+      const [som] = fluxo.getAudioTracks();
+      if (!video) {
+        pararTudo();
+        throw new Error("Sem vídeo na captura da tela");
+      }
+      video.contentHint = opcoes.dica;
+      try {
+        await sala.localParticipant.publishTrack(video, { ...opcoes.video, source: Track.Source.ScreenShare });
+        if (som) await sala.localParticipant.publishTrack(som, { ...opcoes.som, source: Track.Source.ScreenShareAudio });
+      } catch (falha) {
+        pararTudo();
+        await sala?.localParticipant.setScreenShareEnabled(false).catch(() => {});
+        throw falha;
+      }
+      if (!som) return null;
+      const ajustes = som.getSettings();
+      const superficie = video.getSettings().displaySurface;
+      console.info("Som da tela:", ajustes, superficie);
+      return { ajustes, superficie };
+    },
+    // Só o som: a imagem continua
+    async tirarSomDaTela() {
+      const trilha = sala?.localParticipant.getTrackPublication(Track.Source.ScreenShareAudio)?.track;
+      if (trilha) await sala.localParticipant.unpublishTrack(trilha);
+    },
     aplicarVolumes() {
       if (sala) for (const participante of sala.remoteParticipants.values()) aplicarVolumeEm(participante);
     },
@@ -577,10 +749,13 @@ function criarMotorSimulado(idSala, avisos) {
       local().camera = ligada;
       avisos.mudou();
     },
+    // A qualidade e o som chegam e não mudam nada aqui
     async definirTela(ligada) {
       local().tela = ligada;
       avisos.mudou();
+      return null;
     },
+    async tirarSomDaTela() {},
     aplicarVolumes() {},
     async trocarAparelho() {},
     async reiniciarMicrofone() {},
@@ -754,34 +929,69 @@ async function alternarCamera() {
   desenharTudo();
 }
 
-// Sem "restrictOwnAudio", o som desta aba (as vozes da chamada) iria junto: avisa uma vez por página
-let avisouDoSomDaTela = false;
-
-function navegadorTiraOSomDoChat() {
-  try {
-    return Boolean(navigator.mediaDevices?.getSupportedConstraints?.().restrictOwnAudio);
-  } catch {
-    return false;
-  }
-}
-
+// Compartilhando, o botão para; senão, abre o menu da qualidade
 async function alternarTela() {
   const local = pessoaLocal();
   if (!voz.motor || !local) return;
-  if (!local.tela && !avisouDoSomDaTela && !navegadorTiraOSomDoChat()) {
-    avisouDoSomDaTela = true;
-    await perguntar({
-      titulo: "O som do chat pode ir junto",
-      texto:
-        "Seu navegador não consegue tirar o som do chat da transmissão. Compartilhe só uma aba, ou desmarque 'Compartilhar áudio'.",
-    });
-    if (!voz.motor || pessoaLocal()?.tela) return;
+  if (!local.tela) {
+    abrirMenuDaTela();
+    return;
   }
   try {
-    await voz.motor.definirTela(!local.tela);
+    await voz.motor.definirTela(false);
+  } catch (falha) {
+    avisarFalha({ message: textoDaFalhaDeAparelho(falha, "tela") });
+  }
+  desenharTudo();
+}
+
+function abrirMenuDaTela() {
+  const atual = qualidadeDaTela();
+  const itens = [{ titulo: "Compartilhar a tela" }];
+  for (const [chave, q] of Object.entries(QUALIDADES_DA_TELA)) {
+    const conteudo = criar("span", "menu-tela__item");
+    conteudo.append(criar("strong", "menu-tela__nome", q.nome), criar("span", "menu-tela__explicacao", q.explicacao));
+    itens.push({ conteudo, atual: chave === atual, acao: () => comecarTela(chave) });
+  }
+  abrirMenu(painel.tela, itens);
+}
+
+let comecandoTela = false;
+
+async function comecarTela(qualidade) {
+  gravarLocal(CONFIG_DA_VOZ.chaveDaQualidadeDaTela, qualidade);
+  const motor = voz.motor;
+  if (!motor || !pessoaLocal() || pessoaLocal().tela || comecandoTela) return;
+  comecandoTela = true;
+  let som = null;
+  try {
+    som = await motor.definirTela(true, { qualidade, tirarAsVozes: await tirarAsVozesAgora() });
   } catch (falha) {
     // Fechar a janela de escolha da tela não é erro
     if (falha?.name !== "NotAllowedError" && falha?.name !== "AbortError") avisarFalha({ message: textoDaFalhaDeAparelho(falha, "tela") });
+  } finally {
+    comecandoTela = false;
+  }
+  desenharTudo();
+  if (som) await conferirSomDaTela(motor, som);
+}
+
+// As vozes da chamada foram junto no som da tela? Pergunta se tira o som (a imagem continua)
+async function conferirSomDaTela(motor, { ajustes, superficie }) {
+  if (somDaTelaLimpo(ajustes, superficie, await sistemaTiraAsVozes())) return;
+  if (motor !== voz.motor || !pessoaLocal()?.tela) return;
+  const tirar = await perguntar({
+    titulo: "As vozes da chamada vão junto",
+    texto:
+      "Quem fala vai se ouvir de volta no som da sua tela. Dá para tirar o som da tela agora, ou escolher 'Sempre tirar as vozes da chamada' nas Configurações de voz.",
+    confirmar: "Tirar o som da tela",
+    cancelar: "Manter assim",
+  });
+  if (!tirar || motor !== voz.motor) return;
+  try {
+    await motor.tirarSomDaTela();
+  } catch (falha) {
+    avisarFalha({ message: textoDaFalhaDeAparelho(falha, "tela") });
   }
   desenharTudo();
 }
@@ -1018,6 +1228,45 @@ function clicarNoQuadro(chave, destacado) {
   desenharTudo();
 }
 
+/* ---------- Tela cheia, num quadro de tela ---------- */
+
+function botaoDeTelaCheia(elemento) {
+  const b = criar("button", "icone-botao quadro__tela-cheia");
+  b.type = "button";
+  b.append(simbolo("icone-tela-cheia"));
+  // Não amplia nem solta o quadro (nem pelo clique, nem pelo Enter)
+  b.addEventListener("click", (evento) => {
+    evento.stopPropagation();
+    if (document.fullscreenElement === elemento) document.exitFullscreen().catch(() => {});
+    else elemento.requestFullscreen?.().catch(() => avisoRapido("O navegador não deixou abrir em tela cheia."));
+  });
+  b.addEventListener("keydown", (evento) => evento.stopPropagation());
+  marcarTelaCheia(b, false);
+  return b;
+}
+
+function marcarTelaCheia(b, cheia) {
+  const rotulo = cheia ? "Sair da tela cheia" : "Tela cheia";
+  b.title = rotulo;
+  b.setAttribute("aria-label", rotulo);
+}
+
+// O Esc (ou o botão) saiu da tela cheia: os botões voltam ao rótulo certo
+document.addEventListener("fullscreenchange", () => {
+  for (const registro of voz.quadros.values()) {
+    if (registro.telaCheia) marcarTelaCheia(registro.telaCheia, document.fullscreenElement === registro.elemento);
+  }
+});
+
+// Põe os elementos na ordem mexendo só no que mudou: um quadro em tela cheia que sai da página sai da tela cheia
+function arrumarFilhos(caixa, elementos) {
+  elementos.forEach((elemento, indice) => {
+    const naVez = caixa.children[indice] ?? null;
+    if (naVez !== elemento) caixa.insertBefore(elemento, naVez);
+  });
+  while (caixa.children.length > elementos.length) caixa.lastElementChild.remove();
+}
+
 function registroDoQuadro(q) {
   let registro = voz.quadros.get(q.chave);
   if (registro) return registro;
@@ -1026,8 +1275,15 @@ function registroDoQuadro(q) {
   const midia = criar("div", "quadro__midia");
   const rotulo = criar("figcaption", "quadro__rotulo");
   elemento.append(midia, rotulo);
-  registro = { elemento, midia, rotulo, video: null, trilha: null, modo: "" };
-  elemento.addEventListener("click", () => clicarNoQuadro(q.chave, elemento.classList.contains("quadro--destaque")));
+  registro = { elemento, midia, rotulo, video: null, trilha: null, modo: "", telaCheia: null };
+  if (q.tipo === "tela") {
+    registro.telaCheia = botaoDeTelaCheia(elemento);
+    elemento.append(registro.telaCheia);
+  }
+  elemento.addEventListener("click", () => {
+    if (document.fullscreenElement === elemento) return; // em tela cheia, o clique não mexe na sala
+    clicarNoQuadro(q.chave, elemento.classList.contains("quadro--destaque"));
+  });
   elemento.addEventListener("keydown", (evento) => {
     if (evento.key === "Enter" || evento.key === " ") {
       evento.preventDefault();
@@ -1162,11 +1418,11 @@ function desenharChamada(caixa, categoria) {
     const elementos = (lista) => lista.map((q) => voz.quadros.get(q.chave).elemento);
     elemento.classList.toggle("sala__chamada--destaque", Boolean(destaque));
     if (destaque) {
-      palco.replaceChildren(...elementos([destaque]));
-      grade.replaceChildren(...elementos(quadros.filter((q) => q !== destaque)));
+      arrumarFilhos(palco, elementos([destaque]));
+      arrumarFilhos(grade, elementos(quadros.filter((q) => q !== destaque)));
     } else {
-      palco.replaceChildren();
-      grade.replaceChildren(...elementos(quadros));
+      arrumarFilhos(palco, []);
+      arrumarFilhos(grade, elementos(quadros));
     }
     grade.style.setProperty("--colunas", String(colunasPara(destaque ? 1 : quadros.length)));
   }
@@ -1442,12 +1698,21 @@ async function abrirConfiguracoesDeVoz() {
   $("#voz-sons").checked = sonsDaChamadaLigados();
   mostrarPortao();
   mostrarAtalho();
+  mostrarVozesNaTela();
   const saidaLivre = podeEscolherSaida();
   $("#voz-saida").disabled = !saidaLivre;
   $("#voz-saida-aviso").hidden = saidaLivre;
   $("#voz-aparelhos-aviso").hidden = true;
   if (!dialogo.open) dialogo.showModal();
   await preencherAparelhos();
+}
+
+// A escolha do som da tela e a dica do que o Automático faz neste computador
+async function mostrarVozesNaTela() {
+  $("#voz-tela-vozes").value = vozesNaTela();
+  $("#voz-tela-vozes-dica").textContent = (await sistemaTiraAsVozes())
+    ? "Neste computador, o Automático deixa o sistema tirar as vozes da chamada."
+    : "Neste computador, o Automático usa o cancelamento de eco: o som da tela pode abafar um pouco quando alguém fala.";
 }
 
 function avisoDosAparelhos(texto) {
@@ -1585,6 +1850,9 @@ function configurarConfiguracoesDeVoz() {
   $("#voz-ganho").addEventListener("change", mudarProcessamento);
   $("#voz-portao").addEventListener("change", mudarPortao);
   $("#voz-corte").addEventListener("input", mudarPortao);
+  $("#voz-tela-vozes").addEventListener("change", () => {
+    gravarLocal(CONFIG_DA_VOZ.chaveDasVozesNaTela, $("#voz-tela-vozes").value);
+  });
   $("#voz-sons").addEventListener("change", () => {
     const ligar = $("#voz-sons").checked;
     gravarLocal(CONFIG_DA_VOZ.chaveDosSons, ligar ? "sim" : "nao");
