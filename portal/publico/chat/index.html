@@ -352,6 +352,16 @@
         <span class="caixa__marca" aria-hidden="true"></span>
         <span>Sons da chamada</span>
       </label>
+      <fieldset class="voz-atalho">
+        <legend class="campo__rotulo">Atalho do microfone</legend>
+        <div class="voz-atalho__linha">
+          <span id="voz-atalho-teclas" class="voz-atalho__teclas">Nenhum</span>
+          <button id="voz-atalho-gravar" class="botao botao--leve botao--pequeno" type="button" aria-live="polite">Gravar atalho</button>
+          <button id="voz-atalho-tirar" class="botao botao--leve botao--pequeno" type="button" hidden>Tirar</button>
+        </div>
+        <p id="voz-atalho-erro" class="dica voz-atalho__erro" role="alert" hidden></p>
+        <p id="voz-atalho-dica" class="dica"></p>
+      </fieldset>
       <p id="voz-aparelhos-aviso" class="dica" hidden></p>
       <div class="dialogo__acoes">
         <button class="botao botao--principal" value="fechar">Fechar</button>

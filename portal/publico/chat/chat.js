@@ -902,6 +902,7 @@ const ganchosDaVoz = {
   encerrar: null, // () → sai da sala (saiu da conta)
   mover: null, // ({ canal }) → o administrador moveu você para outra sala
   depoisDaLista: null, // () → a lista foi redesenhada (o brilho de quem fala)
+  abrirConfiguracoes: null, // () → abre as Configurações de voz (a engrenagem da faixa da conta)
 };
 
 const eu = () => estado.dados?.conta.usuario;
@@ -1639,6 +1640,7 @@ function configurarDialogoDoCanal() {
 
 function abrirConfiguracoes() {
   const itens = [{ titulo: "Perfil" }, { texto: "Seu perfil", acao: abrirPerfil }, { titulo: "Avisos" }, itemDosAvisos(), itemDoSom()];
+  if (ganchosDaVoz.abrirConfiguracoes) itens.push({ titulo: "Voz" }, { texto: "Configurações de voz", acao: ganchosDaVoz.abrirConfiguracoes });
   if (estado.dados.conta.admin) itens.push({ titulo: "Administração" }, { texto: "Categorias das mesas", acao: abrirCategorias });
   abrirMenu($("#botao-configuracoes"), itens);
 }
