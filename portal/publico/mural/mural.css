@@ -312,6 +312,12 @@
   background: var(--cor-selo);
   border-radius: 50%;
   box-shadow: 0 0 0 1px rgba(42, 31, 22, 0.35), 0 1px 3px rgba(0, 0, 0, 0.35);
+  font-style: normal;
+  gap: 0;
+}
+
+.selo::before {
+  content: none;
 }
 
 .selo--foto {
