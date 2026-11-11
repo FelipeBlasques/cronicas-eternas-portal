@@ -35,7 +35,8 @@ const CONFIG = {
 const CAMPOS_IMAGEM = ["retrato"];
 
 // A ficha completa da aba Detalhes, na ordem em que aparece: chave, rótulo e tipo, como no
-// servidor/personagens.js. O Nome, que vem primeiro, é o "nome" de sempre.
+// servidor/personagens.js. O Nome, que vem primeiro, é o "nome" de sempre. A idade não é um campo:
+// ela é contada do Nascimento (idadeDoPersonagem); a escrita antes vem em detalhes.idadeAnotada.
 const CAMPOS_DOS_DETALHES = [
   ["titulos", "Títulos", "lista"],
   ["apelidos", "Apelidos", "lista"],
@@ -45,7 +46,6 @@ const CAMPOS_DOS_DETALHES = [
   ["genero", "Gênero", "texto"],
   ["especie", "Espécie", "texto"],
   ["ocupacao", "Ocupação", "texto"],
-  ["idade", "Idade", "texto"],
   ["religiao", "Religião", "texto"],
   ["linguagens", "Linguagem", "lista"],
   ["nascimento", "Nascimento", "marco"],
@@ -170,7 +170,7 @@ function exemplosDaPrevia() {
   const ev = (campos) => ({ ate: null, visibilidade: "todos", revelado: false, personagens: [], ...campos });
 
   return {
-    anoAtual: 366, // o ano de hoje em Draevor, o mesmo da prévia da Linha do Tempo
+    hoje: { ano: 366, mes: 2, dia: 14 }, // a data de hoje em Draevor, a mesma da prévia da Linha do Tempo
     contas: [
       { usuario: "mestre", nome: "Mestre" },
       { usuario: "comuna", nome: "Comuna" },
@@ -199,7 +199,7 @@ function exemplosDaPrevia() {
           apelidos: ["Vento"],
           especie: "Meio-elfo",
           ocupacao: "Músico errante",
-          idade: "27 anos",
+          nascimento: { data: data(339, 2, 14), onde: "" },
           linguagens: ["Comum", "Élfico"],
           classe: "Bardo 7",
           frases: ["Enquanto eu tocar, a cidade não dorme."],
@@ -233,6 +233,7 @@ function exemplosDaPrevia() {
           },
         ],
       }),
+      // Sem nascimento, com a idade escrita antes de ela ser contada
       doPortal({
         id: "p3",
         nome: "Personagem de Frati",
@@ -243,6 +244,7 @@ function exemplosDaPrevia() {
           titulos: ["Pendurou o machado depois da canção e abriu uma forja perto do porto."],
           especie: "Anão",
           ocupacao: "Ferreiro",
+          idade: "c. 50 anos",
           classe: "Guerreiro 6",
         },
         destaque: { tipo: "titulo", indice: 0 },
@@ -293,10 +295,9 @@ function exemplosDaPrevia() {
           genero: "Feminino",
           especie: "Humana",
           ocupacao: "Paladina da Ordem do Gelo",
-          idade: "35 anos quando sumiu",
           religiao: "A Chama Quieta",
           linguagens: ["Comum", "Anão", "Primordial"],
-          nascimento: { data: data(296, 4, 12), onde: "Westna" },
+          nascimento: { data: data(296), onde: "Westna" },
           pais: ["Aldren Varn", "[[personagem:npc-2c3d4e5f|Dona Hilda]], mãe de criação"],
           irmaos: ["[[personagem:npc-1b2c3d4e|Bram]], irmão de juramento"],
           filhos: ["[[personagem:npc-3d4e5f60|Lianne]]"],
@@ -322,7 +323,7 @@ function exemplosDaPrevia() {
           },
         ],
       }),
-      // O caído com a Morte e o epitáfio
+      // O caído com o Nascimento, a Morte e o epitáfio
       outro({
         id: "npc-1b2c3d4e",
         nome: "Bram, o guardião da ponte",
@@ -335,7 +336,7 @@ function exemplosDaPrevia() {
           titulos: ["Guardou a ponte velha por trinta invernos."],
           especie: "Meio-orc",
           ocupacao: "Guardião da ponte velha",
-          idade: "c. 50 anos",
+          nascimento: { data: data(315, 7, 2), onde: "" },
           morte: { data: data(365, 4, 22), onde: "A ponte velha" },
           irmaos: ["[[personagem:npc-0a1b2c3d|Ysolde]], irmã de juramento"],
           classe: "Guerreiro",
@@ -454,8 +455,8 @@ function criarApiDePrevia() {
   function dataDoDetalhe(bruta, rotulo) {
     if (!bruta) return null;
     const { ano } = bruta;
-    if (!Number.isInteger(ano) || ano < 0 || ano > banco.anoAtual) {
-      throw erroComCodigo(`O ano precisa ser um número inteiro de 0 a ${banco.anoAtual} (campo ${rotulo}).`);
+    if (!Number.isInteger(ano) || ano < 0 || ano > banco.hoje.ano) {
+      throw erroComCodigo(`O ano precisa ser um número inteiro de 0 a ${banco.hoje.ano} (campo ${rotulo}).`);
     }
     const numero = (valor, max, mensagem) => {
       if (valor === null || valor === undefined || valor === "" || valor === 0) return null;
@@ -524,8 +525,10 @@ function criarApiDePrevia() {
   }
 
   // Os Detalhes, o Título ou Frase e os Textos. O destaque aponta um item que existe, ou fica null.
-  function conteudoDe(dados, morteMantida) {
+  // A idade escrita antes ("anteriores", os Detalhes guardados) fica enquanto não houver o ano de nascimento.
+  function conteudoDe(dados, morteMantida, anteriores) {
     const detalhes = detalhesDe(dados.detalhes, morteMantida);
+    if (anteriores?.idade && !detalhes.nascimento?.data) detalhes.idade = anteriores.idade;
     const bruto = dados.destaque;
     const lista = bruto && Object.hasOwn(LISTA_DO_DESTAQUE, bruto.tipo) ? detalhes[LISTA_DO_DESTAQUE[bruto.tipo]] : null;
     const valido = lista && Number.isInteger(bruto.indice) && bruto.indice >= 0 && bruto.indice < lista.length;
@@ -562,7 +565,7 @@ function criarApiDePrevia() {
       jogador: dados.papel === "jogador" ? textoOpcional(dados.jogador, "Jogador", 40) : "",
       mesas: [...new Set(dados.mesas)].filter((id) => conhecidas.has(id)),
       ...situacaoDe(dados),
-      ...conteudoDe(dados),
+      ...conteudoDe(dados, undefined, atual?.detalhes),
       visibilidade,
     };
   }
@@ -608,6 +611,7 @@ function criarApiDePrevia() {
       else if (tipo === "data") publicos[chave] = dataOuNada(valor);
       else publicos[chave] = valor ? { data: dataOuNada(valor.data), onde: valor.onde || "" } : null;
     }
+    publicos.idadeAnotada = typeof d.idade === "string" ? d.idade : "";
     return publicos;
   }
 
@@ -719,6 +723,7 @@ function criarApiDePrevia() {
       ];
       return structuredClone({
         conta: { ...conta },
+        hoje: { ...banco.hoje },
         mesas: banco.campanhas,
         personagens,
       });
@@ -757,7 +762,7 @@ function criarApiDePrevia() {
       if (!p) throw semPersonagem();
       if (!podeEditarFicha(p)) throw proibido();
       const cuida = conta.cargo === "admin" || conta.cargo === "editor";
-      const valores = conteudoDe(dados, cuida ? undefined : (p.detalhes.morte ?? null));
+      const valores = conteudoDe(dados, cuida ? undefined : (p.detalhes.morte ?? null), p.detalhes);
       if (cuida) Object.assign(valores, situacaoDe(dados));
       Object.assign(p, valores);
       aplicarImagens(p, dados.imagens);
@@ -848,6 +853,7 @@ const api = MODO_PREVIA ? criarApiDePrevia() : apiDoServidor;
 
 const estado = {
   conta: null,
+  hoje: null, // a data de hoje em Draevor, { ano, mes, dia }
   mesas: [],
   personagens: [],
   filtros: { mesas: new Set(), papel: "", situacao: "", busca: "" },
@@ -1267,7 +1273,19 @@ function valorDoDetalhe(chave, tipo, valor, links) {
   return [[valor.data ? textoDaData(valor.data) : "", valor.onde].filter(Boolean).join(" · ")];
 }
 
-// Detalhes: o nome e, na ordem da ficha, só o que estiver preenchido
+// A idade contada do Nascimento até a data final: a Morte ou Destruído para os caídos, hoje em
+// Draevor para os outros. Sem idade, "". "detalhes" tem os marcos no formato do servidor.
+function idadeDoPersonagem(situacao, detalhes) {
+  const nascimento = detalhes.nascimento?.data;
+  if (!nascimento) return "";
+  if (situacao !== "caido") return textoDaIdade(estado.hoje ? idadeEntre(nascimento, estado.hoje) : null, "hoje");
+  if (detalhes.morte?.data) return textoDaIdade(idadeEntre(nascimento, detalhes.morte.data), "morte");
+  if (detalhes.destruido?.data) return textoDaIdade(idadeEntre(nascimento, detalhes.destruido.data), "destruido");
+  return "";
+}
+
+// Detalhes: o nome e, na ordem da ficha, só o que estiver preenchido. A Idade vem depois da Ocupação:
+// a contada do Nascimento ou, sem ele, a escrita antes.
 function abaDetalhes(personagem, resposta) {
   const { detalhes } = resposta.personagem;
   const lista = criar("dl", "ficha__dados");
@@ -1275,6 +1293,13 @@ function abaDetalhes(personagem, resposta) {
   for (const [chave, rotulo, tipo] of CAMPOS_DOS_DETALHES) {
     if (detalhePreenchido(tipo, detalhes[chave])) {
       linhaDaLista(lista, rotulo, ...valorDoDetalhe(chave, tipo, detalhes[chave], resposta.links));
+    }
+    if (chave !== "ocupacao") continue;
+    if (detalhes.nascimento?.data) {
+      const idade = idadeDoPersonagem(personagem.situacao, detalhes);
+      if (idade) linhaDaLista(lista, "Idade", idade);
+    } else if (detalhes.idadeAnotada) {
+      linhaDaLista(lista, "Idade", ...linhaComLinks(detalhes.idadeAnotada, resposta.links));
     }
   }
   return [lista];
@@ -1309,7 +1334,8 @@ function abasComConteudo(resposta) {
   const { detalhes, textos } = resposta.personagem;
   const tem = {
     geral: true,
-    detalhes: CAMPOS_DOS_DETALHES.some(([chave, , tipo]) => detalhePreenchido(tipo, detalhes[chave])),
+    detalhes:
+      CAMPOS_DOS_DETALHES.some(([chave, , tipo]) => detalhePreenchido(tipo, detalhes[chave])) || Boolean(detalhes.idadeAnotada),
     jornada: resposta.jornada.length > 0,
     textos: textos.length > 0,
   };
@@ -1526,6 +1552,7 @@ const edicao = {
   destaque: null, // o Título ou Frase escolhido: { tipo, indice, texto, quantos }, ou null
   citaveis: { acontecimentos: [], personagens: [] }, // o que o "Citar" oferece
   ultimoCampo: { detalhes: null, textos: null }, // onde o "Citar" de cada aba põe o link
+  idadeAnotada: "", // a idade escrita antes de ela ser contada, mostrada embaixo do Nascimento
   abrindo: false, // esperando a ficha completa para abrir
   pedido: 0, // conta os pedidos do "Citar" de um personagem novo, para ignorar os que ficaram para trás
 };
@@ -1539,7 +1566,7 @@ const ABAS_DA_EDICAO = ["geral", "detalhes", "textos"];
 // aparecem nas mensagens de erro; dentro da Regência, o começo e o término ficam com o nome curto.
 const GRUPOS_DOS_DETALHES = [
   ["Nomes", ["titulos", "apelidos", "nomeReal"]],
-  ["Origem", ["especie", "genero", "idade", "lar", "laresAnteriores", "linguagens", "religiao"]],
+  ["Origem", ["especie", "genero", "lar", "laresAnteriores", "linguagens", "religiao"]],
   ["Vida", ["nascimento", "transformado", "morte", "destruido"]],
   ["Família", ["pais", "irmaos", "filhos", "parentes"]],
   ["Regência", ["regenciaInicio", "regenciaFim", "predecessor", "sucessor"]],
@@ -1849,6 +1876,19 @@ function campoDoDetalhe(chave, rotulo, tipo, sozinho) {
     leitura.append(criar("p", "morte-leitura__valor"), criar("span", "campo__ajuda", "Só o administrador e os editores mudam a Morte."));
     grupo.append(leitura);
   }
+
+  // Depois do Nascimento, a idade contada, só para ler, e a escrita antes
+  if (chave === "nascimento") {
+    const idade = criar("div", "idade-hoje");
+    const valor = criar("p", "idade-hoje__valor");
+    valor.id = "idade-hoje";
+    valor.setAttribute("aria-live", "polite");
+    const anotada = criar("span", "campo__ajuda");
+    anotada.id = "idade-anotada";
+    anotada.hidden = true;
+    idade.append(valor, anotada);
+    grupo.append(idade);
+  }
   return grupo;
 }
 
@@ -1898,7 +1938,48 @@ function preencherDetalhes(detalhes) {
   $("#campo-morte .marco-form").hidden = !edicao.cuida;
   $("#morte-leitura").hidden = edicao.cuida;
   $("#morte-leitura .morte-leitura__valor").textContent = textoDoMarco(detalhes.morte) || "Sem data nem lugar.";
+  edicao.idadeAnotada = detalhes.idadeAnotada || "";
+  atualizarIdadeHoje();
 }
+
+// Uma data do formulário só para a conta da idade: sem um ano válido, null; nunca dá erro
+function dataLidaDoFormulario(chave) {
+  const form = formEdicao();
+  const textoDoAno = form.elements[nomeDoDetalhe(chave, "ano")].value;
+  const ano = Number(textoDoAno);
+  if (textoDoAno === "" || !Number.isInteger(ano) || ano < 0) return null;
+  const mes = Number(form.elements[nomeDoDetalhe(chave, "mes")].value) || null;
+  const dia = mes ? Number(form.elements[nomeDoDetalhe(chave, "dia")].value) || null : null;
+  return { ano, mes, dia, aprox: form.elements[nomeDoDetalhe(chave, "aprox")].checked };
+}
+
+// A "Idade hoje" embaixo do Nascimento, que acompanha o nascimento, a situação, a Morte e o Destruído
+function atualizarIdadeHoje() {
+  const form = formEdicao();
+  const nascimento = dataLidaDoFormulario("nascimento");
+  const marco = (chave) => {
+    const data = dataLidaDoFormulario(chave);
+    return data ? { data } : null;
+  };
+  const situacao = form.situacao.value;
+  let texto = "Com a data de nascimento, a idade aparece sozinha.";
+  if (nascimento) {
+    const idade = idadeDoPersonagem(situacao, { nascimento: { data: nascimento }, morte: marco("morte"), destruido: marco("destruido") });
+    if (idade) texto = `Idade hoje: ${idade}`;
+    else if (situacao === "caido" && !marco("morte") && !marco("destruido")) {
+      texto = "Com a data da Morte ou de Destruído, a idade aparece sozinha.";
+    } else texto = "Sem idade: o nascimento fica depois da data final.";
+  }
+  $("#idade-hoje").textContent = texto;
+  const anotada = $("#idade-anotada");
+  anotada.hidden = !edicao.idadeAnotada;
+  anotada.textContent = edicao.idadeAnotada
+    ? `Antes estava escrito: “${edicao.idadeAnotada}”. Com a data de nascimento, a idade passa a ser contada e esse texto sai.`
+    : "";
+}
+
+// Os campos que mudam a "Idade hoje"
+const mudaAIdade = (nome) => nome === "situacao" || /^detalhe_(nascimento|morte|destruido)_/.test(nome);
 
 // Só o ano é obrigatório; o dia só vale com o mês
 function dataDoFormulario(chave, rotulo) {
@@ -2315,6 +2396,10 @@ function configurarEdicao() {
   $("#nova-mesa-cancelar").addEventListener("click", fecharNovaMesa);
   form.addEventListener("change", (evento) => {
     if (evento.target.name === "papel" || evento.target.name === "situacao") mostrarCamposDependentes();
+    if (mudaAIdade(evento.target.name)) atualizarIdadeHoje();
+  });
+  form.addEventListener("input", (evento) => {
+    if (mudaAIdade(evento.target.name)) atualizarIdadeHoje();
   });
   for (const campo of CAMPOS_IMAGEM) {
     form[campo].addEventListener("change", () => {
@@ -2596,6 +2681,7 @@ async function recarregar() {
   const dados = await api.galeria();
   Object.assign(estado, {
     conta: dados.conta,
+    hoje: dados.hoje,
     mesas: dados.mesas,
     personagens: dados.personagens,
   });

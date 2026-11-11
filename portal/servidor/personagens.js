@@ -36,7 +36,7 @@ const {
   aplicarImagens,
   apagarImagens,
 } = require("./base");
-const { iniciar: garantirLinha, lerDataDaLinha, podeVer, dataPublica, chaveDaData, textoOpcional, anoDeHoje } = require("./linha");
+const { iniciar: garantirLinha, lerDataDaLinha, podeVer, dataPublica, chaveDaData, textoOpcional, anoDeHoje, dataDeHoje } = require("./linha");
 const { linksPara, conferirLinks } = require("./memorias");
 
 const PAPEIS = new Set(["jogador", "npc"]);
@@ -45,7 +45,8 @@ const VISIBILIDADES = new Set(["todos", "admin"]);
 const LIMITE_OUTROS = 500;
 
 // A ficha completa da aba Detalhes, na ordem em que aparece: chave, rótulo e tipo.
-// O Nome, que vem primeiro, é o "nome" de sempre.
+// O Nome, que vem primeiro, é o "nome" de sempre. A idade não é um campo: a página a conta
+// do Nascimento. A idade escrita antes fica em detalhes.idade até haver o ano de nascimento.
 const CAMPOS_DOS_DETALHES = [
   ["titulos", "Títulos", "lista"],
   ["apelidos", "Apelidos", "lista"],
@@ -55,7 +56,6 @@ const CAMPOS_DOS_DETALHES = [
   ["genero", "Gênero", "texto"],
   ["especie", "Espécie", "texto"],
   ["ocupacao", "Ocupação", "texto"],
-  ["idade", "Idade", "texto"],
   ["religiao", "Religião", "texto"],
   ["linguagens", "Linguagem", "lista"],
   ["nascimento", "Nascimento", "marco"],
@@ -292,6 +292,7 @@ function detalhesPublicos(d) {
     else if (tipo === "data") publicos[chave] = dataOuNada(valor);
     else publicos[chave] = valor ? { data: dataOuNada(valor.data), onde: valor.onde || "" } : null;
   }
+  publicos.idadeAnotada = typeof d.idade === "string" ? d.idade : "";
   return publicos;
 }
 
@@ -369,6 +370,7 @@ function dadosDaGaleria(conta) {
   ];
   return {
     conta: { usuario: conta.usuario, nome: conta.nome, cargo: cargoDe(conta) },
+    hoje: dataDeHoje(),
     mesas: dados.campanhas.map((c) => ({
       id: c.id,
       nome: c.nome,
@@ -525,9 +527,17 @@ function textosDoCorpo(lista) {
   return caixas;
 }
 
+// A idade escrita antes de a idade ser contada fica enquanto não houver o ano de nascimento
+function manterIdadeAnotada(detalhes, anteriores) {
+  const anotada = anteriores?.idade;
+  if (typeof anotada === "string" && anotada && !detalhes.nascimento?.data) detalhes.idade = anotada;
+}
+
 // Os Detalhes, o Título ou Frase e os Textos. Quem não muda a Morte passa a que já está guardada.
-function conteudoDaFicha(corpo, morteMantida) {
+// "anteriores": os Detalhes guardados, de onde vem a idade escrita antes.
+function conteudoDaFicha(corpo, morteMantida, anteriores) {
   const detalhes = detalhesDoCorpo(corpo.detalhes, morteMantida);
+  manterIdadeAnotada(detalhes, anteriores);
   return { detalhes, destaque: destaqueDoCorpo(corpo.destaque, detalhes), textos: textosDoCorpo(corpo.textos) };
 }
 
@@ -560,7 +570,7 @@ function valoresDoOutro(corpo, conta, atual) {
     jogador,
     mesas: mesasConhecidas(corpo.mesas),
     ...situacaoDaFicha(corpo),
-    ...conteudoDaFicha(corpo),
+    ...conteudoDaFicha(corpo, undefined, atual?.detalhes),
     visibilidade,
   };
 }
@@ -609,7 +619,8 @@ async function salvarFicha(req, res, conta, id) {
   const { corpo, form } = await lerFormularioDaFicha(req);
   const personagem = fichaEditavel(conta, id);
   const cuida = Boolean(conta.admin || conta.editor);
-  const valores = conteudoDaFicha(corpo, cuida ? undefined : (personagem.detalhes?.morte ?? null));
+  const morteMantida = cuida ? undefined : (personagem.detalhes?.morte ?? null);
+  const valores = conteudoDaFicha(corpo, morteMantida, personagem.detalhes);
   if (cuida) Object.assign(valores, situacaoDaFicha(corpo));
   Object.assign(personagem, valores);
   await aplicarImagens(personagem, form, CAMPOS_IMAGEM_GALERIA);

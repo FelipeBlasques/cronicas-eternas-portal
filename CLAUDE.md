@@ -110,7 +110,8 @@ portal/
                     iniciarCinzas(), irParaEntrada(), marcarNaBarra(); o botão Chat do topo
                     (montarBotaoDoChat(), à esquerda do #nome-conta, com a marca de não lidas do
                     /api/barra em marcarChat())
-    calendario.js   o Ciclo de Sylara: MESES, textoDaData(), textoDoPeriodo(), faseDaLua(), somarDias()...
+    calendario.js   o Ciclo de Sylara: MESES, textoDaData(), textoDoPeriodo(), faseDaLua(), somarDias(),
+                    idadeEntre() e textoDaIdade() (a idade dos Personagens, contada do Nascimento)...
     marcas.js       as marcas do texto das notas do Caderno (tipo Markdown, com os links, as embutidas e as
                     imagens do portal): declara só desenharMarcas(texto, { links, embutidas, imagens }, opcoes),
                     que devolve os elementos, e desenharMarcas.enderecoDoPortal(tipo, id), o endereço

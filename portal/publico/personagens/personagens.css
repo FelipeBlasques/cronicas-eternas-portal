@@ -1112,6 +1112,18 @@ button.card--desaparecido:is(:hover, :focus-visible) .card__nevoa {
   color: var(--pergaminho);
 }
 
+/* Embaixo do Nascimento: a idade contada, só para ler, e a escrita antes */
+.idade-hoje {
+  display: grid;
+  gap: 0.2rem;
+  margin-top: 0.7rem;
+}
+
+.idade-hoje__valor {
+  margin: 0;
+  color: var(--pergaminho);
+}
+
 /* A data: ano, mês e dia em campos simples, e a "aproximada" */
 .data-campos {
   display: grid;
