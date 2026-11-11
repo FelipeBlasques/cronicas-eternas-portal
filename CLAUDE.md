@@ -133,8 +133,10 @@ portal/
                                  app (cronicasEternasApp.avisar), o som e a prévia), chat.css: a página do chat, com
                                  login próprio, sem a barra lateral e sem as cinzas; voz.js (voz e vídeo: o painel, a sala, as configurações de aparelhos, o volume
                                  por pessoa (voz e tela), o "mover" do administrador, os sons da chamada (com os de mudo e fala), o atalho
-                                 do microfone (com o do app, cronicasEternasApp.atalhoDoMicrofone) e a voz
-                                 simulada da prévia; usa o estado e os ganchosDaVoz do chat.js); portao-de-ruido.js
+                                 do microfone (com o do app, cronicasEternasApp.atalhoDoMicrofone), a captura
+                                 própria da tela (getDisplayMedia e publishTrack: a qualidade, o som sem as vozes
+                                 da chamada e a pergunta "As vozes da chamada vão junto"), a tela cheia num quadro
+                                 de tela e a voz simulada da prévia; usa o estado e os ganchosDaVoz do chat.js); portao-de-ruido.js
                                  (o AudioWorklet do noise gate, carregado pelo voz.js com audioWorklet.addModule);
                                  livekit-client.js (a cópia fixa do LiveKit) e LICENCA-livekit.txt (versão e licença);
                                  extras.js (o seletor de emojis, o ":" no campo, as reações, o painel de GIFs, o GIF na

@@ -45,6 +45,7 @@
       <symbol id="icone-camera" viewBox="0 0 24 24"><rect x="3" y="6.5" width="12.5" height="11" rx="1.5"/><path d="M15.5 10.5l5.5-3.5v10l-5.5-3.5Z"/></symbol>
       <symbol id="icone-camera-desligada" viewBox="0 0 24 24"><path d="M9 6.5h5a1.5 1.5 0 0 1 1.5 1.5v4M15.5 15.5V16A1.5 1.5 0 0 1 14 17.5H4.5A1.5 1.5 0 0 1 3 16V8a1.5 1.5 0 0 1 1.5-1.5M15.5 10.5l5.5-3.5v10l-3-1.9M3.5 3.5l17 17"/></symbol>
       <symbol id="icone-tela" viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="12" rx="1.5"/><path d="M8.5 20.5h7M12 16.5v4M12 13.5V8M9.5 10.5L12 8l2.5 2.5"/></symbol>
+      <symbol id="icone-tela-cheia" viewBox="0 0 24 24"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/></symbol>
       <symbol id="icone-emoji" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M8.5 14.2a4.2 4.2 0 0 0 7 0"/><circle cx="9.2" cy="9.8" r=".9"/><circle cx="14.8" cy="9.8" r=".9"/></symbol>
       <!-- Os grupos do seletor de emojis -->
       <symbol id="icone-grupo-usados" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
@@ -362,6 +363,15 @@
         <p id="voz-atalho-erro" class="dica voz-atalho__erro" role="alert" hidden></p>
         <p id="voz-atalho-dica" class="dica"></p>
       </fieldset>
+      <label class="campo">
+        <span class="campo__rotulo">Som da tela compartilhada</span>
+        <select id="voz-tela-vozes">
+          <option value="auto">Automático (recomendado)</option>
+          <option value="sempre">Sempre tirar as vozes da chamada</option>
+          <option value="nunca">Nunca: o som da tela sai puro</option>
+        </select>
+      </label>
+      <p id="voz-tela-vozes-dica" class="dica"></p>
       <p id="voz-aparelhos-aviso" class="dica" hidden></p>
       <div class="dialogo__acoes">
         <button class="botao botao--principal" value="fechar">Fechar</button>
