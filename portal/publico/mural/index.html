@@ -65,14 +65,28 @@
       </div>
     </div>
 
-    <!-- O quadro de avisos, com os papéis pregados (montados pelo mural.js) -->
-    <section id="quadro" class="quadro-de-avisos" aria-label="Notas pregadas no mural">
-      <div id="papeis" class="quadro__papeis"></div>
-      <div id="mural-vazio" class="quadro__vazio" hidden>
-        <p class="quadro__vazio-texto">Ninguém pregou nada ainda.</p>
-        <button id="botao-pregar-vazio" class="botao botao--principal" type="button" hidden>Pregar uma nota</button>
-      </div>
-    </section>
+    <div class="mural__colunas">
+      <!-- O quadro de avisos, com os papéis pregados (montados pelo mural.js) -->
+      <section id="quadro" class="quadro-de-avisos" aria-label="Notas pregadas no mural">
+        <div id="papeis" class="quadro__papeis"></div>
+        <div id="mural-vazio" class="quadro__vazio" hidden>
+          <p class="quadro__vazio-texto">Ninguém pregou nada ainda.</p>
+          <button id="botao-pregar-vazio" class="botao botao--principal" type="button" hidden>Pregar uma nota</button>
+        </div>
+      </section>
+
+      <!-- O tempo no portal: uma folha de livro de registro (as linhas, montadas pelo mural.js) -->
+      <aside id="painel-tempo" class="tempo" aria-labelledby="tempo-titulo" hidden>
+        <h2 id="tempo-titulo" class="tempo__titulo">Tempo no portal</h2>
+        <div class="tempo__periodos" role="group" aria-label="Período">
+          <button class="tempo__periodo" type="button" data-periodo="semana" aria-pressed="true">7 dias</button>
+          <button class="tempo__periodo" type="button" data-periodo="mes" aria-pressed="false">30 dias</button>
+          <button class="tempo__periodo" type="button" data-periodo="sempre" aria-pressed="false">Sempre</button>
+        </div>
+        <ul id="tempo-lista" class="tempo__lista" aria-label="Contas"></ul>
+        <p id="tempo-pe" class="tempo__pe"></p>
+      </aside>
+    </div>
   </main>
 
   <!-- ============ A leitura de uma nota ============ -->
@@ -128,7 +142,7 @@
       </select>
     </label>
     <button id="sim-restaurar" class="botao botao--leve" type="button">Restaurar os exemplos</button>
-    <p class="simulacao__nota">Só existe na prévia. As notas são exemplos para ver o visual; pregar e tirar mudam só a memória da página.</p>
+    <p class="simulacao__nota">Só existe na prévia. As notas são exemplos para ver o visual; pregar e tirar mudam só a memória da página. O tempo no portal também é de exemplo.</p>
   </details>
 </body>
 </html>

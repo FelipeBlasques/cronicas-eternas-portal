@@ -14,7 +14,8 @@
    Tem: as páginas do grupo e a barra lateral, a conversa com o
    servidor, utilidades de tela, diálogos e avisos, o status do
    Foundry no cabeçalho, texto formatado, as fontes e o card com
-   moldura dos personagens, e as cinzas do fundo.
+   moldura dos personagens, as cinzas do fundo e o pulso do tempo
+   no portal (ganchosDoUso).
    ================================================================= */
 
 // Fora do servidor (arquivo no PC ou outro endereço), as páginas rodam em prévia, com dados de exemplo
@@ -703,13 +704,82 @@ function iniciarCinzas(quantas = 34) {
 }
 
 /* =================================================================
-   Ao carregar: monta a barra lateral e o botão Chat, acende os números deles e
-   acerta os links de pasta
+   O tempo no portal
+   -----------------------------------------------------------------
+   As páginas da barra lateral e o chat mandam um pulso a cada 30
+   segundos (POST /api/uso/pulso) enquanto estão à vista e em uso
+   (mexeu no mouse, no teclado, rolou ou tocou nos últimos 5
+   minutos), ou numa chamada do chat, mesmo escondido. O servidor
+   (servidor/uso.js) soma o tempo sem contar duas janelas em dobro.
+   O voz.js troca o ganchosDoUso.emChamada. A leitura pública e a
+   prévia não pulsam. As falhas são ignoradas; sem sessão (como na
+   tela de entrada), os pulsos param por 5 minutos.
+   ================================================================= */
+
+const ganchosDoUso = { emChamada: () => false };
+
+const CONFIG_DO_USO = {
+  pulso: 30000, // ms entre os pulsos
+  primeiro: 3000, // ms depois de abrir até o primeiro pulso
+  emUso: 5 * 60000, // ms desde a última ação em que a página ainda está "em uso"
+  moverACada: 10000, // o pointermove guarda a hora no máximo a cada tantos ms
+  semSessao: 5 * 60000, // ms sem pulsos depois de um 401
+};
+
+const usoDaPagina = {
+  ultimaAcao: Date.now(), // abrir a página já é uma ação
+  paradoAte: 0, // depois de um 401, os pulsos esperam até esta hora
+};
+
+function emChamadaParaOUso() {
+  try {
+    return Boolean(ganchosDoUso.emChamada());
+  } catch {
+    return false;
+  }
+}
+
+async function pulsarUso() {
+  if (Date.now() < usoDaPagina.paradoAte) return;
+  const voz = emChamadaParaOUso();
+  const emUso = document.visibilityState === "visible" && Date.now() - usoDaPagina.ultimaAcao <= CONFIG_DO_USO.emUso;
+  if (!voz && !emUso) return;
+  try {
+    await pedir("POST", "/api/uso/pulso", { pagina: PAGINA_ATUAL, voz }, { silencioso: true });
+  } catch (falha) {
+    if (falha.codigo === "sem-sessao") usoDaPagina.paradoAte = Date.now() + CONFIG_DO_USO.semSessao;
+  }
+}
+
+function iniciarUso() {
+  const pulsa = Boolean(document.querySelector(".barra-lateral")) || PAGINA_ATUAL === "chat";
+  if (MODO_PREVIA || !pulsa) return;
+  const acao = () => (usoDaPagina.ultimaAcao = Date.now());
+  const opcoes = { capture: true, passive: true };
+  for (const tipo of ["pointerdown", "keydown", "wheel", "touchstart"]) window.addEventListener(tipo, acao, opcoes);
+  window.addEventListener(
+    "pointermove",
+    () => {
+      if (Date.now() - usoDaPagina.ultimaAcao >= CONFIG_DO_USO.moverACada) acao();
+    },
+    opcoes,
+  );
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") pulsarUso();
+  });
+  setTimeout(pulsarUso, CONFIG_DO_USO.primeiro);
+  setInterval(pulsarUso, CONFIG_DO_USO.pulso);
+}
+
+/* =================================================================
+   Ao carregar: monta a barra lateral e o botão Chat, acende os números deles,
+   liga o pulso do tempo no portal e acerta os links de pasta
    ================================================================= */
 
 montarBarraLateral();
 montarBotaoDoChat();
 atualizarBarra();
+iniciarUso();
 
 if (COMO_ARQUIVO) {
   for (const link of document.querySelectorAll('a[href="./"], a[href="../"]')) {

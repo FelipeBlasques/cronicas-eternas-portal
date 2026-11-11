@@ -8,6 +8,10 @@
    leitura, que tem endereço próprio (#nota-<id>). Quem pregou e o
    administrador tiram a nota do mural.
 
+   Ao lado do quadro, o painel "Tempo no portal" (GET /api/uso, do
+   servidor/uso.js): uma linha por conta no período escolhido (7 dias,
+   30 dias ou sempre), que abre o tempo em cada página e em chamada.
+
    No servidor, conversa com o servidor/mural.js (ler o mural e as
    notas para pregar) e com o servidor/caderno.js (pregar e tirar).
    Aberta fora dele (arquivo no PC ou prévia), usa notas de exemplo
@@ -21,6 +25,8 @@
 const CONFIG = {
   intervaloStatus: 15000, // tempo entre consultas ao estado do Foundry, em ms
   recarregarDepois: 60000, // ms fora de vista depois dos quais o mural é pedido de novo ao voltar
+  intervaloDoTempo: 60000, // ms entre os pedidos do tempo no portal, com a página à vista
+  chaveDoPeriodo: "mural:periodo", // o período escolhido no painel do tempo (localStorage)
 };
 
 const TITULO_DA_PAGINA = document.title;
@@ -35,6 +41,7 @@ const apiDoServidor = {
   pregar: (id) => pedir("POST", `${caminhoDe("/api/caderno/notas", id)}/mural`),
   tirar: (id) => pedir("DELETE", `${caminhoDe("/api/caderno/notas", id)}/mural`),
   estado: () => pedir("GET", "/api/estado", undefined, { silencioso: true }),
+  uso: () => pedir("GET", "/api/uso", undefined, { silencioso: true }),
   sair: () => pedir("POST", "/api/sair"),
 };
 
@@ -174,6 +181,51 @@ function exemplosDaPrevia() {
   return { pessoas, notas, caderno };
 }
 
+// O tempo no portal de exemplo: a Neia no portal agora, e a Bruma sem tempo nenhum
+function usoDaPrevia() {
+  const periodo = (paginas, voz = 0) => ({ s: Object.values(paginas).reduce((a, b) => a + b, 0), voz, paginas });
+  const nada = () => periodo({});
+  const conta = (usuario, nome, cor, foto, agora, semana, mes, sempre) => ({ usuario, nome, cor, foto, agora, semana, mes, sempre });
+  const desde = new Date(Date.now() - 40 * 86400000).toISOString().slice(0, 10);
+  return {
+    desde,
+    contas: [
+      conta(
+        "mestre",
+        "Mestre",
+        "#7a4a2e",
+        null,
+        false,
+        periodo({ linha: 4200, memorias: 3600, mapas: 2400, chat: 1800 }, 1200),
+        periodo({ linha: 16800, memorias: 12600, mapas: 9000, chat: 7200, mesas: 1500 }, 5400),
+        periodo({ linha: 30600, memorias: 21000, mapas: 14400, chat: 12600, mesas: 2700, regras: 1800 }, 9000),
+      ),
+      conta(
+        "neia",
+        "Neia",
+        "#5e5130",
+        null,
+        true,
+        periodo({ chat: 25800, caderno: 10800, mapas: 4500, mural: 2400 }, 19200),
+        periodo({ chat: 61200, caderno: 30600, mapas: 9900, mural: 4800, personagens: 3000 }, 43800),
+        periodo({ chat: 88200, caderno: 45000, mapas: 14400, mural: 4800, personagens: 6300, linha: 2100 }, 63000),
+      ),
+      conta(
+        "takezo",
+        "Takezo",
+        "#365c5c",
+        fotoDaPrevia("#365c5c", "T"),
+        false,
+        periodo({ chat: 2700 }, 1800),
+        periodo({ chat: 15000, personagens: 2400, mesas: 900 }, 10800),
+        periodo({ chat: 15000, personagens: 2400, mesas: 900 }, 10800),
+      ),
+      conta("frati", "Frati", "#6b3a4a", null, false, periodo({ regras: 40 }), periodo({ regras: 1260, linha: 4140 }), periodo({ regras: 1260, linha: 4140 })),
+      conta("bruma", "Bruma", "#3f4a5c", null, false, nada(), nada(), nada()),
+    ],
+  };
+}
+
 function criarApiDePrevia() {
   let banco = exemplosDaPrevia();
   let conta = CONTAS_DA_PREVIA.jogador;
@@ -285,6 +337,10 @@ function criarApiDePrevia() {
     async estado() {
       await esperar(200);
       return { online: true, mundo: "Ode to Sleep", usuarios: 3 };
+    },
+    async uso() {
+      await esperar(220);
+      return usoDaPrevia();
     },
     async sair() {
       return { ok: true };
@@ -605,6 +661,183 @@ async function pregar(id) {
 }
 
 /* =================================================================
+   O tempo no portal
+   ================================================================= */
+
+const PERIODOS = ["semana", "mes", "sempre"];
+const NOMES_DO_USO = { chat: "Chat" }; // as páginas fora da barra lateral
+
+const tempo = {
+  dados: null, // a resposta do GET /api/uso
+  periodo: "semana",
+  abertas: new Set(), // os usuários com o detalhe aberto
+};
+
+function lerPeriodo() {
+  try {
+    const guardado = localStorage.getItem(CONFIG.chaveDoPeriodo);
+    if (PERIODOS.includes(guardado)) return guardado;
+  } catch {
+    // sem localStorage, fica o padrão
+  }
+  return "semana";
+}
+
+function gravarPeriodo(periodo) {
+  try {
+    localStorage.setItem(CONFIG.chaveDoPeriodo, periodo);
+  } catch {
+    // sem localStorage, só nesta visita
+  }
+}
+
+// "12 h 05 min", "3 h", "45 min", "menos de 1 min", ou "—" sem nada
+function textoDoTempo(segundos) {
+  if (!segundos) return "—";
+  if (segundos < 60) return "menos de 1 min";
+  const minutos = Math.floor(segundos / 60);
+  const horas = Math.floor(minutos / 60);
+  const resto = minutos % 60;
+  if (!horas) return `${minutos} min`;
+  return resto ? `${horas} h ${String(resto).padStart(2, "0")} min` : `${horas} h`;
+}
+
+const nomeDaPaginaDoUso = (id) => PAGINAS.find((p) => p.id === id)?.nome ?? NOMES_DO_USO[id] ?? id;
+
+// O selo da conta no painel: a foto do perfil do chat, ou a inicial na cor do perfil
+function seloDoUso(conta) {
+  if (conta.foto) return imagem(conta.foto, "selo selo--foto");
+  const selo = criar("span", "selo", (conta.nome.trim()[0] ?? "?").toLocaleUpperCase("pt-BR"));
+  selo.setAttribute("aria-hidden", "true");
+  if (conta.cor) selo.style.setProperty("--cor-selo", conta.cor);
+  return selo;
+}
+
+function barraDoTempo(parte, classe) {
+  const barra = criar("span", `tempo__barra ${classe ?? ""}`.trim());
+  barra.setAttribute("aria-hidden", "true");
+  const cheia = criar("span", "tempo__barra-cheia");
+  cheia.style.setProperty("--parte", String(Math.max(0, Math.min(1, parte))));
+  barra.append(cheia);
+  return barra;
+}
+
+function detalheDoTempo(conta, idDetalhe) {
+  const doPeriodo = conta[tempo.periodo];
+  const detalhe = criar("div", "tempo__detalhe");
+  detalhe.id = idDetalhe;
+  const paginas = Object.entries(doPeriodo.paginas)
+    .filter(([, s]) => s > 0)
+    .sort((a, b) => b[1] - a[1] || nomeDaPaginaDoUso(a[0]).localeCompare(nomeDaPaginaDoUso(b[0]), "pt-BR"));
+  if (!paginas.length) {
+    detalhe.append(criar("p", "tempo__nada", "Nenhum tempo neste período."));
+    return detalhe;
+  }
+  const maior = paginas[0][1];
+  const lista = criar("ul", "tempo__paginas");
+  for (const [pagina, s] of paginas) {
+    const item = criar("li", "tempo__pagina");
+    item.append(
+      criar("span", "tempo__pagina-nome", nomeDaPaginaDoUso(pagina)),
+      criar("span", "tempo__pagina-tempo", textoDoTempo(s)),
+      barraDoTempo(s / maior, "tempo__barra--fina"),
+    );
+    lista.append(item);
+  }
+  detalhe.append(lista, criar("p", "tempo__chamada", `Em chamada: ${textoDoTempo(doPeriodo.voz)}`));
+  return detalhe;
+}
+
+function linhaDoTempo(conta, maior) {
+  const doPeriodo = conta[tempo.periodo];
+  const aberta = tempo.abertas.has(conta.usuario);
+  const idDetalhe = `tempo-de-${conta.usuario}`;
+  const item = criar("li", "tempo__conta");
+
+  const linha = criar("button", "tempo__linha");
+  linha.type = "button";
+  linha.setAttribute("aria-expanded", String(aberta));
+  linha.setAttribute("aria-controls", idDetalhe);
+
+  const nome = criar("span", "tempo__nome");
+  nome.append(criar("span", "tempo__nome-texto", conta.nome));
+  if (conta.agora) {
+    const ponto = criar("span", "tempo__agora");
+    ponto.title = "No portal agora";
+    ponto.append(criar("span", "sr", "No portal agora"));
+    nome.append(ponto);
+  }
+  linha.append(
+    seloDoUso(conta),
+    nome,
+    criar("span", "tempo__quanto", textoDoTempo(doPeriodo.s)),
+    barraDoTempo(maior ? doPeriodo.s / maior : 0),
+  );
+  linha.addEventListener("click", () => {
+    if (tempo.abertas.has(conta.usuario)) tempo.abertas.delete(conta.usuario);
+    else tempo.abertas.add(conta.usuario);
+    renderizarTempo();
+  });
+
+  item.append(linha);
+  if (aberta) item.append(detalheDoTempo(conta, idDetalhe));
+  return item;
+}
+
+function renderizarTempo() {
+  const painel = $("#painel-tempo");
+  if (!tempo.dados) return;
+  for (const botao of painel.querySelectorAll(".tempo__periodo")) {
+    botao.setAttribute("aria-pressed", String(botao.dataset.periodo === tempo.periodo));
+  }
+  const contas = [...tempo.dados.contas].sort(
+    (a, b) => b[tempo.periodo].s - a[tempo.periodo].s || a.nome.localeCompare(b.nome, "pt-BR"),
+  );
+  const maior = contas[0]?.[tempo.periodo].s ?? 0;
+
+  // O foco fica na mesma linha depois de desenhar de novo
+  const focada = document.activeElement?.closest?.(".tempo__conta")?.dataset.usuario;
+  const itens = contas.map((conta) => {
+    const item = linhaDoTempo(conta, maior);
+    item.dataset.usuario = conta.usuario;
+    return item;
+  });
+  $("#tempo-lista").replaceChildren(...itens);
+  if (focada) itens.find((i) => i.dataset.usuario === focada)?.querySelector(".tempo__linha").focus();
+
+  const desde = new Date(`${tempo.dados.desde}T12:00:00`);
+  const quando = Number.isNaN(desde.getTime()) ? "" : ` Desde ${FORMATO_DO_DIA_E_ANO.format(desde)}.`;
+  $("#tempo-pe").textContent = `Conta o tempo com o portal aberto e em uso, ou numa chamada do chat.${quando}`;
+  painel.hidden = false;
+}
+
+// Falhas só deixam o painel como estava (escondido, se nunca carregou)
+async function carregarTempo() {
+  try {
+    tempo.dados = await api.uso();
+  } catch {
+    return;
+  }
+  renderizarTempo();
+}
+
+function iniciarPainelDoTempo() {
+  tempo.periodo = lerPeriodo();
+  for (const botao of document.querySelectorAll(".tempo__periodo")) {
+    botao.addEventListener("click", () => {
+      tempo.periodo = botao.dataset.periodo;
+      gravarPeriodo(tempo.periodo);
+      renderizarTempo();
+    });
+  }
+  carregarTempo();
+  // Com a página à vista, a cada minuto: o ponto de "agora" e os números mudam
+  setInterval(() => {
+    if (document.visibilityState === "visible") carregarTempo();
+  }, CONFIG.intervaloDoTempo);
+}
+
+/* =================================================================
    Carregar
    ================================================================= */
 
@@ -705,9 +938,11 @@ async function iniciar() {
     $("#papeis").hidden = true;
     $("#mural-vazio").hidden = false;
     $(".quadro__vazio-texto").textContent = falha.message;
+    iniciarPainelDoTempo();
     return;
   }
   $("#pagina").hidden = false;
+  iniciarPainelDoTempo();
 
   atualizarStatus();
   setInterval(atualizarStatus, CONFIG.intervaloStatus);
