@@ -29,6 +29,67 @@ const {
 const ANO_INICIAL_DA_LINHA = 366;
 const ANO_MAXIMO_DA_LINHA = 100000;
 
+/* ---------- O relógio: a data de hoje em Draevor ----------
+   Guardada em dados.linha.hoje = { ano, mes, dia, desde }: a data em Draevor no dia real
+   "desde" (AAAA-MM-DD, no horário de Brasília). Um dia em Draevor a cada 3 dias reais,
+   virando à meia-noite de Brasília. Nada é gravado enquanto o relógio anda. */
+const DIAS_REAIS_POR_DIA = 3;
+const FUSO_DO_RELOGIO = "America/Sao_Paulo";
+const FORMATO_DO_DIA_REAL = new Intl.DateTimeFormat("en-CA", {
+  timeZone: FUSO_DO_RELOGIO,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+const DIA_REAL_VALIDO = /^\d{4}-\d{2}-\d{2}$/;
+const UM_DIA_MS = 24 * 60 * 60 * 1000;
+
+// O dia real em Brasília, "2026-11-11"
+const diaRealDeHoje = (agora = new Date()) => FORMATO_DO_DIA_REAL.format(agora);
+
+// "2026-11-11" em dias desde 1970 (só para contar a diferença)
+const diasDoDiaReal = (dia) => Math.floor(Date.parse(`${dia}T00:00:00Z`) / UM_DIA_MS);
+const diaRealDosDias = (dias) => new Date(dias * UM_DIA_MS).toISOString().slice(0, 10);
+
+// Todo mês tem 30 dias e todo ano tem 300
+function somarDias(data, dias) {
+  const total = data.ano * 300 + (data.mes - 1) * 30 + (data.dia - 1) + dias;
+  return { ano: Math.floor(total / 300), mes: Math.floor((total % 300) / 30) + 1, dia: (total % 30) + 1 };
+}
+
+// Quantos dias de Draevor já se passaram desde o "desde" guardado
+function diasPassados(agora) {
+  const reais = diasDoDiaReal(diaRealDeHoje(agora)) - diasDoDiaReal(dados.linha.hoje.desde);
+  return Math.max(0, Math.floor(reais / DIAS_REAIS_POR_DIA));
+}
+
+// A data de hoje em Draevor: { ano, mes, dia }
+function dataDeHoje(agora = new Date()) {
+  const { ano, mes, dia } = dados.linha.hoje;
+  return somarDias({ ano, mes, dia }, diasPassados(agora));
+}
+
+const anoDeHoje = (agora = new Date()) => dataDeHoje(agora).ano;
+
+// O dia real em que começa o próximo dia de Draevor, "2026-11-14"
+function proximaVirada(agora = new Date()) {
+  const inicio = diasDoDiaReal(dados.linha.hoje.desde);
+  return diaRealDosDias(inicio + (diasPassados(agora) + 1) * DIAS_REAIS_POR_DIA);
+}
+
+const diaRealValido = (dia) => typeof dia === "string" && DIA_REAL_VALIDO.test(dia) && diaRealDosDias(diasDoDiaReal(dia)) === dia;
+
+function hojeValido(hoje) {
+  return (
+    !!hoje &&
+    typeof hoje === "object" &&
+    Number.isInteger(hoje.ano) && hoje.ano >= 0 && hoje.ano <= ANO_MAXIMO_DA_LINHA &&
+    Number.isInteger(hoje.mes) && hoje.mes >= 1 && hoje.mes <= 10 &&
+    Number.isInteger(hoje.dia) && hoje.dia >= 1 && hoje.dia <= 30 &&
+    diaRealValido(hoje.desde)
+  );
+}
+
 // Os tipos que vêm com a página (os desenhos dos glifos ficam no linha.js)
 const TIPOS_PADRAO = [
   { id: "marco", nome: "Marco", glifo: "marco" },
@@ -97,8 +158,19 @@ function garantirLinha() {
     mudou = true;
   }
   const linha = dados.linha;
-  if (!Number.isInteger(linha.anoAtual) || linha.anoAtual < 0) {
-    linha.anoAtual = ANO_INICIAL_DA_LINHA;
+  // A data de hoje. Sem uma válida, nasce em 1 de Auralis do ano atual antigo.
+  if (!hojeValido(linha.hoje)) {
+    const ano = Number.isInteger(linha.anoAtual) && linha.anoAtual >= 0 && linha.anoAtual <= ANO_MAXIMO_DA_LINHA
+      ? linha.anoAtual
+      : ANO_INICIAL_DA_LINHA;
+    linha.hoje = { ano, mes: 1, dia: 1, desde: diaRealDeHoje() };
+    mudou = true;
+  } else if (linha.hoje.desde > diaRealDeHoje()) {
+    linha.hoje.desde = diaRealDeHoje();
+    mudou = true;
+  }
+  if ("anoAtual" in linha) {
+    delete linha.anoAtual;
     mudou = true;
   }
   for (const lista of ["tipos", "acontecimentos", "pendencias"]) {
@@ -306,7 +378,9 @@ function dadosDaLinha(conta) {
 
   return {
     conta: { usuario: conta.usuario, nome: conta.nome, cargo },
-    anoAtual: linha.anoAtual,
+    hoje: dataDeHoje(),
+    proximaVirada: proximaVirada(),
+    anoAtual: anoDeHoje(),
     tipos: tiposDaLinha().map((t) => ({ id: t.id, nome: t.nome, glifo: t.glifo, padrao: TIPOS_PADRAO.includes(t) })),
     mesas,
     personagens: personagensDaLinha(conta, contexto),
@@ -358,7 +432,7 @@ function valoresDoAcontecimento(corpo, conta, origem = false) {
   const descricao = textoOpcional(corpo.descricao, "Descrição", 3000);
   if (origem) return { titulo, descricao };
 
-  const { anoAtual } = dados.linha;
+  const anoAtual = anoDeHoje();
   const data = lerDataDaLinha(corpo.data, anoAtual, true);
   const ate = corpo.ate ? lerDataDaLinha(corpo.ate, anoAtual, false) : null;
   if (ate && chaveDaData(ate) < chaveDaData(data)) throw new ErroHttp(400, "O período não pode terminar antes de começar.");
@@ -463,7 +537,7 @@ async function tratarLinha(req, res, rota, metodo, conta) {
     if (recurso === "pendencias" && id && !outroId && metodo === "POST" && ["aprovar", "recusar"].includes(acao)) {
       return decidirPedido(res, conta, id, acao === "aprovar");
     }
-    if (recurso === "ano-atual" && !id && metodo === "PUT") return mudarAnoAtual(req, res, conta);
+    if (recurso === "hoje" && !id && metodo === "PUT") return mudarDataDeHoje(req, res, conta);
     if (recurso === "tipos" && !acao) {
       if (!id && metodo === "POST") return criarTipo(req, res, conta);
       if (id && metodo === "DELETE") return apagarTipo(res, conta, id);
@@ -618,8 +692,9 @@ async function decidirPedido(res, conta, id, aprovar) {
         throw new ErroHttp(409, "O tipo pedido não existe mais. Recuse o pedido ou crie o tipo de novo.");
       }
       const ultimoAno = Math.max(pedido.data.ano, pedido.ate?.ano ?? 0);
-      if (ultimoAno > linha.anoAtual) {
-        throw new ErroHttp(409, `O pedido usa ${ultimoAno} ED, depois do ano atual do mundo (${linha.anoAtual} ED).`);
+      const anoAtual = anoDeHoje();
+      if (ultimoAno > anoAtual) {
+        throw new ErroHttp(409, `O pedido usa ${ultimoAno} ED, depois do ano atual do mundo (${anoAtual} ED).`);
       }
       Object.assign(ev, {
         titulo: pedido.titulo,
@@ -649,17 +724,21 @@ async function decidirPedido(res, conta, id, aprovar) {
   enviarJson(res, 200, { ok: true });
 }
 
-async function mudarAnoAtual(req, res, conta) {
+// Mudar a data à mão recomeça a contagem: a data escolhida vale a partir de hoje
+async function mudarDataDeHoje(req, res, conta) {
   exigirAdmin(conta);
-  const { ano } = await lerJson(req);
+  const corpo = await lerJson(req);
+  const { ano, mes, dia } = corpo && typeof corpo === "object" ? corpo : {};
   if (!Number.isInteger(ano) || ano < 0) throw new ErroHttp(400, "Escreva um ano inteiro, de 0 em diante.");
-  if (ano > ANO_MAXIMO_DA_LINHA) throw new ErroHttp(400, `O ano atual pode ir até ${ANO_MAXIMO_DA_LINHA} ED.`);
+  if (ano > ANO_MAXIMO_DA_LINHA) throw new ErroHttp(400, `O ano pode ir até ${ANO_MAXIMO_DA_LINHA} ED.`);
+  if (!Number.isInteger(mes) || mes < 1 || mes > 10) throw new ErroHttp(400, "Escolha um mês da lista.");
+  if (!Number.isInteger(dia) || dia < 1 || dia > 30) throw new ErroHttp(400, "Escolha um dia de 1 a 30.");
   const linha = dados.linha;
   const ultimo = linha.acontecimentos.reduce((maior, a) => Math.max(maior, a.data.ano, a.ate?.ano ?? 0), 0);
   if (ano < ultimo) {
-    throw new ErroHttp(400, `Há acontecimentos registrados até ${ultimo} ED. O ano atual não pode ficar antes deles.`);
+    throw new ErroHttp(400, `Há acontecimentos registrados até ${ultimo} ED. A data de hoje não pode ficar antes deles.`);
   }
-  linha.anoAtual = ano;
+  linha.hoje = { ano, mes, dia, desde: diaRealDeHoje() };
   await salvarDados();
   enviarJson(res, 200, { ok: true });
 }
@@ -746,4 +825,10 @@ module.exports = {
   dataPublica,
   chaveDaData,
   textoOpcional,
+  DIAS_REAIS_POR_DIA,
+  FUSO_DO_RELOGIO,
+  diaRealDeHoje,
+  dataDeHoje,
+  anoDeHoje,
+  proximaVirada,
 };

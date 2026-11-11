@@ -564,8 +564,13 @@
 
 .marcador-hoje__ano {
   font-family: var(--fonte-gotica);
-  font-size: 2.1rem;
-  line-height: 1;
+  font-size: 1.7rem;
+  line-height: 1.1;
+}
+
+.marcador-hoje__ciclo {
+  font-size: 0.86rem;
+  color: var(--pergaminho-apagado);
 }
 
 .marcador-hoje__rotulo {
@@ -1685,6 +1690,26 @@
 
 .painel__linha .campo {
   flex: 1 1 12rem;
+}
+
+.painel__data-de-hoje .campo--dia-de-hoje {
+  flex: 0 1 5.5rem;
+}
+
+.painel__data-de-hoje .campo--mes-de-hoje {
+  flex: 1 1 10rem;
+}
+
+.painel__data-de-hoje .campo--ano-de-hoje {
+  flex: 0 1 7rem;
+}
+
+.painel__data-de-hoje + .campo__ajuda {
+  margin-top: -0.5rem;
+}
+
+.painel__salvar-data {
+  justify-self: start;
 }
 
 .glifos {

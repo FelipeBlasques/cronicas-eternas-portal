@@ -12,7 +12,7 @@
 
 const crypto = require("node:crypto");
 const { dados, salvarDados, ganchos, ErroHttp, enviarJson, lerJson, texto } = require("./base");
-const { iniciar: garantirLinha, lerDataDaLinha, podeVer, dataPublica, chaveDaData, textoOpcional } = require("./linha");
+const { iniciar: garantirLinha, lerDataDaLinha, podeVer, dataPublica, chaveDaData, textoOpcional, anoDeHoje } = require("./linha");
 
 // As classificações e o rótulo do campo "detalhe" de cada uma (null: não tem o campo)
 const TIPOS = new Map([
@@ -276,7 +276,7 @@ function valoresDaMemoria(corpo) {
     throw new ErroHttp(400, "Escolha uma classificação da lista.");
   }
   const tipo = corpo.tipo;
-  const data = corpo.data ? lerDataDaLinha(corpo.data, dados.linha.anoAtual, true) : null;
+  const data = corpo.data ? lerDataDaLinha(corpo.data, anoDeHoje(), true) : null;
   const rotulo = TIPOS.get(tipo);
   const detalhe = rotulo ? textoOpcional(corpo.detalhe, rotulo, 120).replace(/\s*\n\s*/g, " ") : "";
   if (tipo === "livro") return { titulo, tipo, data, detalhe, texto: "", capitulos: capitulosDoLivro(corpo.capitulos) };

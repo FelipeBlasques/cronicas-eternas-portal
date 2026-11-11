@@ -72,7 +72,7 @@ const apiDoServidor = {
   apagarFrase: (id, idFrase) => pedir("DELETE", caminhoDe(`${caminhoDe("/api/linha/acontecimentos", id)}/frases`, idFrase)),
   revelar: (id) => pedir("POST", `${caminhoDe("/api/linha/acontecimentos", id)}/revelar`),
   decidir: (id, aprovar) => pedir("POST", `${caminhoDe("/api/linha/pendencias", id)}/${aprovar ? "aprovar" : "recusar"}`),
-  mudarAnoAtual: (ano) => pedir("PUT", "/api/linha/ano-atual", { ano }),
+  mudarDataDeHoje: (data) => pedir("PUT", "/api/linha/hoje", data),
   criarTipo: (tipo) => pedir("POST", "/api/linha/tipos", tipo),
   apagarTipo: (id) => pedir("DELETE", caminhoDe("/api/linha/tipos", id)),
   // As mesas são as da Administração; aqui mudam só o nome e a cor
@@ -89,6 +89,14 @@ const CONTAS_DA_PREVIA = {
   editor: { usuario: "takezo", nome: "Takezo", cargo: "editor" },
   jogador: { usuario: "neia", nome: "Neia", cargo: "jogador" },
 };
+
+// O relógio da prévia: como no servidor, um dia em Draevor a cada 3 dias reais,
+// contados do dia em que a data foi marcada (desde, em dias desde 1970)
+const diaRealDaPrevia = (data = new Date()) => Math.floor((data.getTime() - data.getTimezoneOffset() * 60000) / 86400000);
+const diasDaPrevia = (banco) => Math.max(0, Math.floor((diaRealDaPrevia() - banco.hoje.desde) / 3));
+const hojeDaPrevia = (banco) => somarDias(banco.hoje, diasDaPrevia(banco));
+const viradaDaPrevia = (banco) =>
+  new Date((banco.hoje.desde + (diasDaPrevia(banco) + 1) * 3) * 86400000).toISOString().slice(0, 10);
 
 function exemplosDaPrevia() {
   // Um busto desenhado aqui mesmo, para a prévia mostrar retratos sem depender de arquivos
@@ -110,7 +118,7 @@ function exemplosDaPrevia() {
     ...campos,
   });
   return {
-    anoAtual: 366,
+    hoje: { ano: 366, mes: 2, dia: 14, desde: diaRealDaPrevia() },
     tipos: TIPOS_PADRAO.map((t) => ({ ...t })),
     mesas: [
       { id: "ode-to-sleep", nome: "Ode to Sleep", cor: "#2e3756", naPaginaMesas: true },
@@ -281,10 +289,10 @@ function criarApiDePrevia() {
     if (!String(dados.titulo || "").trim()) throw erroComCodigo("Escreva o título do acontecimento.");
     if (origem) return;
     const { ano } = dados.data;
-    if (!Number.isInteger(ano) || ano < 0 || ano > banco.anoAtual) {
-      throw erroComCodigo(`O ano precisa ficar entre 0 e ${banco.anoAtual} ED.`);
+    if (!Number.isInteger(ano) || ano < 0 || ano > hojeDaPrevia(banco).ano) {
+      throw erroComCodigo(`O ano precisa ficar entre 0 e ${hojeDaPrevia(banco).ano} ED.`);
     }
-    if (dados.ate && (dados.ate.ano > banco.anoAtual || chaveDaData(dados.ate) < chaveDaData(dados.data))) {
+    if (dados.ate && (dados.ate.ano > hojeDaPrevia(banco).ano || chaveDaData(dados.ate) < chaveDaData(dados.data))) {
       throw erroComCodigo("O período precisa terminar depois de começar e até o ano atual.");
     }
     if (!banco.tipos.some((t) => t.id === dados.tipo)) throw erroComCodigo("Escolha um tipo da lista.");
@@ -325,7 +333,9 @@ function criarApiDePrevia() {
       });
       return {
         conta: { ...conta },
-        anoAtual: banco.anoAtual,
+        hoje: hojeDaPrevia(banco),
+        proximaVirada: viradaDaPrevia(banco),
+        anoAtual: hojeDaPrevia(banco).ano,
         tipos: copia(banco.tipos),
         mesas: copia(banco.mesas),
         personagens: copia(banco.personagens),
@@ -433,13 +443,16 @@ function criarApiDePrevia() {
       }
       return {};
     },
-    async mudarAnoAtual(ano) {
+    async mudarDataDeHoje({ ano, mes, dia }) {
       await esperar(160);
       if (!ehAdmin()) throw proibido();
       const ultimo = Math.max(...banco.acontecimentos.map((a) => Math.max(a.data.ano, a.ate?.ano ?? 0)));
       if (!Number.isInteger(ano) || ano < 0) throw erroComCodigo("Escreva um ano inteiro, de 0 em diante.");
-      if (ano < ultimo) throw erroComCodigo(`Há acontecimentos registrados até ${ultimo} ED. O ano atual não pode ficar antes deles.`);
-      banco.anoAtual = ano;
+      if (ano > 100000) throw erroComCodigo("O ano pode ir até 100000 ED.");
+      if (!Number.isInteger(mes) || mes < 1 || mes > 10) throw erroComCodigo("Escolha um mês da lista.");
+      if (!Number.isInteger(dia) || dia < 1 || dia > 30) throw erroComCodigo("Escolha um dia de 1 a 30.");
+      if (ano < ultimo) throw erroComCodigo(`Há acontecimentos registrados até ${ultimo} ED. A data de hoje não pode ficar antes deles.`);
+      banco.hoje = { ano, mes, dia, desde: diaRealDaPrevia() };
       return {};
     },
     async criarTipo(tipo) {
@@ -499,6 +512,8 @@ const api = MODO_PREVIA ? criarApiDePrevia() : apiDoServidor;
 
 const estado = {
   conta: null,
+  hoje: { ano: 0, mes: 1, dia: 1 },
+  proximaVirada: "",
   anoAtual: 0,
   tipos: [],
   mesas: [],
@@ -852,9 +867,14 @@ function marcadorHoje() {
   const marcador = criar("div", "marcador-hoje");
   marcador.dataset.ano = String(estado.anoAtual);
   marcador.dataset.marcoAno = "";
-  marcador.append(criar("span", "marcador-hoje__ano", `${estado.anoAtual} ED`), criar("span", "marcador-hoje__rotulo", "Hoje em Draevor"));
+  const { mes, dia } = estado.hoje;
+  marcador.append(
+    criar("span", "marcador-hoje__ano", textoDaData(estado.hoje, { extenso: true })),
+    criar("span", "marcador-hoje__ciclo", `${ESTACOES[mes - 1]} · ${FASES[faseDaLua(dia)]}`),
+    criar("span", "marcador-hoje__rotulo", "Hoje em Draevor"),
+  );
   if (ehAdmin()) {
-    marcador.append(botao("Alterar o ano atual", "botao--leve botao--pequeno marcador-hoje__editar", abrirAnoAtual));
+    marcador.append(botao("Alterar a data de hoje", "botao--leve botao--pequeno marcador-hoje__editar", abrirDataDeHoje));
   }
   return marcador;
 }
@@ -1700,32 +1720,54 @@ function campoTexto(rotulo, nome, valor = "", { tipo = "text", ajuda = "", max }
   return campo;
 }
 
-function abrirAnoAtual() {
-  abrirPainel("ano", "Ano atual do mundo", (raiz) => {
+// "2026-11-14" vira "14/11/2026"
+const diaRealEscrito = (dia) => dia.split("-").reverse().join("/");
+
+function abrirDataDeHoje() {
+  abrirPainel("hoje", "Data de hoje em Draevor", (raiz) => {
     const ultimo = Math.max(0, ...estado.acontecimentos.map((a) => Math.max(a.data.ano, a.ate?.ano ?? 0)));
-    raiz.append(criar("p", "painel__texto", `A linha termina no ano atual, hoje ${estado.anoAtual} ED. Nenhum acontecimento pode passar dele.`));
+    raiz.append(
+      criar(
+        "p",
+        "painel__texto",
+        `O mundo anda sozinho: um dia em Draevor a cada 3 dias reais, virando à meia-noite (horário de Brasília). O próximo dia começa em ${diaRealEscrito(estado.proximaVirada)}. Mudar a data aqui recomeça a contagem a partir de hoje.`,
+      ),
+    );
     const form = criar("form", "painel__form");
     form.noValidate = true;
-    const campo = campoTexto("Ano atual", "ano", String(estado.anoAtual), {
-      tipo: "number",
-      ajuda: ultimo > 0 ? `O registro mais recente é de ${ultimo} ED.` : "",
-    });
+
+    const campoDia = campoTexto("Dia", "dia", String(estado.hoje.dia), { tipo: "number" });
+    campoDia.classList.add("campo--dia-de-hoje");
+    const entradaDia = campoDia.querySelector("input");
+    entradaDia.min = "1";
+    entradaDia.max = "30";
+    const campoMes = criar("label", "campo campo--mes-de-hoje");
+    const seletor = criar("select");
+    seletor.name = "mes";
+    seletor.append(...MESES.map((nome, i) => new Option(nome, String(i + 1))));
+    seletor.value = String(estado.hoje.mes);
+    campoMes.append(criar("span", "campo__rotulo", "Mês"), seletor);
+    const campoAno = campoTexto("Ano", "ano", String(estado.hoje.ano), { tipo: "number" });
+    campoAno.classList.add("campo--ano-de-hoje");
+    campoAno.querySelector("input").min = "0";
+
+    const datas = criar("div", "painel__linha painel__data-de-hoje");
+    datas.append(campoDia, campoMes, campoAno);
+    const ajuda = ultimo > 0 ? criar("p", "campo__ajuda", `O registro mais recente é de ${ultimo} ED.`) : null;
     const erro = criar("p", "mensagem-erro");
     erro.hidden = true;
-    const salvar = criar("button", "botao botao--principal botao--pequeno", "Salvar");
+    const salvar = criar("button", "botao botao--principal botao--pequeno painel__salvar-data", "Salvar");
     salvar.type = "submit";
-    const linha = criar("div", "painel__linha");
-    linha.append(campo, salvar);
-    form.append(linha, erro);
+    form.append(datas, ...(ajuda ? [ajuda] : []), erro, salvar);
     form.addEventListener("submit", async (evento) => {
       evento.preventDefault();
-      const ano = Number(form.ano.value);
+      const data = { ano: Number(form.ano.value), mes: Number(form.mes.value), dia: Number(form.dia.value) };
       salvar.disabled = true;
       try {
-        await api.mudarAnoAtual(ano);
+        await api.mudarDataDeHoje(data);
         $("#dialogo-painel").close();
         await recarregar();
-        avisoRapido(`O ano atual agora é ${ano} ED.`);
+        avisoRapido(`Hoje em Draevor: ${textoDaData(estado.hoje)}.`);
       } catch (falha) {
         erro.textContent = falha.message;
         erro.hidden = false;
@@ -1966,7 +2008,9 @@ async function recarregar() {
   const dados = await api.linha();
   Object.assign(estado, {
     conta: dados.conta,
-    anoAtual: dados.anoAtual,
+    hoje: dados.hoje,
+    proximaVirada: dados.proximaVirada,
+    anoAtual: dados.hoje.ano,
     tipos: dados.tipos,
     mesas: dados.mesas,
     personagens: dados.personagens,

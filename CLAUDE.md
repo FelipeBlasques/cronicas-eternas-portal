@@ -69,7 +69,8 @@ portal/
     mesas.js        /api/entrar, /api/portal, /api/abrir, /api/conta, /api/senha, ...
     admin.js        /api/admin/... (contas, mesas, personagens). Todas as mesas ficam em dados.campanhas;
                     naPaginaMesas diz se a mesa aparece na página Mesas
-    linha.js        /api/linha/... (Linha do Tempo; exporta lerDataDaLinha, podeVer, dataPublica...)
+    linha.js        /api/linha/... (Linha do Tempo; exporta lerDataDaLinha, podeVer, dataPublica, dataDeHoje,
+                    anoDeHoje...; a data de hoje em dados.linha.hoje anda um dia a cada 3 dias reais)
     regras.js       /api/regras/... (Regras da casa)
     personagens.js  /api/galeria/... (Personagens: fichas e outros personagens; a arte da galeria
                     fica em `retrato`, separada da capa e da arte do card das Mesas)
@@ -101,7 +102,7 @@ portal/
                     iniciarCinzas(), irParaEntrada(), marcarNaBarra(); o botão Chat do topo
                     (montarBotaoDoChat(), à esquerda do #nome-conta, com a marca de não lidas do
                     /api/barra em marcarChat())
-    calendario.js   o Ciclo de Sylara: MESES, textoDaData(), textoDoPeriodo(), faseDaLua()...
+    calendario.js   o Ciclo de Sylara: MESES, textoDaData(), textoDoPeriodo(), faseDaLua(), somarDias()...
     marcas.js       as marcas do texto das notas do Caderno (tipo Markdown, com os links, as embutidas e as
                     imagens do portal): declara só desenharMarcas(texto, { links, embutidas, imagens }, opcoes),
                     que devolve os elementos, e desenharMarcas.enderecoDoPortal(tipo, id), o endereço

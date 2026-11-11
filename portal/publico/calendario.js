@@ -38,3 +38,9 @@ function textoDoPeriodo(ev, opcoes) {
   if (!de.mes && !ate.mes) return `De ${de.aprox ? "c. " : ""}${de.ano} a ${ate.ano} ED`;
   return `De ${textoDaData(de, opcoes)} a ${textoDaData(ate, opcoes)}`;
 }
+
+// Soma dias a uma data completa. Todo mês tem 30 dias e todo ano tem 300.
+function somarDias(data, dias) {
+  const total = data.ano * 300 + (data.mes - 1) * 30 + (data.dia - 1) + dias;
+  return { ano: Math.floor(total / 300), mes: Math.floor((total % 300) / 30) + 1, dia: (total % 30) + 1 };
+}
