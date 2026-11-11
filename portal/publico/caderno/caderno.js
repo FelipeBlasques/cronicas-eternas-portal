@@ -94,6 +94,8 @@ const apiDoServidor = {
   compartilharPasta: (id, contas) => pedir("PUT", `${caminhoDe("/api/caderno/pastas", id)}/compartilhada`, { contas }),
   ligarLink: (id) => pedir("POST", `${caminhoDe("/api/caderno/notas", id)}/link`),
   desligarLink: (id) => pedir("DELETE", `${caminhoDe("/api/caderno/notas", id)}/link`),
+  pregarNoMural: (id) => pedir("POST", `${caminhoDe("/api/caderno/notas", id)}/mural`),
+  tirarDoMural: (id) => pedir("DELETE", `${caminhoDe("/api/caderno/notas", id)}/mural`),
   // O administrador busca no caderno que está lendo ("conta")
   buscar: (q, conta) => pedir("GET", `/api/caderno/busca?${new URLSearchParams(conta ? { q, conta } : { q })}`),
   estado: () => pedir("GET", "/api/estado", undefined, { silencioso: true }),
@@ -147,7 +149,7 @@ function exemplosDaPrevia() {
     criadaPor: dono,
   });
   // "dias": há quantos dias a nota foi alterada pela última vez; "por": quem alterou
-  const nota = (dono, { dias, por = dono, pasta: acima = null, compartilhada = {}, link = null, ...campos }) => ({
+  const nota = (dono, { dias, por = dono, pasta: acima = null, compartilhada = {}, link = null, mural = null, ...campos }) => ({
     ...campos,
     pasta: acima,
     versao: 3,
@@ -157,6 +159,7 @@ function exemplosDaPrevia() {
     alteradaPor: por,
     compartilhada,
     link,
+    mural,
   });
 
   const GUIA = String.raw`Este guia mostra as marcas que o caderno entende. Em cada uma, primeiro como se escreve (com uma barra invertida antes da marca, para ela aparecer) e depois o resultado. #guia
@@ -274,6 +277,7 @@ O código !\[\[nota:id\|…\]\] sozinho na linha mostra a outra nota inteira, nu
         id: "nota-5e5500000012",
         titulo: "Sessão 2: o Passo Negro",
         pasta: "pasta-5e5500000001",
+        mural: { desde: diasAtras(0, 5) },
         dias: 1,
         texto:
           "Saímos de Hando antes do amanhecer, e [[evento:e9|a travessia do Passo Negro]] levou o dia inteiro.\n\n> O guia jura que já atravessou sozinho. Ninguém acredita.\n\nO que vimos na ponte está em [[nota:nota-5e5500000011|Sessão 1: a ponte]]. #pistas #passo-negro\n\n- [ ] Perguntar a Bram sobre a canção\n- [x] Comprar corda",
@@ -534,6 +538,7 @@ function criarApiDePrevia() {
     pasta,
     alteradaEm: n.alteradaEm,
     etiquetas: [...lerCodigos(n.texto).etiquetas.values()],
+    mural: Boolean(n.mural),
   });
 
   function arvoreInteira(c, daDona) {
@@ -617,6 +622,8 @@ function criarApiDePrevia() {
       if (tipo === "nota") {
         const achado = acharNota(id);
         if (legivel(leitor, achado)) alvo = { titulo: achado.nota.titulo };
+        // A nota pregada no mural leva ao papel dela lá
+        else if (achado?.nota.mural) alvo = { titulo: achado.nota.titulo, publico: `${enderecoDaPagina("mural")}#nota-${encodeURIComponent(id)}` };
       } else if (tipo === "personagem") {
         const p = [...banco.personagens, ...banco.outrosPersonagens.filter((x) => leitor.admin || x.visibilidade !== "admin")].find(
           (x) => x.id === id,
@@ -664,7 +671,7 @@ function criarApiDePrevia() {
     for (const id of lida.embutidas) {
       if (id === nota.id) continue;
       const outra = acharNota(id);
-      if (!legivel(leitor, outra)) continue;
+      if (!outra || (!outra.nota.mural && !legivel(leitor, outra))) continue;
       embutidas[id] = { titulo: outra.nota.titulo, texto: outra.nota.texto, dono: pessoa(outra.dono) };
       const daOutra = lerCodigos(outra.nota.texto);
       for (const chave of daOutra.links) chaves.add(chave);
@@ -732,6 +739,7 @@ function criarApiDePrevia() {
       alteradaPor: nota.alteradaPor ? pessoa(nota.alteradaPor) : null,
       dono: pessoa(dono),
       nivel,
+      mural: Boolean(nota.mural),
     };
     if (nivel === "dona") {
       publica.compartilhada = compartilhadaPublica(nota);
@@ -1133,6 +1141,27 @@ function criarApiDePrevia() {
       if (nivel !== "dona") throw soADona(dono, "desligar o link público desta nota");
       nota.link = null;
       return { ok: true };
+    },
+    // No máximo 5 por caderno, como no servidor
+    async pregarNoMural(id) {
+      await esperar(120);
+      exigirQuemEscreve();
+      const { dono, item: nota, nivel } = itemVisivel("nota", id);
+      if (nivel !== "dona") throw soADona(dono, "pregar esta nota no mural");
+      if (!nota.mural) {
+        if (cadernoDe(dono).notas.filter((n) => n.mural).length >= 5) {
+          throw erroComCodigo("Você já tem 5 notas no mural. Tire uma antes de pregar outra.", "limite-do-mural");
+        }
+        nota.mural = { desde: carimbo() };
+      }
+      return { mural: true };
+    },
+    async tirarDoMural(id) {
+      await esperar(120);
+      const { dono, item: nota, nivel } = itemVisivel("nota", id);
+      if (nivel !== "dona" && nivel !== "admin") throw soADona(dono, "tirar esta nota do mural");
+      nota.mural = null;
+      return { mural: false };
     },
     // No título e no texto, sem diferença de maiúsculas e acentos. Começando com #, busca a etiqueta.
     // Primeiro os achados no título, depois os mais recentes. O administrador busca no caderno de uma conta.
@@ -1629,6 +1658,12 @@ function barraDaNota(nota, { editando = false } = {}) {
     barra.append(alternar);
   }
   if (nota.nivel === "dona") barra.append(botao("Compartilhar", "botao--leve", () => abrirCompartilhar("nota", nota.id)));
+  if (nota.mural) {
+    const noMural = criar("a", "nota__no-mural", "No mural");
+    noMural.href = `${enderecoDaPagina("mural")}#nota-${encodeURIComponent(nota.id)}`;
+    noMural.title = "Ver o papel desta nota no Mural";
+    barra.append(noMural);
+  }
   const mais = botao("⋯", "botao--leve nota__mais", () => {
     if (menu.botao === mais) return fecharMenu();
     abrirMenu(mais, opcoesDe({ tipo: "nota", id: nota.id, nivel: nota.nivel, naBarra: true }), { rotulo: "Mais opções da nota" });
@@ -2304,6 +2339,10 @@ function opcoesDe({ tipo, id, nivel, naBarra = false }) {
     const fixada = estado.dados.fixadas.some((f) => f.id === id);
     opcao(fixada ? "Desafixar" : "Fixar", () => fixar(id, !fixada));
   }
+  if (tipo === "nota" && dona) {
+    const noMural = estaNoMural(id);
+    opcao(noMural ? "Tirar do mural" : "Pregar no mural", () => mudarMural(id, !noMural));
+  }
   if (tipo === "nota") {
     opcao("Ver no grafo", () => abrirGrafo(id));
     opcao("Baixar .md", () => baixarMd(id));
@@ -2645,6 +2684,36 @@ async function fixar(id, sim) {
   }
   await atualizarLateral();
   avisoRapido(sim ? "Nota fixada." : "Nota desafixada.");
+}
+
+/* ---------- O mural ---------- */
+
+const AVISO_DO_MURAL =
+  "Toda conta do portal vai poder ler a nota no mural, com as imagens dela. Só você altera, no Caderno, e pode tirar quando quiser.";
+
+// Se a nota está no mural: a aberta diz pela leitura; as outras, pela árvore da dona
+function estaNoMural(id) {
+  if (navegacao.lida?.nota.id === id) return Boolean(navegacao.lida.nota.mural);
+  return Boolean(estado.dados?.caderno?.notas.find((n) => n.id === id)?.mural);
+}
+
+// Pregar pergunta antes; tirar, não (é fácil pregar de novo)
+async function mudarMural(id, pregar) {
+  if (pregar) {
+    const sim = await perguntar({ titulo: "Pregar no mural?", texto: AVISO_DO_MURAL, confirmar: "Pregar", cancelar: "Cancelar" });
+    if (!sim) return;
+  }
+  try {
+    await (pregar ? api.pregarNoMural(id) : api.tirarDoMural(id));
+  } catch (falha) {
+    return avisarFalha(falha);
+  }
+  if (navegacao.lida?.nota.id === id) {
+    navegacao.lida.nota.mural = pregar;
+    $("#area-nota .nota__barra")?.replaceWith(barraDaNota(navegacao.lida.nota, { editando: emEdicao() }));
+  }
+  await atualizarLateral();
+  avisoRapido(pregar ? "Nota pregada no mural." : "Nota tirada do mural.");
 }
 
 /* ---------- Nota de hoje ---------- */

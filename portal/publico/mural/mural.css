@@ -1,0 +1,477 @@
+/* =================================================================
+   Mural: as notas que o grupo prega para todos lerem
+   -----------------------------------------------------------------
+   Um quadro de avisos de taverna: tábuas escuras numa moldura de
+   ferro, e os papéis de pergaminho pregados com um prego de ferro.
+   Cada papel gira um pouco (--giro, do mural.js) e endireita ao
+   passar o mouse.
+   ================================================================= */
+
+.sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.topo__cargo {
+  margin-left: -0.6rem;
+  font-style: italic;
+  font-size: 0.95rem;
+  color: var(--cinza);
+}
+
+.pagina-mural {
+  width: min(76rem, 100%);
+  margin: 0 auto;
+  padding: 2.8rem clamp(1rem, 4vw, 3rem) 7rem;
+}
+
+/* =================================================================
+   Cabeça da página
+   ================================================================= */
+
+.cabeca-mural {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 1rem 1.6rem;
+  margin-bottom: 1.8rem;
+}
+
+.cabeca-mural__texto {
+  flex: 1 1 22rem;
+  min-width: 0;
+}
+
+.cabeca-mural__titulo {
+  margin: 0;
+  font-family: var(--fonte-gotica);
+  font-weight: 500;
+  font-size: clamp(2.6rem, 5.4vw, 4rem);
+  line-height: 1;
+  text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.7), 0 6px 26px rgba(0, 0, 0, 0.85);
+}
+
+.cabeca-mural__sub {
+  max-width: 42rem;
+  margin: 0.55rem 0 0;
+  font-style: italic;
+  color: var(--pergaminho-apagado);
+}
+
+.cabeca-mural__acoes {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.45rem;
+  margin-left: auto;
+}
+
+.cabeca-mural__acoes[hidden] {
+  display: none;
+}
+
+.cabeca-mural__quantas {
+  margin: 0;
+  font-size: 0.9rem;
+  font-style: italic;
+  color: var(--cinza);
+}
+
+/* =================================================================
+   O quadro de avisos: tábuas, juntas, veios e a moldura de ferro
+   ================================================================= */
+
+.quadro-de-avisos {
+  position: relative;
+  padding: clamp(1.4rem, 3vw, 2.4rem) clamp(1rem, 2.6vw, 2.2rem) clamp(0.6rem, 1.6vw, 1.2rem);
+  background:
+    /* as juntas das tábuas, a cada 9,5rem */
+    repeating-linear-gradient(
+      90deg,
+      transparent 0,
+      transparent calc(9.5rem - 3px),
+      rgba(0, 0, 0, 0.55) calc(9.5rem - 3px),
+      rgba(255, 220, 170, 0.05) calc(9.5rem - 1px),
+      transparent 9.5rem
+    ),
+    /* os veios, bem fracos */
+    repeating-linear-gradient(
+      90deg,
+      transparent 0,
+      transparent 7px,
+      rgba(255, 225, 180, 0.018) 7px,
+      rgba(255, 225, 180, 0.018) 9px,
+      transparent 9px,
+      transparent 17px,
+      rgba(0, 0, 0, 0.06) 17px,
+      rgba(0, 0, 0, 0.06) 18px
+    ),
+    linear-gradient(180deg, #3a2a1f 0%, #2e2119 38%, #33251b 64%, #261b14 100%);
+  border: 0.6rem solid #1d1a17;
+  border-radius: var(--raio);
+  box-shadow:
+    inset 0 0 0 1px rgba(0, 0, 0, 0.6),
+    inset 0 0 44px 8px rgba(0, 0, 0, 0.62),
+    0 0 0 1px var(--ferro),
+    0 34px 70px -30px rgba(0, 0, 0, 0.95);
+}
+
+.quadro__papeis {
+  columns: 17rem auto;
+  column-gap: clamp(1.2rem, 2.4vw, 2rem);
+}
+
+.quadro__papeis[hidden] {
+  display: none;
+}
+
+.quadro__vazio {
+  display: grid;
+  justify-items: center;
+  gap: 1.2rem;
+  padding: 3.5rem 1rem 4.2rem;
+  text-align: center;
+}
+
+.quadro__vazio[hidden] {
+  display: none;
+}
+
+.quadro__vazio-texto {
+  margin: 0;
+  font-size: 1.15rem;
+  font-style: italic;
+  color: var(--pergaminho-apagado);
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+}
+
+/* =================================================================
+   Cada papel: pergaminho claro, tinta escura e o prego no alto
+   -----------------------------------------------------------------
+   As variáveis das cores mudam só dentro do papel, para as marcas
+   do texto (marcas.css) saírem em tinta escura.
+   ================================================================= */
+
+.aviso {
+  --pergaminho: #2a1f16;
+  --pergaminho-apagado: #5b4936;
+  --cinza: #76634d;
+  --ferro: rgba(74, 52, 32, 0.42);
+  --ferro-forte: rgba(74, 52, 32, 0.66);
+  --ferro-fraco: rgba(74, 52, 32, 0.2);
+  --giro: 0deg;
+
+  position: relative;
+  display: block;
+  width: 100%;
+  margin: 0.4rem 0 clamp(1.6rem, 3vw, 2.2rem);
+  padding: 1.6rem 1.25rem 0.9rem;
+  break-inside: avoid;
+  color: var(--pergaminho);
+  cursor: pointer;
+  background:
+    radial-gradient(120% 80% at 30% 10%, rgba(255, 250, 235, 0.55), transparent 60%),
+    radial-gradient(90% 70% at 85% 95%, rgba(150, 110, 60, 0.22), transparent 70%),
+    linear-gradient(170deg, #efe3c8 0%, #e3d2ae 55%, #d6c095 100%);
+  border-radius: 2px;
+  box-shadow:
+    inset 0 0 0 1px rgba(120, 88, 50, 0.25),
+    inset 0 0 26px rgba(120, 82, 40, 0.18),
+    0 2px 3px rgba(0, 0, 0, 0.35),
+    0 14px 22px -10px rgba(0, 0, 0, 0.75);
+  transform: rotate(var(--giro));
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+
+/* O prego de ferro, no alto e no meio */
+.aviso::before {
+  content: "";
+  position: absolute;
+  top: 0.45rem;
+  left: 50%;
+  width: 0.8rem;
+  height: 0.8rem;
+  transform: translateX(-50%);
+  background: radial-gradient(circle at 35% 30%, #a39a8f 0%, #5f5852 35%, #2a2623 70%, #171412 100%);
+  border-radius: 50%;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.18) inset,
+    0 2px 3px rgba(0, 0, 0, 0.55),
+    0 0 0 2px rgba(60, 40, 22, 0.18);
+}
+
+.aviso:hover,
+.aviso:focus-within {
+  transform: translateY(-4px) rotate(0deg);
+  box-shadow:
+    inset 0 0 0 1px rgba(120, 88, 50, 0.25),
+    inset 0 0 26px rgba(120, 82, 40, 0.18),
+    0 4px 6px rgba(0, 0, 0, 0.35),
+    0 22px 30px -12px rgba(0, 0, 0, 0.8);
+}
+
+.aviso__titulo {
+  margin: 0 0 0.6rem;
+  font-family: var(--fonte-gotica);
+  font-weight: 500;
+  font-size: 1.3rem;
+  line-height: 1.12;
+}
+
+.aviso__abrir {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+  background: none;
+  border: 0;
+  overflow-wrap: break-word;
+}
+
+.aviso__abrir:focus-visible {
+  outline: 2px solid var(--brasa);
+  outline-offset: 4px;
+}
+
+/* O começo do texto, numa altura máxima que some embaixo */
+.aviso__trecho {
+  max-height: 14rem;
+  overflow: hidden;
+  font-size: 0.95rem;
+  line-height: 1.55;
+  -webkit-mask-image: linear-gradient(180deg, #000 70%, transparent 100%);
+  mask-image: linear-gradient(180deg, #000 70%, transparent 100%);
+}
+
+.aviso__trecho > * + * {
+  margin-top: 0.6rem;
+}
+
+.aviso .marcas__foto {
+  background: rgba(42, 31, 22, 0.15);
+}
+
+.aviso .marcas__embutida {
+  background: rgba(90, 64, 36, 0.06);
+}
+
+.aviso__vazia {
+  margin: 0;
+  font-style: italic;
+  color: var(--cinza);
+}
+
+/* O selo de quem pregou, o nome e a data */
+.aviso__pe {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 0.8rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--ferro-fraco);
+}
+
+.aviso__quem {
+  display: grid;
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.aviso__nome {
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.aviso__data {
+  font-size: 0.85rem;
+  font-style: italic;
+  color: var(--pergaminho-apagado);
+}
+
+.selo {
+  --cor-selo: #5e5130;
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  font-family: var(--fonte-gotica);
+  font-size: 1.15rem;
+  line-height: 1;
+  color: #f2e8d4;
+  background: var(--cor-selo);
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(42, 31, 22, 0.35), 0 1px 3px rgba(0, 0, 0, 0.35);
+}
+
+.selo--foto {
+  object-fit: cover;
+  background: #2a1f16;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aviso {
+    transition: none;
+  }
+
+  /* O giro fica; ao passar o mouse, o papel não se mexe */
+  .aviso:hover,
+  .aviso:focus-within {
+    transform: rotate(var(--giro));
+  }
+}
+
+/* =================================================================
+   A leitura
+   ================================================================= */
+
+.dialogo--leitura {
+  width: min(48rem, calc(100vw - 2rem));
+  max-height: calc(100vh - 2rem);
+  max-height: calc(100dvh - 2rem);
+  overflow: auto;
+}
+
+.leitura-mural__quem {
+  margin: 0 0 1.3rem;
+  padding-bottom: 0.8rem;
+  font-size: 0.95rem;
+  font-style: italic;
+  color: var(--pergaminho-apagado);
+  border-bottom: 1px solid var(--ferro-fraco);
+}
+
+.leitura-mural__texto > * + * {
+  margin-top: 0.8rem;
+}
+
+.dialogo--leitura .dialogo__titulo {
+  overflow-wrap: break-word;
+}
+
+a.botao {
+  text-decoration: none;
+}
+
+/* =================================================================
+   Pregar uma nota
+   ================================================================= */
+
+.pregar__busca {
+  margin-top: 1.1rem;
+}
+
+.pregar__limite {
+  margin: 0.9rem 0 0;
+  font-style: italic;
+  color: var(--alerta);
+}
+
+.pregar__situacao {
+  margin: 0.6rem 0 0;
+  font-style: italic;
+  color: var(--pergaminho-apagado);
+}
+
+.pregar__situacao:empty {
+  display: none;
+}
+
+.pregar__lista {
+  max-height: min(48vh, 26rem);
+  margin: 0.8rem 0 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+  border-top: 1px solid var(--ferro-fraco);
+}
+
+.pregar__lista li {
+  border-bottom: 1px solid var(--ferro-fraco);
+}
+
+.pregar__nota {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  width: 100%;
+  padding: 0.6rem 0.5rem;
+  font: inherit;
+  text-align: left;
+  color: var(--pergaminho);
+  cursor: pointer;
+  background: none;
+  border: 0;
+  transition: background-color 0.2s;
+}
+
+.pregar__nota:hover:not(:disabled) {
+  background: rgba(196, 106, 53, 0.08);
+}
+
+.pregar__nota:focus-visible {
+  outline: 2px solid var(--brasa);
+  outline-offset: -2px;
+}
+
+.pregar__nota:disabled {
+  cursor: default;
+  color: var(--cinza);
+}
+
+.pregar__textos {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+
+.pregar__titulo {
+  overflow-wrap: break-word;
+}
+
+.pregar__caminho {
+  font-size: 0.82rem;
+  font-style: italic;
+  color: var(--cinza);
+}
+
+.pregar__no-mural {
+  flex: none;
+  padding: 0.05rem 0.5rem;
+  font-size: 0.8rem;
+  font-style: italic;
+  color: var(--pergaminho-apagado);
+  border: 1px solid var(--ferro-fraco);
+  border-radius: 999px;
+}
+
+.pregar__nada {
+  padding: 0.9rem 0.5rem;
+  font-style: italic;
+  color: var(--cinza);
+}
+
+/* =================================================================
+   Celular: uma coluna, e o botão de pregar abaixo do título
+   ================================================================= */
+
+@media (max-width: 40rem) {
+  .cabeca-mural__acoes {
+    align-items: flex-start;
+    margin-left: 0;
+  }
+
+  .quadro-de-avisos {
+    border-width: 0.45rem;
+  }
+}

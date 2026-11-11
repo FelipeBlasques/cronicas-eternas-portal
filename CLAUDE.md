@@ -1,6 +1,6 @@
 # Crônicas Eternas: portal
 
-Portal do grupo de RPG em https://cronicaseternas.com. Cada jogador tem conta, vê os personagens na página **Mesas** e entra no mundo certo do Foundry com um clique. Também tem a **Linha do Tempo** do mundo de Draevor, as **Regras da casa**, a galeria de **Personagens**, os **Mapas** e as **Memórias de Draevor** (textos do cenário). As especificações de cada página estão em `planejamento/`.
+Portal do grupo de RPG em https://cronicaseternas.com. Cada jogador tem conta, vê os personagens na página **Mesas** e entra no mundo certo do Foundry com um clique. Também tem a **Linha do Tempo** do mundo de Draevor, as **Regras da casa**, a galeria de **Personagens**, os **Mapas**, as **Memórias de Draevor** (textos do cenário) e o **Mural** (as notas do Caderno que o grupo prega para todos lerem). As especificações de cada página estão em `planejamento/`.
 
 ## Onde roda
 
@@ -53,6 +53,8 @@ O `unzip -o` só cria e substitui arquivos, nunca apaga. Se uma mudança tirar a
 
 Toda conta que não é administrador tem um **Caderno**, que só ela altera (e quem ela deixar editar). O administrador lê todos os cadernos e não altera nenhum.
 
+No **Mural**, toda conta com caderno prega até 5 notas do próprio Caderno, e toda conta lê. O administrador tira qualquer nota do mural (a exceção a "não altera nenhum": ele modera o mural).
+
 Sem login, nenhuma página abre. A exceção é a leitura pública de uma nota do Caderno (`/ler/#<token>`), que abre com o link.
 
 ## Mapa do código
@@ -86,16 +88,22 @@ portal/
                     chat/fixadas.json; as imagens em chat/imagens/, pela rota protegida; os GIFs: a busca na
                     Klipy com cache e o envio pelo id; a voz: o passe JWT do LiveKit, quem está nas salas
                     pelas chamadas Twirp e o "mover" do administrador; exporta resumoDoChat, que o
-                    /api/barra usa)
+                    /api/barra usa, e perfilPublico, que o Mural usa para a cor e a foto de quem pregou)
     caderno.js      /api/caderno/... (Caderno: notas e pastas de cada conta, em cadernos/<usuario>/caderno.json,
                     fora do dados.json, e as imagens em cadernos/<usuario>/imagens/; os ganchos de conta
                     renomeiam e apagam essas pastas. Links, embutidas, etiquetas, busca, citáveis, imagens
                     protegidas e órfãs; o grafo em /api/caderno/grafo e, para o administrador,
                     /api/caderno/contas/<usuario>/grafo, montado do que já se lê das notas;
-                    /api/caderno/publico/... é o link público, sem login). Exporta para
-                    os Mapas lerCodigos, alvosDosLinks, conferirLinks e citaveisDoPortal (o Citar sem as notas)
+                    /api/caderno/publico/... é o link público, sem login). A marca do mural fica na própria
+                    nota (nota.mural = { desde } ou null), com POST e DELETE /api/caderno/notas/<id>/mural;
+                    a nota pregada vale para toda conta nos links (o "publico" leva a /mural/#nota-<id>), nas
+                    embutidas e nas imagens, mas não entra na árvore, na busca, no grafo nem no Citar.
+                    Exporta para os Mapas lerCodigos, alvosDosLinks, conferirLinks e citaveisDoPortal (o Citar
+                    sem as notas) e para o Mural notasDoMural, notasParaPregar e LIMITE_NO_MURAL
+    mural.js        /api/mural (o mural como a conta o lê, com os perfis de quem pregou) e /api/mural/minhas
+                    (as notas da conta para pregar). Sem dados próprios: pregar e tirar são rotas do caderno.js
   publico/
-    comum.js        lista PAGINAS e barra lateral, pedir(), $, criar(), botao(), imagem(),
+    comum.js        lista PAGINAS (com o Mural depois do Caderno) e barra lateral, pedir(), $, criar(), botao(), imagem(),
                     simbolo(), perguntar(), avisoRapido(), avisarFalha(), fecharAoClicarFora(),
                     mostrarStatus(), textoFormatado(), paragrafosDe(), resumoDe(), normalizar(),
                     corVisivel(), FONTES e aplicarFonte(), montarCardComMoldura(),
@@ -126,6 +134,8 @@ portal/
                                  ../editor-de-marcas.js e ../editor-de-marcas.css); grafo.js (o grafo das notas em
                                  #grafo e #grafo-<id>: o canvas, a simulação por forças e o painel; usa o estado,
                                  a api, o abrirNota e o buscarEtiqueta do caderno.js e preenche os ganchosDoGrafo)
+    mural/                       index.html, mural.js, mural.css: o Mural (o quadro de avisos com os papéis, a leitura
+                                 em #nota-<id> e o "Pregar uma nota"); carrega também ../marcas.js e ../marcas.css
     ler/                         index.html, ler.js, ler.css: a leitura pública de uma nota do Caderno (/ler/#<token>),
                                  sem login e sem a barra lateral; carrega também ../marcas.js e ../marcas.css
     chat/                        index.html, chat.js (texto: lista, mensagens, privadas, eventos, administração,
