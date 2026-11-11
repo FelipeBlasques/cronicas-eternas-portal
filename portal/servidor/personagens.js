@@ -36,7 +36,7 @@ const {
   aplicarImagens,
   apagarImagens,
 } = require("./base");
-const { iniciar: garantirLinha, lerDataDaLinha, podeVer, dataPublica, chaveDaData, textoOpcional } = require("./linha");
+const { iniciar: garantirLinha, lerDataDaLinha, podeVer, dataPublica, chaveDaData, textoOpcional, anoDeHoje } = require("./linha");
 const { linksPara, conferirLinks } = require("./memorias");
 
 const PAPEIS = new Set(["jogador", "npc"]);
@@ -464,7 +464,7 @@ function listaDoDetalhe(valor, rotulo, maxItem) {
 function dataDoDetalhe(valor, rotulo) {
   if (!valor) return null;
   try {
-    return lerDataDaLinha(valor, dados.linha.anoAtual, true);
+    return lerDataDaLinha(valor, anoDeHoje(), true);
   } catch (erro) {
     if (erro instanceof ErroHttp) throw new ErroHttp(400, `${erro.message.replace(/\.$/, "")} (campo ${rotulo}).`);
     throw erro;
