@@ -17,8 +17,12 @@
      recebe o evento "mover" e troca de sala, com o mudo e o ensurdecido.
    - O microfone passa pelo portão de ruído (portao-de-ruido.js, um
      AudioWorklet), que cala o som abaixo do corte escolhido.
-   - Sons curtos ao entrar e sair, e quando alguém entra ou sai da sua
-     sala, feitos com Web Audio.
+   - Sons curtos ao entrar e sair, quando alguém entra ou sai da sua
+     sala e quando o microfone liga ou desliga, feitos com Web Audio.
+   - O atalho do microfone, escolhido nas Configurações de voz: vale
+     numa chamada, com o chat na frente (keydown no document); no app
+     novo (cronicasEternasApp.atalhoDoMicrofone), em qualquer janela,
+     com o evento "cronicas-eternas:atalho".
 
    O passe de entrada vem de POST /api/chat/voz/entrar; o ensurdecido,
    que o LiveKit não sabe, vai para POST /api/chat/voz/estado.
@@ -44,6 +48,7 @@ const CONFIG_DA_VOZ = {
   chaveDosVolumes: "chat:voz:volumes",
   chaveDoPortao: "chat:voz:portao",
   chaveDosSons: "chat:voz:sons",
+  chaveDoAtalho: "chat:voz:atalho",
   cortePadrao: -50, // dB
   volumeDosSons: 0.06,
 };
@@ -287,6 +292,8 @@ const SONS_DA_CHAMADA = {
   ],
   chegou: [[620, 830, 0, 0.14]],
   partiu: [[830, 620, 0, 0.14]],
+  mudo: [[700, 500, 0, 0.09]],
+  fala: [[500, 700, 0, 0.09]],
 };
 
 function tocarSomDaChamada(tipo) {
@@ -653,6 +660,7 @@ async function entrarNaSala(idSala, manter = null) {
   if (voz.ensurdecido) avisarEnsurdecido();
   tocarSomDaChamada("entrei"); // trocar de sala toca só este
   desenharTudo();
+  registrarAtalhoNoApp();
 }
 
 // O botão Sair: o único que toca o "saiu"
@@ -668,6 +676,7 @@ async function sairDaSala() {
   limparQuadros();
   fecharVolume();
   if (estado.dados) desenharTudo();
+  registrarAtalhoNoApp();
   if (motor) await motor.sair().catch(() => {});
 }
 
@@ -679,6 +688,7 @@ function caiuDaSala(mensagem) {
   limparQuadros();
   fecharVolume();
   desenharTudo();
+  registrarAtalhoNoApp();
   motor?.sair().catch(() => {});
 }
 
@@ -687,9 +697,10 @@ function avisarEnsurdecido() {
   pedir("POST", "/api/chat/voz/estado", { ensurdecido: voz.ensurdecido }, { silencioso: true }).catch(() => {});
 }
 
+// Devolve true (ligou), false (desligou) ou null (não trocou)
 async function alternarMicrofone() {
   const local = pessoaLocal();
-  if (!voz.motor || !local) return;
+  if (!voz.motor || !local) return null;
   const ligar = local.mudo || voz.ensurdecido;
   if (voz.ensurdecido) {
     // Ligar o microfone ensurdecido também tira o ensurdecido
@@ -697,12 +708,16 @@ async function alternarMicrofone() {
     voz.motor.aplicarVolumes();
     avisarEnsurdecido();
   }
+  let trocou = true;
   try {
     await voz.motor.definirMicrofone(ligar);
   } catch (falha) {
+    trocou = false;
     avisarFalha({ message: textoDaFalhaDeAparelho(falha, "microfone") });
   }
+  if (trocou) tocarSomDaChamada(ligar ? "fala" : "mudo");
   desenharTudo();
+  return trocou ? ligar : null;
 }
 
 async function alternarEnsurdecer() {
@@ -1426,6 +1441,7 @@ async function abrirConfiguracoesDeVoz() {
   $("#voz-ganho").checked = aparelhos.ganho;
   $("#voz-sons").checked = sonsDaChamadaLigados();
   mostrarPortao();
+  mostrarAtalho();
   const saidaLivre = podeEscolherSaida();
   $("#voz-saida").disabled = !saidaLivre;
   $("#voz-saida-aviso").hidden = saidaLivre;
@@ -1551,6 +1567,15 @@ function configurarConfiguracoesDeVoz() {
   const dialogo = $("#dialogo-voz");
   fecharAoClicarFora(dialogo);
   dialogo.addEventListener("close", pararTeste);
+  dialogo.addEventListener("close", () => pararGravacao());
+  dialogo.addEventListener("cancel", (evento) => {
+    // O Esc da gravação cancela só a gravação
+    if (!atalho.gravando) return;
+    evento.preventDefault();
+    pararGravacao();
+  });
+  $("#voz-atalho-gravar").addEventListener("click", () => (atalho.gravando ? pararGravacao() : comecarGravacao()));
+  $("#voz-atalho-tirar").addEventListener("click", tirarAtalho);
   $("#voz-testar").addEventListener("click", () => (teste.ligado ? pararTeste() : comecarTeste()));
   $("#voz-microfone").addEventListener("change", () => trocarAparelho("microfone", "audioinput", "microfone"));
   $("#voz-saida").addEventListener("change", () => trocarAparelho("saida", "audiooutput", "microfone"));
@@ -1565,6 +1590,200 @@ function configurarConfiguracoesDeVoz() {
     gravarLocal(CONFIG_DA_VOZ.chaveDosSons, ligar ? "sim" : "nao");
     if (ligar) tocarSomDaChamada("entrei"); // para ouvir como é
   });
+}
+
+/* =================================================================
+   O atalho do microfone
+   ================================================================= */
+
+// { codigo (o evento.code), ctrl, alt, shift, meta, rotulo }, ou null
+function lerAtalho() {
+  const guardado = lerObjetoLocal(CONFIG_DA_VOZ.chaveDoAtalho);
+  if (typeof guardado.codigo !== "string" || !guardado.codigo || typeof guardado.rotulo !== "string") return null;
+  const novo = {
+    codigo: guardado.codigo,
+    ctrl: guardado.ctrl === true,
+    alt: guardado.alt === true,
+    shift: guardado.shift === true,
+    meta: guardado.meta === true,
+    rotulo: guardado.rotulo,
+  };
+  return atalhoValido(novo) ? novo : null;
+}
+
+const atalho = {
+  guardado: null,
+  gravando: false,
+  doApp: false, // o app pegou o atalho: o keydown daqui não troca
+  pedidoDoApp: 0, // cada pedido ao app tem um número: respostas de um pedido antigo não valem
+};
+
+const TECLAS_SO_MODIFICADORAS = new Set(["Control", "Alt", "AltGraph", "Shift", "Meta", "OS", "Super", "Hyper"]);
+const teclaSoModificadora = (evento) =>
+  TECLAS_SO_MODIFICADORAS.has(evento.key) || /^(Control|Alt|Shift|Meta|OS)(Left|Right)$/.test(evento.code);
+
+// Uma tecla com Ctrl ou Alt; ou, sozinhas, F1 a F24, Pause e Scroll Lock
+function atalhoValido({ codigo, ctrl, alt, shift, meta }) {
+  if (ctrl || alt) return true;
+  if (shift || meta) return false;
+  return /^F([1-9]|1[0-9]|2[0-4])$/.test(codigo) || codigo === "Pause" || codigo === "ScrollLock";
+}
+
+function nomeDaTecla(evento) {
+  const codigo = evento.code;
+  let achado;
+  if ((achado = /^Key([A-Z])$/.exec(codigo))) return achado[1];
+  if ((achado = /^Digit([0-9])$/.exec(codigo))) return achado[1];
+  if (/^F[0-9]{1,2}$/.test(codigo)) return codigo;
+  if ((achado = /^Numpad([0-9])$/.exec(codigo))) return `Num ${achado[1]}`;
+  if (codigo === "Backquote") return evento.key;
+  if (codigo === "ScrollLock") return "Scroll Lock";
+  return String(evento.key).toUpperCase();
+}
+
+function atalhoDoEvento(evento) {
+  const novo = {
+    codigo: evento.code,
+    ctrl: evento.ctrlKey,
+    alt: evento.altKey,
+    shift: evento.shiftKey,
+    meta: evento.metaKey,
+  };
+  const partes = [];
+  if (novo.ctrl) partes.push("Ctrl");
+  if (novo.alt) partes.push("Alt");
+  if (novo.shift) partes.push("Shift");
+  if (novo.meta) partes.push("Win");
+  partes.push(nomeDaTecla(evento));
+  novo.rotulo = partes.join(" + ");
+  return novo;
+}
+
+const casaComAtalho = (evento, a) =>
+  evento.code === a.codigo &&
+  evento.ctrlKey === a.ctrl &&
+  evento.altKey === a.alt &&
+  evento.shiftKey === a.shift &&
+  evento.metaKey === a.meta;
+
+// Para o app: "Control+Alt+Shift+Super+KeyM", só com os que há
+function aceleradorDe(a) {
+  const partes = [];
+  if (a.ctrl) partes.push("Control");
+  if (a.alt) partes.push("Alt");
+  if (a.shift) partes.push("Shift");
+  if (a.meta) partes.push("Super");
+  partes.push(a.codigo);
+  return partes.join("+");
+}
+
+const emChamada = () => Boolean(voz.motor && voz.situacao === "conectado");
+const appTemAtalho = () => typeof window.cronicasEternasApp?.atalhoDoMicrofone === "function";
+
+// Numa chamada, o atalho guardado vai para o app; fora dela (ou sem atalho), null tira o de antes
+async function registrarAtalhoNoApp() {
+  if (!appTemAtalho()) return;
+  const pedido = ++atalho.pedidoDoApp;
+  const a = emChamada() ? atalho.guardado : null;
+  atalho.doApp = false;
+  try {
+    await window.cronicasEternasApp.atalhoDoMicrofone(a ? aceleradorDe(a) : null);
+    if (pedido === atalho.pedidoDoApp) atalho.doApp = Boolean(a);
+  } catch (falha) {
+    if (pedido !== atalho.pedidoDoApp || !a) return;
+    const mensagem = typeof falha === "string" ? falha : falha?.message || "sem resposta";
+    avisoRapido(`O atalho ${a.rotulo} não ficou valendo fora do chat: ${mensagem}`);
+  }
+}
+
+async function trocarPeloAtalho() {
+  if (!emChamada()) return;
+  const ligou = await alternarMicrofone();
+  if (ligou !== null) avisoRapido(ligou ? "Microfone ligado." : "Microfone desligado.");
+}
+
+function mostrarAtalho() {
+  const a = atalho.guardado;
+  const teclas = $("#voz-atalho-teclas");
+  if (a) {
+    const partes = [];
+    a.rotulo.split(" + ").forEach((parte, i) => {
+      if (i) partes.push(" + ");
+      partes.push(criar("kbd", "", parte));
+    });
+    teclas.replaceChildren(...partes);
+  } else {
+    teclas.textContent = "Nenhum";
+  }
+  $("#voz-atalho-gravar").textContent = atalho.gravando ? "Aperte as teclas…" : "Gravar atalho";
+  $("#voz-atalho-tirar").hidden = !a;
+  $("#voz-atalho-dica").textContent = appTemAtalho()
+    ? "Vale em qualquer janela enquanto você está numa chamada. Nesse tempo, os outros programas não recebem essas teclas."
+    : "Vale com o chat na frente. No app atualizado, vale em qualquer janela.";
+}
+
+function erroDoAtalho(texto) {
+  const erro = $("#voz-atalho-erro");
+  erro.textContent = texto;
+  erro.hidden = !texto;
+}
+
+function comecarGravacao() {
+  atalho.gravando = true;
+  erroDoAtalho("");
+  mostrarAtalho();
+}
+
+function pararGravacao() {
+  if (!atalho.gravando) return;
+  atalho.gravando = false;
+  mostrarAtalho();
+}
+
+function guardarAtalho(novo) {
+  atalho.guardado = novo;
+  gravarLocal(CONFIG_DA_VOZ.chaveDoAtalho, JSON.stringify(novo));
+  mostrarAtalho();
+  if (emChamada()) registrarAtalhoNoApp();
+}
+
+function tirarAtalho() {
+  pararGravacao();
+  erroDoAtalho("");
+  guardarAtalho(null);
+}
+
+function gravarTecla(evento) {
+  evento.preventDefault();
+  evento.stopPropagation();
+  if (evento.key === "Escape") return pararGravacao();
+  if (!evento.code || teclaSoModificadora(evento)) return; // espera a tecla
+  const novo = atalhoDoEvento(evento);
+  atalho.gravando = false;
+  if (!atalhoValido(novo)) {
+    mostrarAtalho();
+    erroDoAtalho("Use Ctrl ou Alt junto com a tecla, ou uma tecla de F1 a F24, Pause ou Scroll Lock sozinha.");
+    return;
+  }
+  erroDoAtalho("");
+  guardarAtalho(novo);
+}
+
+function teclaNoDocumento(evento) {
+  if (atalho.gravando) return gravarTecla(evento);
+  const a = atalho.guardado;
+  if (!a || evento.repeat || atalho.doApp || !emChamada() || !casaComAtalho(evento, a)) return;
+  evento.preventDefault();
+  trocarPeloAtalho();
+}
+
+function configurarAtalho() {
+  atalho.guardado = lerAtalho();
+  document.addEventListener("keydown", teclaNoDocumento, true);
+  window.addEventListener("cronicas-eternas:atalho", (evento) => {
+    if (evento.detail?.estado === "apertou" && emChamada()) trocarPeloAtalho();
+  });
+  registrarAtalhoNoApp(); // nada sobra preso de uma página anterior
 }
 
 /* =================================================================
@@ -1631,6 +1850,7 @@ ganchosDaVoz.mover = ({ canal }) => {
 };
 
 ganchosDaVoz.salaConectada = salaConectada;
+ganchosDaVoz.abrirConfiguracoes = abrirConfiguracoesDeVoz;
 ganchosDaVoz.depoisDaLista = marcarQuemFalaNaLista;
 ganchosDaVoz.encerrar = () => {
   if (voz.sala) sairDaSala();
@@ -1646,6 +1866,7 @@ function configurarVoz() {
   configurarVolume();
   configurarArrastar();
   configurarConfiguracoesDeVoz();
+  configurarAtalho();
 
   // Clicar numa sala na lista entra nela (abrir pelo endereço só mostra)
   $("#lista").addEventListener("click", (evento) => {

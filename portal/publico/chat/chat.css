@@ -3118,3 +3118,43 @@ button.seletor-persona:focus-visible {
   justify-content: flex-end;
   gap: 0.9rem;
 }
+
+/* O atalho do microfone */
+.voz-atalho {
+  margin: 0.6rem 0 1rem;
+  padding: 0;
+  border: 0;
+}
+
+.voz-atalho legend {
+  margin-bottom: 0.3rem;
+}
+
+.voz-atalho__linha {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.3rem;
+}
+
+.voz-atalho__teclas {
+  flex: 1;
+  min-width: 8rem;
+  color: var(--pergaminho-apagado);
+}
+
+.voz-atalho__teclas kbd {
+  display: inline-block;
+  padding: 0.05rem 0.4rem;
+  font-family: inherit;
+  font-size: 0.92rem;
+  background: var(--fuligem);
+  border: 1px solid var(--ferro);
+  border-bottom-width: 2px;
+  border-radius: 3px;
+}
+
+.voz-atalho__erro {
+  color: var(--alerta);
+}
