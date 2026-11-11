@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mural · Crônicas Eternas</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alegreya:ital,wght@0,400;0,500;0,700;1,400;1,500&family=Grenze+Gotisch:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="../style.css">
+  <link rel="stylesheet" href="../marcas.css">
+  <link rel="stylesheet" href="mural.css">
+  <script src="../comum.js" defer></script>
+  <script src="../marcas.js" defer></script>
+  <script src="mural.js" defer></script>
+</head>
+<body class="com-barra pagina-do-mural" data-pagina="mural" data-raiz="../">
+
+  <!-- ============ Cenário: arte de fundo, névoa e cinzas ============ -->
+  <div class="cenario" aria-hidden="true">
+    <div class="cenario__arte"></div>
+    <div class="cenario__nevoa"></div>
+    <canvas id="cinzas" class="cenario__cinzas"></canvas>
+    <div class="cenario__vinheta"></div>
+    <div class="cenario__grao"></div>
+  </div>
+
+  <!-- ============ Desenhos usados pela página ============ -->
+  <svg class="simbolos" aria-hidden="true" focusable="false">
+    <defs>
+      <symbol id="vigia" viewBox="0 0 24 24"><path d="M2.5 12C5.5 7.4 8.6 5.6 12 5.6S18.5 7.4 21.5 12C18.5 16.6 15.4 18.4 12 18.4S5.5 16.6 2.5 12Z"/><circle cx="12" cy="12" r="3.2"/><path d="M12 1.8V3.4M12 20.6V22.2"/></symbol>
+      <symbol id="icone-lupa" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.4 15.4L21 21"/></symbol>
+    </defs>
+  </svg>
+
+  <!-- ============ Cabeçalho ============ -->
+  <header id="topo" class="topo">
+    <a class="topo__marca topo__marca--link" href="../">Crônicas Eternas</a>
+
+    <p id="status" class="status" role="status" aria-live="polite">
+      <svg class="status__vigia" aria-hidden="true"><use href="#vigia"/></svg>
+      <span id="status-texto">Consultando o servidor…</span>
+    </p>
+
+    <nav class="topo__conta" aria-label="Sua conta">
+      <span id="nome-conta" class="topo__nome"></span>
+      <span id="cargo-conta" class="topo__cargo" hidden></span>
+      <button id="botao-sair" class="botao botao--leve" type="button">Sair</button>
+    </nav>
+  </header>
+
+  <!-- ============ Barra lateral (montada pelo comum.js) ============ -->
+  <nav class="barra-lateral" aria-label="Páginas do grupo"></nav>
+
+  <!-- ============ A página ============ -->
+  <main id="pagina" class="pagina-mural" hidden>
+    <div class="cabeca-mural">
+      <div class="cabeca-mural__texto">
+        <h1 class="cabeca-mural__titulo">Mural</h1>
+        <p class="cabeca-mural__sub">As notas que o grupo pregou para todos lerem.</p>
+      </div>
+      <div id="acoes-mural" class="cabeca-mural__acoes" hidden>
+        <button id="botao-pregar" class="botao botao--principal" type="button">Pregar uma nota</button>
+        <p id="quantas-minhas" class="cabeca-mural__quantas"></p>
+      </div>
+    </div>
+
+    <!-- O quadro de avisos, com os papéis pregados (montados pelo mural.js) -->
+    <section id="quadro" class="quadro-de-avisos" aria-label="Notas pregadas no mural">
+      <div id="papeis" class="quadro__papeis"></div>
+      <div id="mural-vazio" class="quadro__vazio" hidden>
+        <p class="quadro__vazio-texto">Ninguém pregou nada ainda.</p>
+        <button id="botao-pregar-vazio" class="botao botao--principal" type="button" hidden>Pregar uma nota</button>
+      </div>
+    </section>
+  </main>
+
+  <!-- ============ A leitura de uma nota ============ -->
+  <dialog id="dialogo-leitura" class="dialogo dialogo--leitura" aria-labelledby="leitura-titulo">
+    <h2 id="leitura-titulo" class="dialogo__titulo"></h2>
+    <p id="leitura-quem" class="leitura-mural__quem"></p>
+    <div id="leitura-texto" class="marcas leitura-mural__texto"></div>
+    <div class="dialogo__acoes">
+      <a id="leitura-caderno" class="botao botao--leve" hidden>Abrir no Caderno</a>
+      <button id="leitura-tirar" class="botao botao--leve" type="button" hidden>Tirar do mural</button>
+      <button id="leitura-fechar" class="botao botao--principal" type="button">Fechar</button>
+    </div>
+  </dialog>
+
+  <!-- ============ Pregar uma nota ============ -->
+  <dialog id="dialogo-pregar" class="dialogo dialogo--largo" aria-labelledby="pregar-titulo">
+    <h2 id="pregar-titulo" class="dialogo__titulo">Pregar uma nota</h2>
+    <p class="dialogo__texto">Toda conta do portal vai poder ler a nota no mural, com as imagens dela. Só você altera, no Caderno, e pode tirar quando quiser.</p>
+    <label class="campo pregar__busca">
+      <span class="sr">Procurar pelo título</span>
+      <input id="pregar-busca" type="search" placeholder="Procurar pelo título" autocomplete="off">
+    </label>
+    <p id="pregar-limite" class="pregar__limite" role="status" hidden></p>
+    <p id="pregar-situacao" class="pregar__situacao" role="status"></p>
+    <ul id="pregar-lista" class="pregar__lista" aria-label="Suas notas"></ul>
+    <div class="dialogo__acoes">
+      <button id="pregar-cancelar" class="botao botao--leve" type="button">Cancelar</button>
+    </div>
+  </dialog>
+
+  <!-- ============ Avisos ============ -->
+  <dialog id="dialogo-aviso" class="dialogo">
+    <form method="dialog">
+      <h2 id="aviso-titulo" class="dialogo__titulo"></h2>
+      <p id="aviso-texto" class="dialogo__texto"></p>
+      <div class="dialogo__acoes">
+        <button id="aviso-cancelar" class="botao botao--leve" value="cancelar" hidden></button>
+        <button id="aviso-confirmar" class="botao botao--principal" value="confirmar">Entendi</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="aviso-rapido" class="aviso-rapido" role="status" aria-live="polite" hidden></div>
+
+  <!-- ============ Só na prévia ============ -->
+  <details id="simulacao" class="simulacao" hidden>
+    <summary id="simulacao-resumo">Prévia</summary>
+    <label class="campo">
+      <span class="campo__rotulo">Ver a página como</span>
+      <select id="sim-cargo">
+        <option value="jogador">Jogador (Neia)</option>
+        <option value="admin">Administrador (mestre)</option>
+      </select>
+    </label>
+    <button id="sim-restaurar" class="botao botao--leve" type="button">Restaurar os exemplos</button>
+    <p class="simulacao__nota">Só existe na prévia. As notas são exemplos para ver o visual; pregar e tirar mudam só a memória da página.</p>
+  </details>
+</body>
+</html>

@@ -93,6 +93,14 @@ const PAGINAS = [
     pronta: true,
     icone: "M5 2.5h12a1.5 1.5 0 0 1 1.5 1.5v16a1.5 1.5 0 0 1-1.5 1.5H5ZM8.5 2.5v19M14.5 2.5v6l-1.5-1.2-1.5 1.2v-6M18.5 11h2.5v3h-2.5", // caderno com fita e fecho
   },
+  {
+    id: "mural",
+    nome: "Mural",
+    curto: "Mural",
+    caminho: "mural/",
+    pronta: true,
+    icone: "M3 4h18v12H3ZM7 20.5 8.3 16M17 20.5 15.7 16M6.5 7h5v6h-5ZM9 5.5v1.5M14 7.5h4M14 10h4M14 12.5h2.5", // quadro com um papel pregado
+  },
 ];
 
 // O endereço de uma página do grupo, visto da página atual

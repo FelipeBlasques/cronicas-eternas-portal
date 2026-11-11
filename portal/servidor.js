@@ -18,6 +18,7 @@
      mapas.js     Mapas
      memorias.js  Memórias de Draevor
      caderno.js   Caderno (cada conta tem o seu, fora do dados.json)
+     mural.js     Mural (as notas pregadas do Caderno, para todos lerem)
      chat.js      Chat (canais, privadas e eventos; as mensagens ficam fora do dados.json)
 
    Comandos:
@@ -73,6 +74,7 @@ const PAGINAS = [
   require("./servidor/mapas"),
   require("./servidor/memorias"),
   require("./servidor/caderno"),
+  require("./servidor/mural"),
   require("./servidor/chat"),
 ];
 

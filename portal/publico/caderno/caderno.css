@@ -564,6 +564,23 @@
   letter-spacing: 0.08em;
 }
 
+/* A nota pregada no Mural: uma marca pequena, que leva ao papel dela lá */
+.nota__no-mural {
+  padding: 0.12rem 0.55rem;
+  border: 1px solid var(--ferro-fraco);
+  border-radius: 999px;
+  font-size: 0.82rem;
+  letter-spacing: 0.04em;
+  color: var(--pergaminho-apagado);
+  text-decoration: none;
+}
+
+.nota__no-mural:hover,
+.nota__no-mural:focus-visible {
+  border-color: var(--pergaminho-apagado);
+  color: var(--pergaminho);
+}
+
 .nota__vazia {
   font-style: italic;
   color: var(--cinza);

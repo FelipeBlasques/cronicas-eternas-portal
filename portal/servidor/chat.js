@@ -2372,4 +2372,5 @@ module.exports = {
   tratar: tratarChat,
   iniciar: iniciarChat,
   resumoDoChat,
+  perfilPublico,
 };

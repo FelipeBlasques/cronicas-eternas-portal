@@ -53,6 +53,7 @@ const RESULTADOS_DA_BUSCA = 50; // notas que a busca devolve, no máximo
 const LARGURA_DO_TRECHO = 120; // caracteres, mais ou menos, do trecho de cada resultado da busca
 const LIMITE_JSON = 1024 * 1024; // o corpo das rotas de escrita: uma nota inteira, com folga para os acentos
 const UM_DIA = 24 * 60 * 60 * 1000;
+const LIMITE_NO_MURAL = 5; // notas que cada caderno pode ter pregadas no mural
 
 const PASTA_CADERNOS = path.join(CONFIG.pastaDados, "cadernos");
 const ARQUIVO = "caderno.json";
@@ -180,6 +181,7 @@ function conferirCaderno(bruto) {
     if (typeof nota.texto !== "string") nota.texto = "";
     if (!Number.isInteger(nota.versao)) nota.versao = 1;
     if (!objeto(nota.link) || typeof nota.link.token !== "string" || !nota.link.token) nota.link = null;
+    if (!objeto(nota.mural) || typeof nota.mural.desde !== "string") nota.mural = null;
   }
   // Uma imagem com o registro estragado fica de fora, sem perder o resto do caderno
   conteudo.imagens = (Array.isArray(bruto.imagens) ? bruto.imagens : []).filter((imagem) => {
@@ -549,14 +551,17 @@ function lugaresVisiveis(conta) {
 }
 
 const enderecoPublico = (nota) => `/ler/#${nota.link.token}`;
+const enderecoNoMural = (nota) => `/mural/#nota-${encodeURIComponent(nota.id)}`;
 
-// O link para outra nota: para quem pode lê-la, o título. Na leitura pública, uma nota que quem
-// lê não pode abrir no Caderno, mas que tem o link público ligado, vem também com "publico".
+// O link para outra nota: para quem pode lê-la, o título. Para uma conta que não pode abri-la no
+// Caderno, a nota pregada no mural vem com "publico", o endereço do papel dela no mural. Na leitura
+// pública, uma nota que tem o link público ligado vem também com "publico".
 function alvoDeNota(leitor, id, publica) {
   const achado = acharItem("nota", id);
   if (!achado || !cadernoAtivo(achado.c)) return null;
   const nota = achado.item;
   if (leitor && nivelDe(leitor, achado.c, nota, mapaDePastas(achado.c))) return { titulo: nota.titulo };
+  if (leitor && nota.mural) return { titulo: nota.titulo, publico: enderecoNoMural(nota) };
   if (publica && nota.link) return { titulo: nota.titulo, publico: enderecoPublico(nota) };
   return null;
 }
@@ -628,7 +633,7 @@ function conteudoLido(nota, c, leitor, token) {
     if (!achado || !cadernoAtivo(achado.c)) continue;
     const outra = achado.item;
     const comLink = publica && Boolean(outra.link);
-    const legivel = Boolean(leitor && nivelDe(leitor, achado.c, outra, mapaDePastas(achado.c)));
+    const legivel = Boolean(leitor && (outra.mural || nivelDe(leitor, achado.c, outra, mapaDePastas(achado.c))));
     if (!comLink && !legivel) continue;
     const dono = pessoa(achado.c.dono);
     embutidas[id] = { titulo: outra.titulo, texto: outra.texto, dono: publica ? { nome: dono.nome } : dono };
@@ -689,6 +694,7 @@ const notaDaArvore = (n, pasta) => ({
   pasta,
   alteradaEm: n.alteradaEm,
   etiquetas: [...analisar(n).etiquetas.values()],
+  mural: Boolean(n.mural),
 });
 
 // A árvore inteira de um caderno: para a dona, com o que ela compartilhou; para o administrador, sem
@@ -789,6 +795,7 @@ function notaPublica(conta, achado) {
     alteradaPor: nota.alteradaPor ? pessoa(nota.alteradaPor) : null,
     dono: pessoa(c.dono),
     nivel,
+    mural: Boolean(nota.mural),
   };
   if (nivel === "dona") {
     publica.compartilhada = compartilhadaPublica(nota);
@@ -935,6 +942,10 @@ async function tratarCaderno(req, res, rota, metodo, conta) {
         if (metodo === "POST") return ligarLink(res, conta, id);
         if (metodo === "DELETE") return desligarLink(res, conta, id);
       }
+      if (id && acao === "mural") {
+        if (metodo === "POST") return pregarNoMural(res, conta, id);
+        if (metodo === "DELETE") return tirarDoMural(res, conta, id);
+      }
     }
     if (recurso === "pastas") {
       if (!id && metodo === "POST") return criarPasta(req, res, conta);
@@ -1050,6 +1061,7 @@ async function criarNota(req, res, conta) {
     alteradaPor: conta.usuario,
     compartilhada: {},
     link: null,
+    mural: null,
   };
   c.dados.notas.push(nota);
   ondeEsta.set(nota.id, c);
@@ -1260,6 +1272,84 @@ async function desligarLink(res, conta, id) {
   enviarJson(res, 200, { ok: true });
 }
 
+/* ---------- O mural ---------- */
+
+// Prega a nota no mural: toda conta passa a lê-la lá. No máximo LIMITE_NO_MURAL por caderno.
+async function pregarNoMural(res, conta, id) {
+  exigirQuemEscreve(conta);
+  const { c, item: nota, nivel } = itemVisivel(conta, "nota", id);
+  if (nivel !== "dona") throw soADona(c, "pregar esta nota no mural");
+  exigirGravavel(c);
+  if (!nota.mural) {
+    if (c.dados.notas.filter((n) => n.mural).length >= LIMITE_NO_MURAL) {
+      throw new ErroHttp(
+        409,
+        `Você já tem ${LIMITE_NO_MURAL} notas no mural. Tire uma antes de pregar outra.`,
+        "limite-do-mural",
+      );
+    }
+    nota.mural = { desde: carimbo() };
+    await gravarCaderno(c);
+  }
+  enviarJson(res, 200, { mural: true });
+}
+
+// Tira a nota do mural: a dona, ou o administrador, que modera o mural (a exceção ao "só lê os cadernos")
+async function tirarDoMural(res, conta, id) {
+  const { c, item: nota, nivel } = itemVisivel(conta, "nota", id);
+  if (nivel !== "dona" && nivel !== "admin") throw soADona(c, "tirar esta nota do mural");
+  exigirGravavel(c);
+  if (nota.mural) {
+    nota.mural = null;
+    await gravarCaderno(c);
+  }
+  enviarJson(res, 200, { mural: false });
+}
+
+// As notas pregadas no mural, das pregadas por último primeiro, como a conta as lê lá
+function notasDoMural(leitor) {
+  const lista = [];
+  for (const c of cadernos.values()) {
+    if (!cadernoAtivo(c)) continue;
+    const pastas = mapaDePastas(c);
+    for (const nota of c.dados.notas) {
+      if (!nota.mural) continue;
+      const minha = c.dono === leitor.usuario;
+      lista.push({
+        id: nota.id,
+        titulo: nota.titulo,
+        texto: nota.texto,
+        desde: nota.mural.desde,
+        alteradaEm: nota.alteradaEm,
+        dono: pessoa(c.dono),
+        minha,
+        podeTirar: minha || Boolean(leitor.admin),
+        noCaderno: Boolean(nivelDe(leitor, c, nota, pastas)),
+        ...conteudoLido(nota, c, leitor),
+      });
+    }
+  }
+  return lista.sort((a, b) => doMaisRecente(a.desde, b.desde));
+}
+
+// As notas do caderno da conta, para escolher qual pregar, em ordem de título
+function notasParaPregar(conta) {
+  const c = cadernoDaConta(conta);
+  const pastas = mapaDePastas(c);
+  const notas = c.dados.notas
+    .map((nota) => ({
+      id: nota.id,
+      titulo: nota.titulo,
+      caminho: pastasAcima(nota, pastas)
+        .reverse()
+        .map((p) => p.nome)
+        .join(" / "),
+      noMural: Boolean(nota.mural),
+    }))
+    .sort(porTitulo);
+  return { notas, noMural: notas.filter((n) => n.noMural).length, limite: LIMITE_NO_MURAL };
+}
+
 /* ---------- Imagens ---------- */
 
 // Um tamanho em bytes do jeito que se lê: "10 MB", "1 GB", "1,5 GB"
@@ -1305,14 +1395,17 @@ async function mandarImagem(res, { c, imagem }) {
     .pipe(res);
 }
 
-// A imagem fica protegida: só quem pode ler uma nota do mesmo caderno que a cite (o administrador sempre)
+// A imagem fica protegida: só quem pode ler uma nota do mesmo caderno que a cite (o administrador sempre).
+// Enquanto uma nota pregada no mural a cita, qualquer conta a vê.
 function verImagem(res, conta, arquivo) {
   const achada = imagemPeloArquivo(arquivo);
   if (!achada) throw semImagem();
   const { c, imagem } = achada;
   if (!conta.admin) {
     const pastas = mapaDePastas(c);
-    const citada = c.dados.notas.some((n) => analisar(n).imagens.has(imagem.id) && nivelDe(conta, c, n, pastas));
+    const citada = c.dados.notas.some(
+      (n) => analisar(n).imagens.has(imagem.id) && (n.mural || nivelDe(conta, c, n, pastas)),
+    );
     if (!citada) throw semImagem();
   }
   return mandarImagem(res, achada);
@@ -1674,7 +1767,8 @@ ganchos.excluirConta.push(apagarCadernoDaConta);
 
 // Os endereços /api/caderno/... são desta página. "iniciar" lê os cadernos ao ligar o portal.
 // Os que começam com /api/caderno/publico/ abrem sem login: o servidor.js os passa a "tratarPublico".
-// "lerCodigos", "alvosDosLinks", "conferirLinks" e "citaveisDoPortal" servem à página dos lugares nos Mapas.
+// "lerCodigos", "alvosDosLinks", "conferirLinks" e "citaveisDoPortal" servem à página dos lugares nos Mapas;
+// "notasDoMural", "notasParaPregar" e "LIMITE_NO_MURAL", ao Mural.
 module.exports = {
   prefixo: "/api/caderno",
   tratar: tratarCaderno,
@@ -1685,4 +1779,7 @@ module.exports = {
   alvosDosLinks,
   conferirLinks,
   citaveisDoPortal,
+  notasDoMural,
+  notasParaPregar,
+  LIMITE_NO_MURAL,
 };

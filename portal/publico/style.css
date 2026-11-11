@@ -2058,7 +2058,7 @@ body.com-barra .topo {
     border-top: 1px solid var(--ferro-fraco);
   }
 
-  /* Os botões dividem a largura: os sete cabem num celular de 360 px */
+  /* Os botões dividem a largura: os oito cabem num celular de 360 px */
   .barra-lateral__botao {
     flex: 1 1 0;
     width: auto;
