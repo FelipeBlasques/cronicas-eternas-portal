@@ -11,6 +11,10 @@
    Ao lado do quadro, o painel "Tempo no portal" (GET /api/uso, do
    servidor/uso.js): uma linha por conta no período escolhido (7 dias,
    30 dias ou sempre), que abre o tempo em cada página e em chamada.
+   Para o administrador, cada linha tem o multiplicador secreto da
+   conta ("×3"), que ele troca (PUT /api/uso/multiplicadores/<usuario>),
+   e o detalhe mostra também o tempo sem o multiplicador. As outras
+   contas recebem só o tempo já multiplicado.
 
    No servidor, conversa com o servidor/mural.js (ler o mural e as
    notas para pregar) e com o servidor/caderno.js (pregar e tirar).
@@ -42,6 +46,7 @@ const apiDoServidor = {
   tirar: (id) => pedir("DELETE", `${caminhoDe("/api/caderno/notas", id)}/mural`),
   estado: () => pedir("GET", "/api/estado", undefined, { silencioso: true }),
   uso: () => pedir("GET", "/api/uso", undefined, { silencioso: true }),
+  multiplicador: (usuario, vezes) => pedir("PUT", caminhoDe("/api/uso/multiplicadores", usuario), { vezes }),
   sair: () => pedir("POST", "/api/sair"),
 };
 
@@ -226,8 +231,17 @@ function usoDaPrevia() {
   };
 }
 
+// O tempo de exemplo vezes o multiplicador: na prévia, vale para todo o período
+function multiplicarNaPrevia(periodo, vezes) {
+  const vezesDe = (s) => Math.round(s * vezes);
+  const paginas = {};
+  for (const [pagina, s] of Object.entries(periodo.paginas)) if (vezesDe(s)) paginas[pagina] = vezesDe(s);
+  return { s: vezesDe(periodo.s), voz: vezesDe(periodo.voz), paginas };
+}
+
 function criarApiDePrevia() {
   let banco = exemplosDaPrevia();
+  let multiplicadores = { takezo: 3 }; // usuario → vezes; sem ele, ×1
   let conta = CONTAS_DA_PREVIA.jogador;
   const LIMITE = 5;
   const copia = (valor) => structuredClone(valor);
@@ -338,9 +352,26 @@ function criarApiDePrevia() {
       await esperar(200);
       return { online: true, mundo: "Ode to Sleep", usuarios: 3 };
     },
+    // Como no servidor: o tempo já multiplicado; o multiplicador e o tempo de verdade, só para o administrador
     async uso() {
       await esperar(220);
-      return usoDaPrevia();
+      const dados = usoDaPrevia();
+      for (const linha of dados.contas) {
+        const vezes = multiplicadores[linha.usuario] ?? 1;
+        const real = { semana: linha.semana, mes: linha.mes, sempre: linha.sempre };
+        for (const periodo of Object.keys(real)) linha[periodo] = multiplicarNaPrevia(real[periodo], vezes);
+        if (ehAdmin()) Object.assign(linha, { multiplicador: vezes, real });
+      }
+      return dados;
+    },
+    async multiplicador(usuario, vezes) {
+      await esperar(150);
+      if (!ehAdmin()) throw erroComCodigo("Só o administrador pode fazer isso.", "proibido");
+      if (!(Number.isFinite(vezes) && vezes >= 0 && vezes <= 10)) throw new Error("O multiplicador vai de 0 a 10.");
+      const certo = Math.round(vezes * 100) / 100;
+      if (certo === 1) delete multiplicadores[usuario];
+      else multiplicadores[usuario] = certo;
+      return { usuario, multiplicador: certo };
     },
     async sair() {
       return { ok: true };
@@ -351,6 +382,7 @@ function criarApiDePrevia() {
     },
     restaurar() {
       banco = exemplosDaPrevia();
+      multiplicadores = { takezo: 3 };
     },
   };
 }
@@ -722,15 +754,31 @@ function barraDoTempo(parte, classe) {
   return barra;
 }
 
+// "3", "1,5": o multiplicador escrito como no Brasil
+const FORMATO_DO_MULTIPLICADOR = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 2 });
+const textoDasVezes = (vezes) => `×${FORMATO_DO_MULTIPLICADOR.format(vezes)}`;
+
+// Só o administrador recebe o multiplicador de cada conta
+const temMultiplicador = (conta) => typeof conta.multiplicador === "number";
+
+// Para o administrador, quando o multiplicador mudou o tempo do período: o tempo de verdade
+function tempoDeVerdade(conta) {
+  const real = conta.real?.[tempo.periodo];
+  if (!real || real.s === conta[tempo.periodo].s) return null;
+  return criar("p", "tempo__real", `Sem o multiplicador: ${textoDoTempo(real.s)}`);
+}
+
 function detalheDoTempo(conta, idDetalhe) {
   const doPeriodo = conta[tempo.periodo];
   const detalhe = criar("div", "tempo__detalhe");
   detalhe.id = idDetalhe;
+  const real = tempoDeVerdade(conta);
   const paginas = Object.entries(doPeriodo.paginas)
     .filter(([, s]) => s > 0)
     .sort((a, b) => b[1] - a[1] || nomeDaPaginaDoUso(a[0]).localeCompare(nomeDaPaginaDoUso(b[0]), "pt-BR"));
   if (!paginas.length) {
     detalhe.append(criar("p", "tempo__nada", "Nenhum tempo neste período."));
+    if (real) detalhe.append(real);
     return detalhe;
   }
   const maior = paginas[0][1];
@@ -745,7 +793,19 @@ function detalheDoTempo(conta, idDetalhe) {
     lista.append(item);
   }
   detalhe.append(lista, criar("p", "tempo__chamada", `Em chamada: ${textoDoTempo(doPeriodo.voz)}`));
+  if (real) detalhe.append(real);
   return detalhe;
+}
+
+// O selo do multiplicador, ao lado da linha (só o administrador): abre o diálogo para trocar
+function botaoDoMultiplicador(conta) {
+  const vezes = conta.multiplicador;
+  const botao = criar("button", vezes === 1 ? "tempo__vezes" : "tempo__vezes tempo__vezes--ativo", textoDasVezes(vezes));
+  botao.type = "button";
+  botao.title = "Multiplicador do tempo (só você vê)";
+  botao.setAttribute("aria-label", `Multiplicador do tempo de ${conta.nome}: ${textoDasVezes(vezes)}. Trocar`);
+  botao.addEventListener("click", () => abrirMultiplicador(conta));
+  return botao;
 }
 
 function linhaDoTempo(conta, maior) {
@@ -780,6 +840,10 @@ function linhaDoTempo(conta, maior) {
   });
 
   item.append(linha);
+  if (temMultiplicador(conta)) {
+    item.classList.add("tempo__conta--com-vezes");
+    item.append(botaoDoMultiplicador(conta));
+  }
   if (aberta) item.append(detalheDoTempo(conta, idDetalhe));
   return item;
 }
@@ -795,20 +859,101 @@ function renderizarTempo() {
   );
   const maior = contas[0]?.[tempo.periodo].s ?? 0;
 
-  // O foco fica na mesma linha depois de desenhar de novo
-  const focada = document.activeElement?.closest?.(".tempo__conta")?.dataset.usuario;
+  // O foco fica na mesma linha (ou no mesmo multiplicador) depois de desenhar de novo
+  const focado = document.activeElement;
+  const focada = focado?.closest?.(".tempo__conta")?.dataset.usuario;
+  const noMultiplicador = Boolean(focado?.classList?.contains("tempo__vezes"));
   const itens = contas.map((conta) => {
     const item = linhaDoTempo(conta, maior);
     item.dataset.usuario = conta.usuario;
     return item;
   });
   $("#tempo-lista").replaceChildren(...itens);
-  if (focada) itens.find((i) => i.dataset.usuario === focada)?.querySelector(".tempo__linha").focus();
+  if (focada) {
+    const item = itens.find((i) => i.dataset.usuario === focada);
+    (item?.querySelector(noMultiplicador ? ".tempo__vezes" : ".tempo__linha") ?? item?.querySelector(".tempo__linha"))?.focus();
+  }
 
   const desde = new Date(`${tempo.dados.desde}T12:00:00`);
   const quando = Number.isNaN(desde.getTime()) ? "" : ` Desde ${FORMATO_DO_DIA_E_ANO.format(desde)}.`;
-  $("#tempo-pe").textContent = `Conta o tempo com o portal aberto e em uso, ou numa chamada do chat.${quando}`;
+  const segredo = tempo.dados.contas.some(temMultiplicador) ? " Os multiplicadores (×) só você vê." : "";
+  $("#tempo-pe").textContent = `Conta o tempo com o portal aberto e em uso, ou numa chamada do chat.${quando}${segredo}`;
   painel.hidden = false;
+}
+
+/* ---------- O multiplicador secreto (só o administrador) ---------- */
+
+let contaDoMultiplicador = null; // a conta no diálogo do multiplicador
+
+function mostrarErroDoMultiplicador(texto) {
+  const erro = $("#erro-multiplicador");
+  erro.textContent = texto;
+  erro.hidden = !texto;
+}
+
+// Os botões das escolhas rápidas acendem quando o campo tem o mesmo número
+function marcarEscolhaDoMultiplicador() {
+  const vezes = $("#multiplicador-vezes").valueAsNumber;
+  for (const escolha of document.querySelectorAll(".multiplicador__escolha")) {
+    escolha.setAttribute("aria-pressed", String(Number(escolha.dataset.vezes) === vezes));
+  }
+}
+
+function abrirMultiplicador(conta) {
+  contaDoMultiplicador = conta;
+  $("#multiplicador-texto").textContent =
+    `O tempo de ${conta.nome} no painel conta vezes este número, de hoje em diante; os dias de antes ficam como estão. ` +
+    "Só você vê o multiplicador: as outras contas veem só o tempo já multiplicado.";
+  const campo = $("#multiplicador-vezes");
+  campo.value = String(conta.multiplicador);
+  marcarEscolhaDoMultiplicador();
+  mostrarErroDoMultiplicador("");
+  $("#dialogo-multiplicador").showModal();
+  campo.focus();
+  campo.select();
+}
+
+// O mesmo que o servidor confere
+function vezesDoFormulario() {
+  const vezes = Math.round($("#multiplicador-vezes").valueAsNumber * 100) / 100;
+  if (!(vezes >= 0 && vezes <= 10)) throw new Error("O multiplicador precisa ser um número de 0 a 10.");
+  return vezes;
+}
+
+async function salvarMultiplicador(evento) {
+  evento.preventDefault();
+  if (!contaDoMultiplicador) return;
+  mostrarErroDoMultiplicador("");
+  const salvar = $("#multiplicador-salvar");
+  salvar.disabled = true;
+  try {
+    const { multiplicador } = await api.multiplicador(contaDoMultiplicador.usuario, vezesDoFormulario());
+    const nome = contaDoMultiplicador.nome;
+    $("#dialogo-multiplicador").close();
+    await carregarTempo();
+    avisoRapido(`O tempo de ${nome} agora conta ${textoDasVezes(multiplicador)}.`);
+  } catch (falha) {
+    if (falha.codigo === "sem-sessao") return; // o pedir() já cuida
+    mostrarErroDoMultiplicador(falha.message);
+  } finally {
+    salvar.disabled = false;
+  }
+}
+
+function configurarMultiplicador() {
+  const dialogo = $("#dialogo-multiplicador");
+  $("#form-multiplicador").addEventListener("submit", salvarMultiplicador);
+  $("#multiplicador-cancelar").addEventListener("click", () => dialogo.close());
+  $("#multiplicador-vezes").addEventListener("input", marcarEscolhaDoMultiplicador);
+  for (const escolha of document.querySelectorAll(".multiplicador__escolha")) {
+    escolha.addEventListener("click", () => {
+      $("#multiplicador-vezes").value = escolha.dataset.vezes;
+      marcarEscolhaDoMultiplicador();
+      mostrarErroDoMultiplicador("");
+    });
+  }
+  dialogo.addEventListener("close", () => (contaDoMultiplicador = null));
+  fecharAoClicarFora(dialogo);
 }
 
 // Falhas só deixam o painel como estava (escondido, se nunca carregou)
@@ -875,6 +1020,7 @@ function configurarEventos() {
   leitura.addEventListener("close", aoFecharLeitura);
   fecharAoClicarFora(leitura);
   fecharAoClicarFora($("#dialogo-pregar"));
+  configurarMultiplicador();
 
   // De volta à vista depois de mais de um minuto: o mural pode ter mudado
   document.addEventListener("visibilitychange", () => {
@@ -909,13 +1055,13 @@ function configurarSimulacao() {
     api.trocarConta(seletor.value);
     resumo();
     for (const dialogo of document.querySelectorAll("dialog[open]")) dialogo.close();
-    await recarregarEmSilencio();
+    await Promise.all([recarregarEmSilencio(), carregarTempo()]);
     avisoRapido(`Agora você vê a página como ${NOMES_DOS_CARGOS[seletor.value]}.`);
   });
   $("#sim-restaurar").addEventListener("click", async () => {
     api.restaurar();
     for (const dialogo of document.querySelectorAll("dialog[open]")) dialogo.close();
-    await recarregarEmSilencio();
+    await Promise.all([recarregarEmSilencio(), carregarTempo()]);
     avisoRapido("Exemplos restaurados.");
   });
 }

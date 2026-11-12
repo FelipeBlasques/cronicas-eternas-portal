@@ -117,6 +117,29 @@
     </div>
   </dialog>
 
+  <!-- ============ O multiplicador do tempo de uma conta (só o administrador) ============ -->
+  <dialog id="dialogo-multiplicador" class="dialogo" aria-labelledby="multiplicador-titulo">
+    <form id="form-multiplicador" class="dialogo__form" novalidate>
+      <h2 id="multiplicador-titulo" class="dialogo__titulo">Multiplicador do tempo</h2>
+      <p id="multiplicador-texto" class="dialogo__texto"></p>
+      <div class="multiplicador__escolhas" role="group" aria-label="Escolhas rápidas">
+        <button class="multiplicador__escolha" type="button" data-vezes="1" aria-pressed="false">×1</button>
+        <button class="multiplicador__escolha" type="button" data-vezes="1.5" aria-pressed="false">×1,5</button>
+        <button class="multiplicador__escolha" type="button" data-vezes="2" aria-pressed="false">×2</button>
+        <button class="multiplicador__escolha" type="button" data-vezes="3" aria-pressed="false">×3</button>
+      </div>
+      <label class="campo">
+        <span class="campo__rotulo">Multiplicador (de 0 a 10)</span>
+        <input id="multiplicador-vezes" name="vezes" type="number" min="0" max="10" step="0.5" inputmode="decimal" required>
+      </label>
+      <p id="erro-multiplicador" class="mensagem-erro" role="alert" hidden></p>
+      <div class="dialogo__acoes">
+        <button id="multiplicador-cancelar" class="botao botao--leve" type="button">Cancelar</button>
+        <button id="multiplicador-salvar" class="botao botao--principal" type="submit">Salvar</button>
+      </div>
+    </form>
+  </dialog>
+
   <!-- ============ Avisos ============ -->
   <dialog id="dialogo-aviso" class="dialogo">
     <form method="dialog">
@@ -142,7 +165,7 @@
       </select>
     </label>
     <button id="sim-restaurar" class="botao botao--leve" type="button">Restaurar os exemplos</button>
-    <p class="simulacao__nota">Só existe na prévia. As notas são exemplos para ver o visual; pregar e tirar mudam só a memória da página. O tempo no portal também é de exemplo.</p>
+    <p class="simulacao__nota">Só existe na prévia. As notas são exemplos para ver o visual; pregar e tirar mudam só a memória da página. O tempo no portal também é de exemplo; nele, o multiplicador (que só o administrador vê) vale para todo o período, e no portal vale de hoje em diante.</p>
   </details>
 </body>
 </html>

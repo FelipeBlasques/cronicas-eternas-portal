@@ -698,6 +698,85 @@ a.botao {
   margin-top: 0;
 }
 
+/* Só o administrador: o tempo sem o multiplicador, no detalhe */
+.tempo__real {
+  margin: 0.45rem 0 0;
+  font-size: 0.86rem;
+  color: var(--cinza);
+}
+
+/* Só o administrador: o multiplicador secreto ao lado de cada linha */
+.tempo__conta--com-vezes {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 0.25rem;
+}
+
+.tempo__conta--com-vezes .tempo__detalhe {
+  grid-column: 1 / -1;
+}
+
+.tempo__vezes {
+  min-width: 2.4rem;
+  padding: 0.12rem 0.4rem;
+  font: inherit;
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--cinza);
+  background: transparent;
+  border: 1px dashed var(--ferro-fraco);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.tempo__vezes:hover {
+  color: var(--pergaminho);
+  border-color: var(--ferro);
+}
+
+.tempo__vezes--ativo {
+  color: var(--pergaminho);
+  background: rgba(232, 221, 200, 0.1);
+  border: 1px solid var(--ferro-forte);
+}
+
+.tempo__vezes:focus-visible,
+.multiplicador__escolha:focus-visible {
+  outline: 2px solid var(--ferro-forte);
+  outline-offset: 2px;
+}
+
+/* O diálogo do multiplicador */
+.multiplicador__escolhas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.multiplicador__escolha {
+  padding: 0.25rem 0.8rem;
+  font: inherit;
+  font-size: 0.95rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--pergaminho-apagado);
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--ferro-fraco);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.multiplicador__escolha:hover {
+  color: var(--pergaminho);
+  border-color: var(--ferro);
+}
+
+.multiplicador__escolha[aria-pressed="true"] {
+  color: var(--pergaminho);
+  background: rgba(232, 221, 200, 0.1);
+  border-color: var(--ferro-forte);
+}
+
 .tempo__pe {
   margin: 0.9rem 0 0;
   padding-top: 0.7rem;

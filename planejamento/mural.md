@@ -301,6 +301,31 @@ Na barra da nota aberta, para quem lê uma nota pregada, uma marca pequena "No m
 - **No pé:** "Conta o tempo com o portal aberto e em uso, ou numa chamada do chat. Desde 12 de novembro de 2026."
 - **Com a página à vista,** o painel pede o `GET /api/uso` de novo a cada minuto, para o ponto de "agora".
 
+### 4.5 O multiplicador secreto (depois da 20.2)
+
+O administrador põe um multiplicador no tempo de cada conta: umas contam ×3, outras ×1. Só ele sabe.
+
+- **O que muda:** o painel mostra o tempo da conta vezes o multiplicador, de 0 a 10 (com até duas casas). Sem multiplicador, é ×1.
+- **De hoje em diante:** a troca vale a partir do dia de Brasília em que foi feita. Cada dia guardado conta com o multiplicador que valia nele; os dias de antes não mudam, e o painel não dá um salto que entregue o segredo.
+  - Trocar de novo no mesmo dia só corrige o de hoje.
+  - Voltar ao que valia ontem tira o de hoje da lista.
+- **Segredo:**
+  - o `GET /api/uso` de quem não é administrador traz só o tempo já multiplicado, sem nenhum campo do multiplicador;
+  - o do administrador traz também, em cada conta, `multiplicador` (o de hoje) e `real: { semana, mes, sempre }` (o tempo de verdade).
+- **No `uso.json`:**
+  - a conta continua com o tempo de verdade;
+  - `multiplicadores: { "<usuario>": [{ desde: "AAAA-MM-DD", vezes: 3 }] }`, em ordem de dia;
+  - quando um dia com multiplicador sai (mais de 400 dias), o que ele somou a mais (ou a menos) passa para `ajuste` na conta, e o "Sempre" não muda.
+- **A rota:** `PUT /api/uso/multiplicadores/<usuario>` com `{ vezes }`.
+  - 403 para quem não é administrador (antes de olhar a conta), 404 para uma conta que não existe, 400 fora de 0 a 10;
+  - grava na hora e responde `{ usuario, multiplicador }`.
+- **Ganchos:** renomear leva o multiplicador junto; apagar a conta tira.
+- **No painel, só para o administrador:**
+  - ao lado de cada linha, o selo "×3" (o ×1 apagado, os outros acesos), que abre o diálogo "Multiplicador do tempo": as escolhas rápidas ×1, ×1,5, ×2 e ×3, o campo de 0 a 10, Cancelar e Salvar;
+  - no detalhe aberto, quando o multiplicador mudou o tempo do período, "Sem o multiplicador: 45 min";
+  - no pé, "Os multiplicadores (×) só você vê."
+- **O limite do segredo:** o código da página (que qualquer conta pode abrir) mostra que a opção existe, mas nunca os números.
+
 ## Prévia
 
 - **O mural:**
@@ -314,6 +339,7 @@ Na barra da nota aberta, para quem lê uma nota pregada, uma marca pequena "No m
   - a marca "No mural" aparece;
   - os links para notas do mural usam `enderecoDaPagina("mural")` mais `#nota-<id>`.
 - **O painel do tempo,** com números de exemplo: uma conta "agora" e uma sem tempo nenhum.
+- **O multiplicador:** o Takezo começa com ×3. Como administrador, o selo e o diálogo funcionam na memória; na prévia o multiplicador vale para todo o período de exemplo.
 
 ## Fora desta versão
 
@@ -339,6 +365,10 @@ Na barra da nota aberta, para quem lê uma nota pregada, uma marca pequena "No m
   - duas abas abertas juntas não contam em dobro;
   - numa chamada, com o chat minimizado, o tempo continua contando;
   - depois de `systemctl restart portal`, o tempo de antes continua lá (perde no máximo o último minuto).
+- **O multiplicador:**
+  - como administrador, ponha ×3 numa conta: o selo acende e o tempo de hoje dela triplica; os dias de antes ficam iguais;
+  - com outra conta, o painel mostra o tempo triplicado, sem selo, sem "Sem o multiplicador" e sem o aviso no pé;
+  - depois de `systemctl restart portal`, o ×3 continua.
 
 ## Sessões
 
@@ -392,3 +422,4 @@ Na barra da nota aberta, para quem lê uma nota pregada, uma marca pequena "No m
     - o `uso.json` gravado depois de um minuto (ou por uma função de teste);
     - renomear e apagar uma conta.
   - **Com o Playwright na prévia, sem tirar prints:** os três períodos e o detalhe de uma linha.
+- **O multiplicador secreto.** A parte 4.5, feita direto, fora do roteiro.
