@@ -54,7 +54,7 @@ O `unzip -o` só cria e substitui arquivos, nunca apaga. Se uma mudança tirar a
 
 Toda conta que não é administrador tem um **Caderno**, que só ela altera (e quem ela deixar editar). O administrador lê todos os cadernos e não altera nenhum.
 
-No **Mural**, toda conta com caderno prega até 5 notas do próprio Caderno, e toda conta lê. O administrador tira qualquer nota do mural (a exceção a "não altera nenhum": ele modera o mural).
+No **Mural**, toda conta com caderno prega até 5 notas do próprio Caderno, e toda conta lê. O administrador tira qualquer nota do mural (a exceção a "não altera nenhum": ele modera o mural). No painel "Tempo no portal", só o administrador vê e troca o **multiplicador secreto** do tempo de cada conta; as outras contas recebem só o tempo já multiplicado, sem nenhum sinal dele.
 
 Sem login, nenhuma página abre. A exceção é a leitura pública de uma nota do Caderno (`/ler/#<token>`), que abre com o link.
 
@@ -106,7 +106,10 @@ portal/
     uso.js          /api/uso (o tempo no portal de cada conta, para o painel do Mural) e POST /api/uso/pulso (o pulso
                     das páginas: até 90 s depois do anterior soma o tempo desde ele, senão 30 s; duas janelas não
                     contam em dobro). Em uso.json, fora do dados.json, com o total e os dias de Brasília; o último
-                    pulso só na memória; grava a cada minuto, se mudou; os ganchos de conta renomeiam e apagam
+                    pulso só na memória; grava a cada minuto, se mudou; os ganchos de conta renomeiam e apagam.
+                    O multiplicador secreto (PUT /api/uso/multiplicadores/<usuario>, só o administrador): em
+                    uso.multiplicadores, por dia, de hoje em diante; o painel multiplica cada dia pelo que valia
+                    nele, e só o administrador recebe o multiplicador e o tempo de verdade (real)
   publico/
     comum.js        lista PAGINAS (com o Mural depois do Caderno) e barra lateral, pedir(), $, criar(), botao(), imagem(),
                     simbolo(), perguntar(), avisoRapido(), avisarFalha(), fecharAoClicarFora(),
@@ -143,7 +146,8 @@ portal/
                                  #grafo e #grafo-<id>: o canvas, a simulação por forças e o painel; usa o estado,
                                  a api, o abrirNota e o buscarEtiqueta do caderno.js e preenche os ganchosDoGrafo)
     mural/                       index.html, mural.js, mural.css: o Mural (o quadro de avisos com os papéis, a leitura
-                                 em #nota-<id>, o "Pregar uma nota" e o painel "Tempo no portal", do GET /api/uso);
+                                 em #nota-<id>, o "Pregar uma nota" e o painel "Tempo no portal", do GET /api/uso,
+                                 com o selo e o diálogo do multiplicador secreto para o administrador);
                                  carrega também ../marcas.js e ../marcas.css
     ler/                         index.html, ler.js, ler.css: a leitura pública de uma nota do Caderno (/ler/#<token>),
                                  sem login e sem a barra lateral; carrega também ../marcas.js e ../marcas.css
