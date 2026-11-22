@@ -191,7 +191,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: calc(2.6rem + 0.06rem * var(--capitulos, 1));
+  width: var(--largura, calc(2.6rem + 0.06rem * var(--capitulos, 1)));
   height: var(--altura, 15rem);
   padding: 1.9rem 0.25rem;
   color: var(--pergaminho);
@@ -235,6 +235,27 @@
 
 .lombada--ocre {
   --couro: #6a4a1e;
+}
+
+/* A lombada enviada (livro em PDF): a imagem é o couro, as faixas e o título */
+.lombada--imagem {
+  padding: 0;
+  background: #1d150f;
+}
+
+.lombada--imagem::before {
+  display: none;
+}
+
+.lombada__imagem {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+  pointer-events: none;
 }
 
 /* As duas faixas douradas, perto do alto e do pé */
@@ -2046,62 +2067,123 @@
   margin: 0;
 }
 
-/* Os capítulos do Livro: um quadro para cada, com as setas e o "Remover" no alto */
-.capitulos-form {
-  display: grid;
-  gap: 0.9rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.capitulo-form {
-  display: grid;
+/* O Livro: o PDF do miolo, as três imagens (com a miniatura de cada uma) e o "Deixar baixar" */
+.livro-form {
   gap: 0.8rem;
-  padding: 0.75rem 0.95rem 0.95rem;
-  background: rgba(12, 10, 9, 0.3);
-  border: 1px solid var(--ferro-fraco);
-  border-radius: var(--raio);
 }
 
-.capitulo-form__cabeca {
+.livro-form__antigo {
+  margin: 0;
+  padding: 0.6rem 0.8rem;
+  font-style: italic;
+  line-height: 1.45;
+  color: var(--pergaminho-apagado);
+  background: rgba(12, 10, 9, 0.3);
+  border-left: 2px solid var(--ferro);
+}
+
+.livro-form__miolo {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.livro-form__linha {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  justify-content: space-between;
-  gap: 0.2rem 1rem;
+  gap: 0.2rem 1.2rem;
 }
 
-.capitulo-form__numero {
-  font-family: var(--fonte-gotica);
-  font-size: 1.25rem;
+.livro-form__rotulo {
+  font-size: 0.95rem;
+  letter-spacing: 0.04em;
+  color: var(--pergaminho-apagado);
+}
+
+.livro-form__atual {
+  margin: 0;
+  overflow-wrap: anywhere;
   color: var(--pergaminho);
 }
 
-.capitulo-form__acoes {
-  display: flex;
-  align-items: baseline;
-  gap: 0.2rem 1rem;
+.livro-form__imagens {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.55fr) minmax(0, 1fr);
+  gap: 0.9rem;
+  align-items: start;
 }
 
-.capitulo-form__seta {
-  min-width: 1.6rem;
-  font-size: 1.1rem;
+.livro-form__imagem {
+  display: grid;
+  gap: 0.35rem;
+  justify-items: center;
   text-align: center;
 }
 
-/* As setas da ponta e o "Remover" do único capítulo ficam apagados, sem o cursor de espera */
-.capitulo-form__acoes .botao:disabled,
-.capitulos-form__mais:disabled {
-  opacity: 0.3;
-  cursor: default;
+.livro-form__miniatura {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  max-width: 7.5rem;
+  aspect-ratio: 3 / 4.2;
+  overflow: hidden;
+  background: rgba(12, 10, 9, 0.35);
+  border: 1px dashed var(--ferro);
+  border-radius: var(--raio);
 }
 
-/* O "+ Capítulo" e o "Importar capítulos (.md)" */
-.capitulos-form__botoes {
+.livro-form__imagem--lombada .livro-form__miniatura {
+  max-width: 3rem;
+  aspect-ratio: 1 / 7;
+}
+
+.livro-form__miniatura img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.livro-form__sem-imagem {
+  padding: 0.4rem;
+  font-size: 0.82rem;
+  font-style: italic;
+  line-height: 1.3;
+  color: var(--cinza);
+}
+
+.livro-form__imagem--lombada .livro-form__sem-imagem {
+  writing-mode: vertical-rl;
+}
+
+.livro-form__botoes {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.2rem 1.5rem;
+  justify-content: center;
+  gap: 0 0.9rem;
+}
+
+.livro-form__baixar {
+  margin-top: 0.3rem;
+}
+
+/* O andamento do envio do PDF e das imagens */
+.livro-form__envio {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0.6rem 0 0;
+}
+
+.livro-form__envio progress {
+  width: 100%;
+  height: 0.45rem;
+  accent-color: var(--brasa);
+}
+
+.livro-form__envio-texto {
+  font-size: 0.92rem;
+  font-style: italic;
+  color: var(--pergaminho-apagado);
 }
 
 /* Apagar fica à esquerda, longe de Salvar */
@@ -2380,8 +2462,9 @@
     min-height: 0;
   }
 
-  .capitulo-form {
-    padding: 0.65rem 0.7rem 0.8rem;
+  .livro-form__imagens {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 0.6fr) minmax(0, 1fr);
+    gap: 0.6rem;
   }
 
   .revelar__lista {

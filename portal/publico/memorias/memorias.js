@@ -6,10 +6,17 @@
    os livros numa estante e os outros escritos numa mesa, cada um
    com a cara da classificação; clicar num deles troca a biblioteca
    pela leitura, com
-   endereço próprio (#memoria-<id>, e #memoria-<id>-capitulo-<n>
-   nos capítulos de um livro). O texto pode mencionar acontecimentos
-   da Linha do Tempo e personagens da galeria com links. Só o
-   administrador escreve, altera, apaga e revela as memórias.
+   endereço próprio (#memoria-<id>). O texto pode mencionar
+   acontecimentos da Linha do Tempo e personagens da galeria com
+   links. Só o administrador escreve, altera, apaga e revela as
+   memórias.
+
+   O Livro é um PDF (o miolo, e as imagens opcionais da capa, da
+   lombada e da contracapa): abre no folheador (folheador.js), com
+   o índice à direita, e cada página tem endereço próprio
+   (#memoria-<id>-pagina-<n>). Os livros antigos, escritos por
+   capítulos, continuam com a capa, o índice e os capítulos de antes
+   (#memoria-<id>-capitulo-<n>) até o PDF chegar.
 
    No servidor, conversa com o servidor/memorias.js. Aberta fora dele
    (arquivo no PC ou prévia), usa memórias de exemplo e um painel
@@ -17,7 +24,8 @@
 
    Usa o comum.js, carregado antes: pedir(), criar(), avisos, barra
    lateral, status do Foundry, texto formatado, fontes e cinzas. Do
-   calendario.js, textoDaData() e chaveDaData().
+   calendario.js, textoDaData() e chaveDaData(). Do folheador.js,
+   criarFolheador(), carregarPdfJs(), OPCOES_DO_PDF e lerInfoDoPdf().
    ================================================================= */
 
 const CONFIG = {
@@ -48,6 +56,39 @@ const REGEX_LINK = /\[\[(evento|personagem):([^\]|\n]+)\|([^\]\n]*)\]\]/g;
    Conversa com o servidor
    ================================================================= */
 
+// Manda um arquivo cru (o PDF do miolo ou uma imagem do livro), com o andamento do envio.
+// O fetch não conta o que já subiu; o XMLHttpRequest conta.
+function enviarArquivo(metodo, caminho, arquivo, tipo, aoProgredir) {
+  return new Promise((resolver, rejeitar) => {
+    const pedido = new XMLHttpRequest();
+    pedido.open(metodo, caminho);
+    pedido.setRequestHeader("Content-Type", tipo);
+    pedido.setRequestHeader("Accept", "application/json");
+    pedido.upload.addEventListener("progress", (evento) => {
+      if (evento.lengthComputable) aoProgredir?.(evento.loaded / evento.total);
+    });
+    pedido.addEventListener("load", () => {
+      let dados = null;
+      try {
+        dados = JSON.parse(pedido.responseText);
+      } catch {
+        // o nginx responde em HTML quando o arquivo passa do limite dele
+      }
+      if (pedido.status >= 200 && pedido.status < 300) return resolver(dados);
+      if (dados?.codigo === "sem-sessao") aoPerderSessao();
+      const mensagem =
+        dados?.erro ||
+        (pedido.status === 413 ? "O arquivo passou do tamanho que o servidor aceita." : "O portal não respondeu como esperado. Tente de novo em instantes.");
+      rejeitar(erroComCodigo(mensagem, dados?.codigo, dados));
+    });
+    pedido.addEventListener("error", () => rejeitar(erroComCodigo("Sem conexão com o portal. Confira sua internet e tente de novo.", "rede")));
+    pedido.send(arquivo);
+  });
+}
+
+const caminhoDoLivro = (id, parte) => `${caminhoDe("/api/memorias", id)}/livro/${parte}`;
+const numerosNoEndereco = (numeros) => new URLSearchParams(Object.entries(numeros).map(([nome, valor]) => [nome, String(valor)])).toString();
+
 const apiDoServidor = {
   memorias: () => pedir("GET", "/api/memorias"),
   memoria: (id) => pedir("GET", caminhoDe("/api/memorias", id)),
@@ -55,6 +96,16 @@ const apiDoServidor = {
   alterar: (id, dados) => pedir("PUT", caminhoDe("/api/memorias", id), dados),
   apagar: (id) => pedir("DELETE", caminhoDe("/api/memorias", id)),
   revelar: (id, escolha) => pedir("PUT", `${caminhoDe("/api/memorias", id)}/revelacao`, escolha),
+  // O livro: o PDF (com as páginas e o tamanho que o pdf.js leu aqui), as imagens e o índice
+  enviarMiolo: (id, arquivo, info, aoProgredir) =>
+    enviarArquivo("PUT", `${caminhoDoLivro(id, "miolo")}?${numerosNoEndereco(info)}`, arquivo, "application/pdf", aoProgredir),
+  enviarImagem: (id, parte, arquivo, medidas, aoProgredir) =>
+    enviarArquivo("PUT", `${caminhoDoLivro(id, parte)}?${numerosNoEndereco(medidas)}`, arquivo, arquivo.type, aoProgredir),
+  tirarImagem: (id, parte) => pedir("DELETE", caminhoDoLivro(id, parte)),
+  salvarIndice: (id, indice) => pedir("PUT", caminhoDoLivro(id, "indice"), { indice }),
+  // O pdf.js lê o PDF pela rota protegida, só os pedaços que precisa
+  abrirPdf: async (memoria) => (await carregarPdfJs()).getDocument({ ...OPCOES_DO_PDF, url: memoria.livro.miolo.endereco }).promise,
+  enderecoParaBaixar: (memoria) => `${memoria.livro.miolo.endereco}?baixar=1`,
   estado: () => pedir("GET", "/api/estado", undefined, { silencioso: true }),
   sair: () => pedir("POST", "/api/sair"),
 };
@@ -68,6 +119,151 @@ const CONTAS_DA_PREVIA = {
   editor: { usuario: "takezo", nome: "Takezo", cargo: "editor" },
   jogador: { usuario: "neia", nome: "Neia", cargo: "jogador" },
 };
+
+/* ---------- Os livros de exemplo: um PDF feito aqui mesmo ---------- */
+
+// Um PDF pequeno, escrito à mão: páginas de papel antigo com texto na fonte Times (que o PDF não
+// leva dentro; o pdf.js usa a do sistema). Cada página é uma lista de linhas
+// { texto, fonte: "F1" (normal) | "F2" (itálico) | "F3" (negrito), tamanho, y, x ou centro }
+// e de fios { fio: [x1, y1, x2, y2] }.
+function pdfDaPrevia(paginas, { largura = 420, altura = 595 } = {}) {
+  // WinAnsi: o Latin-1 serve para os acentos; alguns sinais têm lugar próprio
+  const ESPECIAIS = { "—": 0x97, "–": 0x96, "…": 0x85, "“": 0x93, "”": 0x94, "‘": 0x91, "’": 0x92 };
+  const textoDoPdf = (texto) =>
+    [...texto]
+      .map((c) => {
+        if (c === "\\" || c === "(" || c === ")") return `\\${c}`;
+        if (ESPECIAIS[c]) return String.fromCharCode(ESPECIAIS[c]);
+        return c.charCodeAt(0) <= 0xff ? c : "?";
+      })
+      .join("");
+  const numero = (n) => String(Math.round(n * 100) / 100);
+  const objetos = [];
+  const novo = (corpo) => objetos.push(corpo);
+  const catalogo = novo(null);
+  const raizDasPaginas = novo(null);
+  const fontes = ["Times-Roman", "Times-Italic", "Times-Bold"].map((nome) =>
+    novo(`<< /Type /Font /Subtype /Type1 /BaseFont /${nome} /Encoding /WinAnsiEncoding >>`),
+  );
+  const recursos = `<< /Font << ${fontes.map((n, i) => `/F${i + 1} ${n} 0 R`).join(" ")} >> >>`;
+  const filhos = paginas.map((linhas) => {
+    const partes = [`0.98 0.96 0.9 rg 0 0 ${largura} ${altura} re f`, "0.2 0.15 0.1 rg 0.45 0.35 0.25 RG"];
+    for (const linha of linhas) {
+      if (linha.fio) {
+        const [x1, y1, x2, y2] = linha.fio.map(numero);
+        partes.push(`0.6 w ${x1} ${y1} m ${x2} ${y2} l S`);
+        continue;
+      }
+      const x = linha.centro ? (largura - linha.texto.length * linha.tamanho * 0.46) / 2 : linha.x;
+      partes.push(`BT /${linha.fonte} ${numero(linha.tamanho)} Tf ${numero(x)} ${numero(linha.y)} Td (${textoDoPdf(linha.texto)}) Tj ET`);
+    }
+    const fluxo = partes.join("\n");
+    const conteudo = novo(`<< /Length ${fluxo.length} >>\nstream\n${fluxo}\nendstream`);
+    return novo(`<< /Type /Page /Parent ${raizDasPaginas} 0 R /MediaBox [0 0 ${largura} ${altura}] /Resources ${recursos} /Contents ${conteudo} 0 R >>`);
+  });
+  objetos[catalogo - 1] = `<< /Type /Catalog /Pages ${raizDasPaginas} 0 R >>`;
+  objetos[raizDasPaginas - 1] = `<< /Type /Pages /Kids [${filhos.map((n) => `${n} 0 R`).join(" ")}] /Count ${filhos.length} >>`;
+
+  let saida = "%PDF-1.4\n%\xe2\xe3\xcf\xd3\n";
+  const posicoes = objetos.map((corpo, i) => {
+    const posicao = saida.length;
+    saida += `${i + 1} 0 obj\n${corpo}\nendobj\n`;
+    return posicao;
+  });
+  const xref = saida.length;
+  saida += `xref\n0 ${objetos.length + 1}\n0000000000 65535 f \n${posicoes.map((p) => `${String(p).padStart(10, "0")} 00000 n \n`).join("")}`;
+  saida += `trailer\n<< /Size ${objetos.length + 1} /Root ${catalogo} 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  return Uint8Array.from(saida, (c) => c.charCodeAt(0));
+}
+
+// As páginas de um livro de exemplo: a folha de rosto, o verso dela, e cada capítulo começando
+// numa página ímpar (à direita), com o texto quebrado em linhas e o número no pé. Devolve as
+// páginas e o índice (a página em que cada capítulo começa).
+function livroDaPrevia(titulo, capitulos, { largura = 420, altura = 595 } = {}) {
+  const margem = 56;
+  const porLinha = Math.floor((largura - 2 * margem) / (11 * 0.46));
+  const linhasDoTexto = (texto) => {
+    const linhas = [];
+    for (const paragrafo of texto.split("\n")) {
+      let linha = "";
+      for (const palavra of paragrafo.split(" ")) {
+        if (`${linha} ${palavra}`.trim().length > porLinha) {
+          linhas.push(linha.trim());
+          linha = palavra;
+        } else linha += ` ${palavra}`;
+      }
+      linhas.push(linha.trim(), "");
+    }
+    return linhas;
+  };
+  const paginas = [
+    [
+      { texto: titulo, fonte: "F3", tamanho: 19, y: altura * 0.62, centro: true },
+      { fio: [largura / 2 - 40, altura * 0.585, largura / 2 + 40, altura * 0.585] },
+      { texto: "Crônicas Eternas", fonte: "F2", tamanho: 11, y: altura * 0.18, centro: true },
+    ],
+    [{ texto: "Escrito em Draevor, para quem lê à luz de vela.", fonte: "F2", tamanho: 9, y: 70, centro: true }],
+  ];
+  const pe = (n) => ({ texto: String(n), fonte: "F1", tamanho: 9, y: 34, centro: true });
+  const indice = [];
+  capitulos.forEach((capitulo, i) => {
+    if (paginas.length % 2 === 1) paginas.push([]);
+    indice.push({ pagina: paginas.length + 1, titulo: capitulo.titulo });
+    let pagina = [
+      { texto: `Capítulo ${i + 1}`, fonte: "F2", tamanho: 11, y: altura - 118, centro: true },
+      { texto: capitulo.titulo, fonte: "F3", tamanho: 17, y: altura - 144, centro: true },
+    ];
+    let y = altura - 190;
+    for (const linha of linhasDoTexto(capitulo.texto)) {
+      if (y < 62) {
+        paginas.push([...pagina, pe(paginas.length + 1)]);
+        pagina = [];
+        y = altura - margem - 10;
+      }
+      if (linha) pagina.push({ texto: linha, fonte: "F1", tamanho: 11, x: margem, y });
+      y -= linha ? 15 : 8;
+    }
+    paginas.push([...pagina, pe(paginas.length + 1)]);
+  });
+  return { pdf: pdfDaPrevia(paginas, { largura, altura }), paginas: paginas.length, largura, altura, indice };
+}
+
+// Uma imagem de exemplo (capa, lombada ou contracapa), desenhada em SVG
+function imagemDaPrevia(largura, altura, desenho) {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${largura} ${altura}" width="${largura}" height="${altura}">${desenho}</svg>`;
+  return { endereco: `data:image/svg+xml,${encodeURIComponent(svg)}`, largura, altura };
+}
+
+function capasDaPrevia(titulo) {
+  const fundo =
+    '<defs><linearGradient id="f" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#20443f"/><stop offset="1" stop-color="#0e211f"/></linearGradient></defs>' +
+    '<rect width="100%" height="100%" fill="url(#f)"/>';
+  const letra = 'font-family="Georgia, serif" fill="#e8d9b0"';
+  return {
+    capa: imagemDaPrevia(
+      420,
+      595,
+      `${fundo}<rect x="22" y="22" width="376" height="551" fill="none" stroke="#c9ab80" stroke-width="2"/>` +
+        '<circle cx="210" cy="250" r="70" fill="none" stroke="#c9ab80" stroke-width="1.5"/><path d="M150 330 Q210 230 270 330" fill="none" stroke="#e8d9b0" stroke-width="3"/>' +
+        `<text x="210" y="420" text-anchor="middle" font-size="40" ${letra}>${titulo.split(" ").slice(0, 1).join(" ")}</text>` +
+        `<text x="210" y="465" text-anchor="middle" font-size="40" ${letra}>${titulo.split(" ").slice(1).join(" ")}</text>` +
+        `<text x="210" y="540" text-anchor="middle" font-size="15" font-style="italic" ${letra}>Crônicas Eternas</text>`,
+    ),
+    lombada: imagemDaPrevia(
+      44,
+      595,
+      `${fundo}<rect x="4" y="30" width="36" height="2" fill="#c9ab80"/><rect x="4" y="563" width="36" height="2" fill="#c9ab80"/>` +
+        `<text transform="translate(29 297) rotate(90)" text-anchor="middle" font-size="20" ${letra}>${titulo}</text>`,
+    ),
+    contracapa: imagemDaPrevia(
+      420,
+      595,
+      `${fundo}<rect x="22" y="22" width="376" height="551" fill="none" stroke="#c9ab80" stroke-width="1"/>` +
+        `<text x="210" y="260" text-anchor="middle" font-size="17" font-style="italic" ${letra}>Doze dias de estrada,</text>` +
+        `<text x="210" y="290" text-anchor="middle" font-size="17" font-style="italic" ${letra}>doze cantigas para não esquecer.</text>`,
+    ),
+  };
+}
 
 // As datas contam a partir de hoje, para os exemplos parecerem recentes em qualquer dia.
 // Os acontecimentos e personagens têm os ids das prévias da Linha do Tempo e dos Personagens,
@@ -87,7 +283,50 @@ function exemplosDaPrevia() {
     alteradoEm: diasAtras(alterada),
   });
 
+  // Os dois livros em PDF: o PDF fica em "arquivos", e o livro guarda o nome dele
+  const arquivos = new Map();
+  const livroDoExemplo = (nome, { pdf, paginas, largura, altura, indice }, extras = {}) => {
+    arquivos.set(nome, pdf);
+    return {
+      miolo: { arquivo: nome, paginas, largura, altura, bytes: pdf.length },
+      capa: null,
+      lombada: null,
+      contracapa: null,
+      indice,
+      baixar: false,
+      ...extras,
+    };
+  };
+  const ESTRADA = ["A partida", "O primeiro poço", "A ponte velha", "O vale de cinza", "A estalagem do corvo", "A chuva", "O desvio", "A torre ao longe", "O rio sem nome", "A vigília", "O passo", "A chegada"];
+  const cantigas = livroDaPrevia(
+    "Cantigas do caminho",
+    ESTRADA.map((titulo, i) => ({
+      titulo,
+      texto: [
+        `Dia ${i + 1} de estrada. Andamos até o sol baixar e paramos perto de ${titulo.toLowerCase()}. Ninguém falou muito.`,
+        "O guia contou as pedras do caminho em voz baixa, como quem reza, e depois dormiu sentado, com a mão no cabo da faca.",
+        "Alguém começou uma cantiga antiga, dessas que só se lembram pela metade. Os outros completaram o resto, cada um com uma palavra diferente, e ninguém quis corrigir ninguém.",
+        "Antes de dormir, anotamos o que vimos: o céu limpo, a água fria, o cheiro de cinza que vinha do norte.",
+      ].join("\n"),
+    })),
+  );
+  const luas = livroDaPrevia("Tratado das luas", [
+    {
+      titulo: "Das luas",
+      texto: Array(5)
+        .fill("São duas as luas de Draevor, e nenhuma delas é gentil. Quem nasce sob a lua cheia carrega um peso nos olhos, dizem as avós; quem nasce na lua nova não carrega nada, e por isso esquece depressa.")
+        .join("\n"),
+    },
+    {
+      titulo: "Das marés",
+      texto: Array(4)
+        .fill("As marés obedecem às duas, e por isso nunca descansam. O mar sobe pela manhã e de novo à noite, e entre uma e outra os barqueiros contam histórias que ninguém confere.")
+        .join("\n"),
+    },
+  ]);
+
   return {
+    arquivos,
     contas: [
       { usuario: "mestre", nome: "Mestre", admin: true },
       { usuario: "comuna", nome: "Comuna" },
@@ -194,23 +433,7 @@ function exemplosDaPrevia() {
         titulo: "Cantigas do caminho",
         tipo: "livro",
         data: { ano: 364, aprox: true },
-        capitulos: [
-          "A partida",
-          "O primeiro poço",
-          "A ponte velha",
-          "O vale de cinza",
-          "A estalagem do corvo",
-          "A chuva",
-          "O desvio",
-          "A torre ao longe",
-          "O rio sem nome",
-          "A vigília",
-          "O passo",
-          "A chegada",
-        ].map((titulo, i) => ({
-          titulo,
-          texto: `Dia ${i + 1} de estrada. Andamos até o sol baixar e paramos perto de ${titulo.toLowerCase()}.\n\nNinguém falou muito.`,
-        })),
+        livro: livroDoExemplo("miolo-cantigas.pdf", cantigas, { ...capasDaPrevia("Cantigas do caminho"), baixar: true }),
         revelacao: { todos: null, contas: { neia: diasAtras(2) } },
         alterada: 2,
       }),
@@ -218,10 +441,7 @@ function exemplosDaPrevia() {
         id: "mem-b2c3d4e5",
         titulo: "Tratado completo sobre as luas, as marés e os sonhos dos homens que vivem perto do mar",
         tipo: "livro",
-        capitulos: [
-          { titulo: "Das luas", texto: "São duas as luas de Draevor, e nenhuma delas é gentil." },
-          { titulo: "Das marés", texto: "As marés obedecem às duas, e por isso nunca descansam." },
-        ],
+        livro: livroDoExemplo("miolo-luas.pdf", luas),
         revelacao: paraTodos(25),
         alterada: 26,
       }),
@@ -376,6 +596,34 @@ function criarApiDePrevia() {
     return `${junto.slice(0, corte > 0 ? corte : LIMITES.inicio).replace(/[\s/]+$/, "")}…`;
   }
 
+  /* ---------- O livro em PDF, como no servidor ---------- */
+
+  const PARTES_DO_LIVRO = ["capa", "lombada", "contracapa"];
+  const livroVazio = () => ({ miolo: null, capa: null, lombada: null, contracapa: null, indice: [], baixar: false });
+  const livroAntigo = (m) => m.tipo === "livro" && m.capitulos.length > 0;
+  // Todo Livro tem o "livro" (o antigo também, vazio até o PDF chegar)
+  const livroDe = (m) => (m.livro ??= livroVazio());
+  // Na prévia, o PDF fica na memória do navegador: o endereço só diz o nome dele
+  const PREFIXO_DO_PDF = "previa:";
+  const pdfDoLivro = (livro) => banco.arquivos.get(livro.miolo.endereco.slice(PREFIXO_DO_PDF.length));
+
+  function livroNaLista(m) {
+    if (livroAntigo(m)) return { capitulos: m.capitulos.length };
+    const { miolo, lombada } = livroDe(m);
+    return { paginas: miolo?.paginas ?? 0, formato: miolo ? { largura: miolo.largura, altura: miolo.altura } : null, lombada: lombada ? { ...lombada } : null };
+  }
+
+  function livroPublico(m) {
+    const livro = livroDe(m);
+    const miolo = livro.miolo;
+    return {
+      miolo: miolo ? { endereco: `${PREFIXO_DO_PDF}${miolo.arquivo}`, paginas: miolo.paginas, largura: miolo.largura, altura: miolo.altura, bytes: miolo.bytes } : null,
+      ...Object.fromEntries(PARTES_DO_LIVRO.map((parte) => [parte, livro[parte] ? { ...livro[parte] } : null])),
+      indice: livro.indice.map((e) => ({ ...e })),
+      baixar: livro.baixar,
+    };
+  }
+
   function memoriaPublica(m) {
     const publica = {
       id: m.id,
@@ -384,8 +632,10 @@ function criarApiDePrevia() {
       data: m.data ? dataPublica(m.data) : null,
       detalhe: tipoDeMemoria(m.tipo)?.detalhe ? m.detalhe || "" : "",
     };
-    if (m.tipo === "livro") publica.capitulos = m.capitulos.map((c) => ({ titulo: c.titulo, texto: c.texto }));
-    else publica.texto = m.texto;
+    if (m.tipo === "livro") {
+      publica.livro = livroPublico(m);
+      if (livroAntigo(m)) publica.capitulos = m.capitulos.map((c) => ({ titulo: c.titulo, texto: c.texto }));
+    } else publica.texto = m.texto;
     publica.reveladaEm = reveladaEm(m);
     if (contaEhAdmin()) publica.revelacao = revelacaoPublica(m);
     return publica;
@@ -393,7 +643,7 @@ function criarApiDePrevia() {
 
   // As mesmas conferências e mensagens do servidor/memorias.js
   const ANO_ATUAL = 366; // o ano atual da prévia da Linha do Tempo
-  const LIMITES = { memorias: 500, capitulos: 80, texto: 100000, livro: 1000000, link: 120, inicio: 160 };
+  const LIMITES = { memorias: 500, texto: 100000, link: 120, inicio: 160, miolo: 200 * 1024 * 1024, paginas: 5000, indice: 300 };
 
   function exigirAdmin() {
     if (!contaEhAdmin()) throw erroComCodigo("Só o administrador pode fazer isso.", "proibido");
@@ -462,32 +712,34 @@ function criarApiDePrevia() {
     return limpo;
   }
 
-  function capitulosDoLivro(lista) {
-    if (!Array.isArray(lista) || !lista.length) throw erroComCodigo("O livro precisa ter pelo menos um capítulo.");
-    if (lista.length > LIMITES.capitulos) throw erroComCodigo(`O livro pode ter no máximo ${LIMITES.capitulos} capítulos.`);
-    let total = 0;
-    const capitulos = lista.map((bruto, i) => {
-      const capitulo = bruto && typeof bruto === "object" ? bruto : {};
-      const titulo = textoValido(capitulo.titulo, `Título do capítulo ${i + 1}`, 120);
-      const textoDoCapitulo = textoDaMemoria(capitulo.texto, `Texto do capítulo ${i + 1}`);
-      total += textoDoCapitulo.length;
-      return { titulo, texto: textoDoCapitulo };
-    });
-    if (total > LIMITES.livro) throw erroComCodigo(`O livro inteiro pode ter no máximo ${LIMITES.livro} caracteres.`);
-    return capitulos;
-  }
-
-  // No Livro vale "capitulos" e o texto fica vazio; nos outros, o contrário.
-  // O "detalhe" só fica nas classificações que têm o campo.
+  // No Livro não há texto: do formulário vem só o "baixar". O "detalhe" só fica nas
+  // classificações que têm o campo.
   function valoresDaMemoria(dados) {
     const titulo = textoValido(dados.titulo, "Título", 120);
     const tipo = typeof dados.tipo === "string" ? tipoDeMemoria(dados.tipo) : null;
     if (!tipo) throw erroComCodigo("Escolha uma classificação da lista.");
     const data = dados.data ? dataDaMemoria(dados.data) : null;
     const detalhe = tipo.detalhe ? textoOpcional(dados.detalhe, tipo.detalhe, 120).replace(/\s*\n\s*/g, " ") : "";
-    if (tipo.id === "livro") return { titulo, tipo: tipo.id, data, detalhe, texto: "", capitulos: capitulosDoLivro(dados.capitulos) };
-    return { titulo, tipo: tipo.id, data, detalhe, texto: textoDaMemoria(dados.texto, "Texto"), capitulos: [] };
+    if (tipo.id === "livro") return { titulo, tipo: tipo.id, data, detalhe, texto: "", baixar: dados.baixar === true };
+    return { titulo, tipo: tipo.id, data, detalhe, texto: textoDaMemoria(dados.texto, "Texto") };
   }
+
+  function livroParaMexer(id) {
+    exigirAdmin();
+    const memoria = acharMemoria(id);
+    if (memoria.tipo !== "livro") throw erroComCodigo("Essa memória não é um livro.");
+    return memoria;
+  }
+
+  // Um envio de mentira: o andamento sobe aos poucos
+  async function simularEnvio(aoProgredir) {
+    for (const parte of [0.2, 0.45, 0.7, 1]) {
+      await esperar(90);
+      aoProgredir?.(parte);
+    }
+  }
+
+  const nomeAleatorio = (parte, extensao) => `${parte}-${Math.random().toString(16).slice(2, 10)}${extensao}`;
 
   // Repete usuários à vontade; uma conta que não existe, ou de administrador, é recusada
   function contasEscolhidas(lista) {
@@ -520,7 +772,7 @@ function criarApiDePrevia() {
             data: m.data ? dataPublica(m.data) : null,
             detalhe: tipoDeMemoria(m.tipo)?.detalhe ? m.detalhe || "" : "",
           };
-          if (m.tipo === "livro") item.capitulos = m.capitulos.length;
+          if (m.tipo === "livro") Object.assign(item, livroNaLista(m));
           else item.inicio = inicioDoTexto(m.texto, m.tipo === "poema");
           item.reveladaEm = reveladaEm(m);
           if (contaEhAdmin()) Object.assign(item, { alteradoEm: m.alteradoEm, revelacao: revelacaoPublica(m) });
@@ -539,23 +791,35 @@ function criarApiDePrevia() {
       const memoria = acharMemoria(id);
       return { memoria: memoriaPublica(memoria), links: linksPara(textosDe(memoria)) };
     },
-    // Toda memória nasce escondida
+    // Toda memória nasce escondida. O Livro nasce sem o PDF.
     async escrever(dados) {
       await esperar(150);
       exigirAdmin();
-      const valores = valoresDaMemoria(dados);
+      const { baixar, ...valores } = valoresDaMemoria(dados);
       if (banco.memorias.length >= LIMITES.memorias) throw erroComCodigo(`Podem existir no máximo ${LIMITES.memorias} memórias.`);
       const quando = new Date().toISOString();
-      const memoria = { id: novoId(), ...valores, revelacao: { todos: null, contas: {} }, criadoEm: quando, alteradoEm: quando };
+      const memoria = { id: novoId(), ...valores, capitulos: [], revelacao: { todos: null, contas: {} }, criadoEm: quando, alteradoEm: quando };
+      if (memoria.tipo === "livro") memoria.livro = { ...livroVazio(), baixar };
       banco.memorias.push(memoria);
       return { memoria: { id: memoria.id } };
     },
-    // Alterar não mexe na revelação
+    // Alterar não mexe na revelação. Trocar de Livro para outra classificação apaga o PDF e as
+    // imagens; de outra para Livro, deixa o texto para trás. Um livro antigo fica com os capítulos.
     async alterar(id, dados) {
       await esperar(150);
       exigirAdmin();
-      const valores = valoresDaMemoria(dados);
+      const { baixar, ...valores } = valoresDaMemoria(dados);
       const memoria = acharMemoria(id);
+      if (valores.tipo === "livro") {
+        if (memoria.tipo !== "livro") {
+          memoria.capitulos = [];
+          memoria.livro = livroVazio();
+        }
+        livroDe(memoria).baixar = baixar;
+      } else {
+        memoria.capitulos = [];
+        delete memoria.livro;
+      }
       Object.assign(memoria, valores, { alteradoEm: new Date().toISOString() });
       return { ok: true };
     },
@@ -566,12 +830,79 @@ function criarApiDePrevia() {
       banco.memorias = banco.memorias.filter((m) => m !== memoria);
       return { ok: true };
     },
+    /* ---------- O livro ---------- */
+    async enviarMiolo(id, arquivo, info, aoProgredir) {
+      const memoria = livroParaMexer(id);
+      if (arquivo.size > LIMITES.miolo) throw erroComCodigo("O arquivo passou do limite de 200 MB.");
+      const bytes = new Uint8Array(await arquivo.arrayBuffer());
+      if (!new TextDecoder("latin1").decode(bytes.subarray(0, 1024)).includes("%PDF-")) throw erroComCodigo("Esse arquivo não é um PDF.");
+      if (!Number.isInteger(info?.paginas) || info.paginas < 1 || info.paginas > LIMITES.paginas) {
+        throw erroComCodigo("Não deu para ler as páginas do arquivo. Escolha-o de novo.");
+      }
+      await simularEnvio(aoProgredir);
+      const livro = livroDe(memoria);
+      const nome = nomeAleatorio("miolo", ".pdf");
+      banco.arquivos.set(nome, bytes);
+      if (livro.miolo) banco.arquivos.delete(livro.miolo.arquivo);
+      livro.miolo = { arquivo: nome, paginas: info.paginas, largura: info.largura, altura: info.altura, bytes: bytes.length };
+      livro.indice = livro.indice.filter((e) => e.pagina <= info.paginas);
+      memoria.capitulos = [];
+      memoria.alteradoEm = new Date().toISOString();
+      return { livro: livroPublico(memoria) };
+    },
+    async enviarImagem(id, parte, arquivo, medidas, aoProgredir) {
+      const memoria = livroParaMexer(id);
+      if (!PARTES_DO_LIVRO.includes(parte)) throw erroComCodigo("Endereço não encontrado.");
+      if (!["image/png", "image/jpeg", "image/webp", "image/gif", "image/avif"].includes(arquivo.type)) {
+        throw erroComCodigo("Use imagens PNG, JPG, WEBP, GIF ou AVIF.");
+      }
+      if (arquivo.size > 10 * 1024 * 1024) throw erroComCodigo("O arquivo passou do limite de 10 MB.");
+      await simularEnvio(aoProgredir);
+      const livro = livroDe(memoria);
+      livro[parte] = { endereco: URL.createObjectURL(arquivo), largura: medidas.largura, altura: medidas.altura };
+      memoria.alteradoEm = new Date().toISOString();
+      return { livro: livroPublico(memoria) };
+    },
+    async tirarImagem(id, parte) {
+      await esperar(80);
+      const memoria = livroParaMexer(id);
+      livroDe(memoria)[parte] = null;
+      return { livro: livroPublico(memoria) };
+    },
+    async salvarIndice(id, indice) {
+      await esperar(120);
+      const memoria = livroParaMexer(id);
+      const miolo = livroDe(memoria).miolo;
+      if (!miolo) throw erroComCodigo("Mande o PDF do miolo antes de montar o índice.");
+      if (!Array.isArray(indice)) throw erroComCodigo("Mande o índice como uma lista.");
+      if (indice.length > LIMITES.indice) throw erroComCodigo(`O índice pode ter no máximo ${LIMITES.indice} capítulos.`);
+      const certos = indice.map((entrada, i) => {
+        if (!Number.isInteger(entrada?.pagina) || entrada.pagina < 1 || entrada.pagina > miolo.paginas) {
+          throw erroComCodigo(`A página do capítulo ${i + 1} do índice precisa ser de 1 a ${miolo.paginas}.`);
+        }
+        return { pagina: entrada.pagina, titulo: textoValido(entrada.titulo, `nome do capítulo ${i + 1} do índice`, 120), i };
+      });
+      memoria.livro.indice = certos.sort((a, b) => a.pagina - b.pagina || a.i - b.i).map(({ pagina, titulo }) => ({ pagina, titulo }));
+      memoria.alteradoEm = new Date().toISOString();
+      return { livro: livroPublico(memoria) };
+    },
+    // O pdf.js recebe o PDF já na memória (aberta direto do arquivo, a página não busca nada)
+    async abrirPdf(memoria) {
+      const pdfjs = await carregarPdfJs();
+      return pdfjs.getDocument({ ...OPCOES_DO_PDF, data: pdfDoLivro(memoria.livro).slice() }).promise;
+    },
+    enderecoParaBaixar(memoria) {
+      return URL.createObjectURL(new Blob([pdfDoLivro(memoria.livro)], { type: "application/pdf" }));
+    },
     // Ninguém: escondida de novo. Todos: a data de agora, ou a que já tinha, e as contas ficam como estão.
     // Algumas contas: cada marcada fica com a data que já tinha, ou a de agora; as desmarcadas saem.
     async revelar(id, escolha) {
       await esperar(120);
       exigirAdmin();
       const memoria = acharMemoria(id);
+      if (escolha?.para !== "ninguem" && memoria.tipo === "livro" && !livroAntigo(memoria) && !livroDe(memoria).miolo) {
+        throw erroComCodigo("Mande o PDF do miolo antes de revelar o livro.");
+      }
       const atual = memoria.revelacao;
       const agora = new Date().toISOString();
       if (escolha?.para === "ninguem") {
@@ -653,20 +984,34 @@ async function atualizarStatus() {
 const TITULO_DA_PAGINA = document.title;
 
 const navegacao = {
-  rota: null, // { id, capitulo } na leitura (capitulo é null fora dos capítulos), ou null na lista
+  // { id, capitulo, pagina } na leitura (capitulo: num capítulo de um livro antigo; pagina: na
+  // página de um livro em PDF; os dois são null fora deles), ou null na lista
+  rota: null,
   lida: null, // { memoria, links } da memória aberta, para folhear os capítulos sem pedir de novo
+  folheador: null, // o livro em PDF aberto (criarFolheador)
   pedido: 0, // conta as aberturas, para ignorar a resposta de uma que ficou para trás
   rolagemDaLista: 0,
 };
 
-const ancoraDe = ({ id, capitulo }) => `#memoria-${id}${capitulo ? `-capitulo-${capitulo}` : ""}`;
+const ancoraDe = ({ id, capitulo = null, pagina = null }) =>
+  `#memoria-${id}${capitulo ? `-capitulo-${capitulo}` : pagina ? `-pagina-${pagina}` : ""}`;
 
 function rotaDoEndereco() {
-  const achado = location.hash.match(/^#memoria-([\w-]+?)(?:-capitulo-(\d+))?$/);
-  return achado ? { id: achado[1], capitulo: achado[2] ? Number(achado[2]) : null } : null;
+  const achado = location.hash.match(/^#memoria-([\w-]+?)(?:-(capitulo|pagina)-(\d+))?$/);
+  if (!achado) return null;
+  const numero = achado[3] ? Number(achado[3]) : null;
+  return { id: achado[1], capitulo: achado[2] === "capitulo" ? numero : null, pagina: achado[2] === "pagina" ? numero : null };
 }
 
-const mesmaRota = (a, b) => Boolean(a && b && a.id === b.id && a.capitulo === b.capitulo);
+const mesmaRota = (a, b) => Boolean(a && b && a.id === b.id && a.capitulo === b.capitulo && (a.pagina ?? null) === (b.pagina ?? null));
+
+// Fecha o livro em PDF que estiver aberto, e a página volta à largura de sempre
+function fecharFolheador() {
+  navegacao.folheador?.destruir();
+  navegacao.folheador = null;
+  $("#pagina").classList.remove("pagina-memorias--livro");
+  $("#leitura").classList.remove("leitura--livro");
+}
 
 const passosDesdeALista = () => (Number.isInteger(history.state?.passos) ? history.state.passos : null);
 
@@ -714,6 +1059,12 @@ function linkDaLeitura(rota, classe, texto) {
 // "forcar" pede a memória de novo ao servidor, mesmo que ela já esteja aberta.
 async function mostrarRota(rota = rotaDoEndereco(), { forcar = false } = {}) {
   if (!rota) return mostrarLista();
+  // No livro em PDF aberto, outra página do mesmo livro só vira as folhas
+  if (!forcar && navegacao.folheador && navegacao.rota?.id === rota.id && !rota.capitulo) {
+    navegacao.rota = rota;
+    navegacao.folheador.irPara(rota.pagina);
+    return;
+  }
   if (!forcar && mesmaRota(rota, navegacao.rota)) return;
   const pedido = ++navegacao.pedido;
 
@@ -756,6 +1107,7 @@ function mostrarLista() {
 
   const leitura = $("#leitura");
   const focoNaLeitura = leitura.contains(document.activeElement) || document.activeElement === document.body;
+  fecharFolheador();
   leitura.hidden = true;
   leitura.replaceChildren();
   $("#vista-lista").hidden = false;
@@ -808,11 +1160,19 @@ const SETE_DIAS = 7 * 86400000;
 const reveladaHaPouco = (m) => !ehAdmin() && Boolean(m.reveladaEm) && Date.now() - Date.parse(m.reveladaEm) < SETE_DIAS;
 
 const quantosCapitulos = (n) => `${n} ${n === 1 ? "capítulo" : "capítulos"}`;
+const quantasPaginas = (n) => `${n} ${n === 1 ? "página" : "páginas"}`;
 
-// O nome do link: "Livro: <título>, 12 capítulos" ou "Carta: <título>", e o estado para o administrador
+// O tamanho do livro na estante: "240 páginas" (ou "12 capítulos", num livro antigo).
+// Sem o PDF ainda (só o administrador vê), "sem o PDF".
+function tamanhoDoLivro(m) {
+  if (m.capitulos !== undefined) return quantosCapitulos(m.capitulos);
+  return m.paginas ? quantasPaginas(m.paginas) : "sem o PDF";
+}
+
+// O nome do link: "Livro: <título>, 240 páginas" ou "Carta: <título>", e o estado para o administrador
 function nomeDoLink(m) {
   const partes = [`${tipoDeMemoria(m.tipo)?.nome ?? "Memória"}: ${m.titulo}`];
-  if (m.tipo === "livro") partes.push(quantosCapitulos(m.capitulos));
+  if (m.tipo === "livro") partes.push(tamanhoDoLivro(m));
   const estadoDela = ehAdmin() ? estadoEmTexto(m.revelacao) : "";
   if (estadoDela) partes.push(estadoDela.charAt(0).toLowerCase() + estadoDela.slice(1));
   return partes.join(", ");
@@ -845,13 +1205,40 @@ function ajustarEtiqueta(livro) {
   etiqueta.style.setProperty("--desvio", `${Math.round(desvio)}px`);
 }
 
+// A altura do livro em PDF na estante sai do tamanho da página: um A5 (595 pontos) fica com uns
+// 15rem, um A4 com 17,4rem; entre 13rem e 18rem
+const alturaDoFormato = (formato) => Math.min(18, Math.max(13, 9 + formato.altura / 100));
+
+// A largura, sem a imagem da lombada, acompanha as páginas
+const larguraDasPaginas = (paginas) => 2.2 + Math.min(paginas, 800) * 0.0045;
+
 function lombada(m) {
   const numero = numeroDoId(m.id);
   const link = linkDaBiblioteca(m, `lombada lombada--${CORES_DO_COURO[Math.floor(numero / 31) % CORES_DO_COURO.length]}`);
-  link.style.setProperty("--capitulos", String(Math.min(m.capitulos, MAXIMO_DE_CAPITULOS_NA_LARGURA)));
-  link.style.setProperty("--altura", `${14 + (numero % 31) / 10}rem`);
+  const altura = m.formato ? alturaDoFormato(m.formato) : 14 + (numero % 31) / 10;
+  link.style.setProperty("--altura", `${altura}rem`);
+  if (m.capitulos !== undefined) {
+    link.style.setProperty("--capitulos", String(Math.min(m.capitulos, MAXIMO_DE_CAPITULOS_NA_LARGURA)));
+  } else if (m.lombada) {
+    // A lombada enviada: a imagem inteira, na proporção dela (um livro fino fica fino)
+    const largura = Math.min(7, Math.max(0.9, (altura * m.lombada.largura) / m.lombada.altura));
+    link.style.setProperty("--largura", `${largura.toFixed(2)}rem`);
+  } else {
+    link.style.setProperty("--largura", `${larguraDasPaginas(m.paginas).toFixed(2)}rem`);
+  }
 
-  link.append(criar("span", "lombada__titulo", m.titulo), enfeite("lombada__ponteiras"));
+  if (m.lombada) {
+    link.classList.add("lombada--imagem");
+    const desenho = criar("img", "lombada__imagem");
+    desenho.alt = "";
+    desenho.decoding = "async";
+    desenho.loading = "lazy";
+    desenho.draggable = false;
+    desenho.src = m.lombada.endereco;
+    link.append(desenho);
+  } else {
+    link.append(criar("span", "lombada__titulo", m.titulo), enfeite("lombada__ponteiras"));
+  }
   if (reveladaHaPouco(m)) link.append(enfeite("lombada__fita"));
   if (ehAdmin() && m.revelacao?.para === "ninguem") {
     const veu = enfeite("lombada__veu");
@@ -862,7 +1249,7 @@ function lombada(m) {
   // A etiqueta de pergaminho que aparece acima do livro: só visual, o nome do link já diz tudo
   const etiqueta = enfeite("lombada__etiqueta");
   etiqueta.append(criar("span", "lombada__etiqueta-titulo", m.titulo));
-  const linha = [quantosCapitulos(m.capitulos), m.data ? textoDaData(m.data) : ""].filter(Boolean).join(" · ");
+  const linha = [tamanhoDoLivro(m), m.data ? textoDaData(m.data) : ""].filter(Boolean).join(" · ");
   etiqueta.append(criar("span", "lombada__etiqueta-linha", linha));
   const estadoDele = ehAdmin() ? estadoEmTexto(m.revelacao) : "";
   if (estadoDele) etiqueta.append(criar("span", "lombada__etiqueta-estado", estadoDele));
@@ -1046,6 +1433,7 @@ function configurarBiblioteca() {
    ================================================================= */
 
 function mostrarAvisoNaLeitura(mensagem) {
+  fecharFolheador();
   document.title = TITULO_DA_PAGINA;
   const barra = criar("div", "leitura__barra");
   barra.append(botao("← Memórias", "botao--leve", voltarALista));
@@ -1054,11 +1442,14 @@ function mostrarAvisoNaLeitura(mensagem) {
   $("#leitura").replaceChildren(barra, aviso);
 }
 
+// No livro em PDF, o link leva à página que está à vista (a rota muda quando as folhas viram)
 async function copiarLink(rota) {
-  const link = `${location.origin}${location.pathname}${ancoraDe(rota)}`;
+  const atual = navegacao.folheador && navegacao.rota?.id === rota.id ? navegacao.rota : rota;
+  const link = `${location.origin}${location.pathname}${ancoraDe(atual)}`;
+  const onde = atual.capitulo ? "neste capítulo" : atual.pagina ? "nesta página" : "nesta memória";
   try {
     await navigator.clipboard.writeText(link);
-    avisoRapido(`Link copiado. Quem abrir vai direto ${rota.capitulo ? "neste capítulo" : "nesta memória"}.`);
+    avisoRapido(`Link copiado. Quem abrir vai direto ${onde}.`);
   } catch {
     avisoRapido(link);
   }
@@ -1106,12 +1497,27 @@ async function baixarPdf(memoria, rota) {
   window.print();
 }
 
-// No alto: "← Memórias", "Copiar link" e "Baixar PDF" (no Livro, só nos capítulos); para o
-// administrador, também "Alterar" e "Revelar…", com o estado atual ao lado
+// O livro em PDF: o "Baixar PDF" é o próprio PDF do miolo, para quem o administrador deixou
+// (e para ele). Os livros antigos, escritos por capítulos, baixam um capítulo por vez, impresso.
+const livroEmPdf = (memoria) => memoria.tipo === "livro" && !memoria.capitulos?.length;
+
+function linkParaBaixar(memoria) {
+  const link = criar("a", "botao botao--leve", "Baixar PDF");
+  link.href = api.enderecoParaBaixar(memoria);
+  link.download = `${memoria.titulo}.pdf`;
+  return link;
+}
+
+// No alto: "← Memórias", "Copiar link" e "Baixar PDF" (no Livro antigo, só nos capítulos; no de
+// PDF, se puder baixar); para o administrador, também "Alterar" e "Revelar…", com o estado atual ao lado
 function barraDaLeitura(memoria, rota) {
   const barra = criar("div", "leitura__barra");
   barra.append(botao("← Memórias", "botao--leve", voltarALista), botao("Copiar link", "botao--leve", () => copiarLink(rota)));
-  if (memoria.tipo !== "livro" || rota.capitulo) barra.append(botao("Baixar PDF", "botao--leve", () => baixarPdf(memoria, rota)));
+  if (livroEmPdf(memoria)) {
+    if (memoria.livro.miolo && (memoria.livro.baixar || ehAdmin())) barra.append(linkParaBaixar(memoria));
+  } else if (memoria.tipo !== "livro" || rota.capitulo) {
+    barra.append(botao("Baixar PDF", "botao--leve", () => baixarPdf(memoria, rota)));
+  }
   if (ehAdmin() && memoria.revelacao) {
     const admin = criar("div", "leitura__admin");
     admin.append(
@@ -1282,8 +1688,63 @@ function capituloDoLivro(memoria, n, links) {
   return [folha];
 }
 
+/* -----------------------------------------------------------------
+   O livro em PDF: o folheador, com o índice à direita
+   ----------------------------------------------------------------- */
+
+// A página à vista vai para o endereço (sem encher o histórico); o "Copiar link" leva a ela
+function aoMudarDePagina(memoria, pagina) {
+  if (navegacao.lida?.memoria !== memoria) return;
+  const rota = { id: memoria.id, capitulo: null, pagina };
+  if (mesmaRota(rota, navegacao.rota) && location.hash === ancoraDe(rota)) return;
+  navegacao.rota = rota;
+  trocarEndereco(ancoraDe(rota));
+}
+
+function renderizarLivro(memoria, pedida) {
+  const rota = { id: memoria.id, capitulo: null, pagina: pedida.pagina };
+  navegacao.rota = rota;
+  document.title = memoria.titulo;
+
+  const cabeca = criar("div", "livro-pdf__cabeca");
+  cabeca.append(criar("h1", "livro-pdf__titulo", memoria.titulo), linhaDaClassificacao(memoria));
+  cabeca.lastElementChild.className = "livro-pdf__classificacao";
+  const leitura = $("#leitura");
+
+  if (!memoria.livro.miolo) {
+    // Só o administrador chega a um livro sem o PDF (ele não pode ser revelado assim)
+    const aviso = criar("p", "livro-pdf__sem-miolo", "Este livro ainda não tem o PDF do miolo. Mande o PDF em Alterar.");
+    leitura.replaceChildren(barraDaLeitura(memoria, rota), cabeca, aviso);
+    window.scrollTo(0, 0);
+    return;
+  }
+
+  $("#pagina").classList.add("pagina-memorias--livro");
+  leitura.classList.add("leitura--livro");
+  const folheador = criarFolheador({
+    titulo: memoria.titulo,
+    livro: memoria.livro,
+    abrirDocumento: () => api.abrirPdf(memoria),
+    pagina: pedida.pagina,
+    aoMudar: (pagina) => aoMudarDePagina(memoria, pagina),
+    indice: {
+      editavel: ehAdmin(),
+      salvar: async (indice) => (await api.salvarIndice(memoria.id, indice)).livro.indice,
+    },
+  });
+  navegacao.folheador = folheador;
+  leitura.replaceChildren(barraDaLeitura(memoria, rota), cabeca, folheador.elemento);
+  window.scrollTo(0, 0);
+  // O teclado (as setas) já vira as páginas, se o foco estava na leitura
+  if (leitura.contains(document.activeElement) || document.activeElement === leitura || document.activeElement === document.body) {
+    folheador.elemento.focus({ preventScroll: true });
+  }
+}
+
 function renderizarLeitura(pedida) {
   const { memoria, links } = navegacao.lida;
+  fecharFolheador();
+  if (livroEmPdf(memoria)) return renderizarLivro(memoria, pedida);
   let capitulo = pedida.capitulo;
   // Um capítulo que não existe (ou numa memória que não é livro) mostra a memória inteira
   if (capitulo !== null && !(memoria.tipo === "livro" && capitulo >= 1 && capitulo <= memoria.capitulos.length)) {
@@ -1311,12 +1772,16 @@ function renderizarLeitura(pedida) {
    Escrever e alterar (só o administrador)
    -----------------------------------------------------------------
    Um formulário só, aberto pelo "+ Memória" ou pelo "Alterar". No
-   Livro, o texto dá lugar aos capítulos. Trocar a classificação de
-   Livro para outra junta os capítulos num texto só; de outra para
-   Livro, o texto vira o capítulo 1. Nada se perde.
-   ================================================================= */
+   Livro, o texto dá lugar ao PDF do miolo e às imagens opcionais da
+   capa, da lombada e da contracapa. Eles vão depois de salvar a
+   memória, cada um pela sua rota, com o andamento do envio. O pdf.js
+   lê o PDF aqui antes, para saber as páginas e o tamanho delas.
 
-const LIMITE_DE_CAPITULOS = 80; // como no servidor
+   Trocar a classificação: de outra para Livro, o texto sai (pergunta
+   antes); de um Livro em PDF para outra, o PDF e as imagens saem ao
+   salvar (pergunta antes); de um livro antigo para outra, os
+   capítulos viram o texto. Nenhum livro é escrito por capítulos.
+   ================================================================= */
 
 // A ajuda abaixo do campo "detalhe", nas classificações que têm o campo
 const AJUDA_DO_DETALHE = {
@@ -1327,10 +1792,25 @@ const AJUDA_DO_DETALHE = {
   inscricao: "Aparece abaixo da pedra. Ex.: Lápide no cemitério de Hando",
 };
 
+// As imagens do livro, cada uma com o que aparece sem ela
+const IMAGENS_DO_LIVRO = [
+  { parte: "capa", nome: "a capa", sem: "O couro, com o título" },
+  { parte: "lombada", nome: "a lombada", sem: "A estante desenha uma" },
+  { parte: "contracapa", nome: "a contracapa", sem: "O couro" },
+];
+const LIMITE_DO_MIOLO = 200 * 1024 * 1024; // como no servidor
+const LIMITE_DA_IMAGEM = 10 * 1024 * 1024;
+const TIPOS_DE_IMAGEM = ["image/png", "image/jpeg", "image/webp", "image/gif", "image/avif"];
+
 const edicao = {
   memoria: null, // a memória sendo alterada, ou null para uma nova
+  criadaAgora: false, // a memória nova já foi escrita, mas um arquivo do livro não foi
   tipo: null, // a classificação escolhida, para saber de qual se trocou
-  capitulos: 0, // conta os capítulos montados, para o id de cada campo de texto
+  // O livro: o PDF escolhido, com o que o pdf.js leu dele ({ arquivo, info }); e, de cada imagem,
+  // a escolhida ({ arquivo, largura, altura, previa }) ou "tirar"
+  miolo: null,
+  lendoMiolo: null, // a leitura do PDF escolhido, enquanto não termina
+  imagens: {},
 };
 
 const formMemoria = () => $("#form-memoria");
@@ -1346,125 +1826,7 @@ function opcoesDeDia(seletor, valor) {
   seletor.value = valor ? String(valor) : "";
 }
 
-// Um capítulo no formulário: o número, as setas e o "Remover" no alto; depois o título e o texto,
-// com o "Importar .md" e o "Citar" acima dele
-function campoDoCapitulo({ titulo = "", texto = "" } = {}) {
-  const item = criar("li", "capitulo-form");
-  const subir = botao("↑", "botao--leve capitulo-form__seta", () => moverCapitulo(item, -1));
-  const descer = botao("↓", "botao--leve capitulo-form__seta", () => moverCapitulo(item, 1));
-  subir.title = "Subir";
-  descer.title = "Descer";
-  const acoes = criar("div", "capitulo-form__acoes");
-  acoes.append(subir, descer, botao("Remover", "botao--leve botao--perigo", () => removerCapitulo(item)));
-  const cabeca = criar("div", "capitulo-form__cabeca");
-  cabeca.append(criar("span", "capitulo-form__numero"), acoes);
-
-  const entrada = criar("input", "capitulo-form__titulo");
-  entrada.maxLength = 120;
-  entrada.autocomplete = "off";
-  entrada.value = titulo;
-  const campoTitulo = criar("label", "campo");
-  campoTitulo.append(criar("span", "campo__rotulo", "Título"), entrada);
-
-  const area = criar("textarea", "capitulo-form__texto");
-  area.id = `capitulo-texto-${++edicao.capitulos}`;
-  area.rows = 10;
-  area.maxLength = 100000;
-  area.value = texto;
-  const rotulo = criar("label", "campo__rotulo", "Texto");
-  rotulo.htmlFor = area.id;
-  const cabecaDoTexto = criar("div", "campo__cabeca");
-  const botoes = criar("div", "campo__botoes");
-  botoes.append(
-    botao("Importar .md", "botao--leve botao--pequeno botao-importar", () =>
-      escolherArquivos(false, (arquivos) => importarNoCapitulo(item, arquivos)),
-    ),
-    botao("Citar", "botao--leve botao--pequeno botao-citar", () => abrirCitar(area)),
-  );
-  cabecaDoTexto.append(rotulo, botoes);
-  const campoTexto = criar("div", "campo");
-  campoTexto.append(cabecaDoTexto, area);
-
-  item.append(cabeca, campoTitulo, campoTexto);
-  return item;
-}
-
-// Depois de mexer na lista: o número de cada capítulo, as setas das pontas apagadas
-// e o "Remover" apagado quando só sobra um
-function numerarCapitulos() {
-  const itens = [...$("#lista-capitulos").children];
-  itens.forEach((item, i) => {
-    const n = i + 1;
-    item.querySelector(".capitulo-form__numero").textContent = `Capítulo ${n}`;
-    const [subir, descer, remover] = item.querySelectorAll(".capitulo-form__acoes button");
-    subir.disabled = i === 0;
-    descer.disabled = n === itens.length;
-    remover.disabled = itens.length === 1;
-    subir.setAttribute("aria-label", `Subir o capítulo ${n}`);
-    descer.setAttribute("aria-label", `Descer o capítulo ${n}`);
-    remover.setAttribute("aria-label", `Remover o capítulo ${n}`);
-    item.querySelector(".botao-citar").setAttribute("aria-label", `Citar no capítulo ${n}`);
-    item.querySelector(".botao-importar").setAttribute("aria-label", `Importar .md no capítulo ${n}`);
-  });
-  $("#botao-mais-capitulo").disabled = itens.length >= LIMITE_DE_CAPITULOS;
-  $("#importar-capitulos").disabled = itens.length >= LIMITE_DE_CAPITULOS;
-}
-
-function mostrarCapitulos(capitulos) {
-  $("#lista-capitulos").replaceChildren(...capitulos.map(campoDoCapitulo));
-  numerarCapitulos();
-}
-
-function capitulosDoFormulario() {
-  return [...$("#lista-capitulos").children].map((item) => ({
-    titulo: item.querySelector(".capitulo-form__titulo").value.trim(),
-    texto: item.querySelector(".capitulo-form__texto").value.trim(),
-  }));
-}
-
-function adicionarCapitulo() {
-  const lista = $("#lista-capitulos");
-  if (lista.children.length >= LIMITE_DE_CAPITULOS) return;
-  const item = campoDoCapitulo();
-  lista.append(item);
-  numerarCapitulos();
-  item.querySelector(".capitulo-form__titulo").focus();
-}
-
-// O foco segue o capítulo que andou; na ponta, passa para a seta que ainda anda
-function moverCapitulo(item, passo) {
-  const vizinho = passo < 0 ? item.previousElementSibling : item.nextElementSibling;
-  if (!vizinho) return;
-  if (passo < 0) vizinho.before(item);
-  else vizinho.after(item);
-  numerarCapitulos();
-  const [subir, descer] = item.querySelectorAll(".capitulo-form__seta");
-  const seta = passo < 0 ? subir : descer;
-  (seta.disabled ? (passo < 0 ? descer : subir) : seta).focus();
-  item.scrollIntoView({ block: "nearest" });
-}
-
-// Um capítulo com texto pede confirmação antes de sair
-async function removerCapitulo(item) {
-  if ($("#lista-capitulos").children.length <= 1) return;
-  if (item.querySelector(".capitulo-form__texto").value.trim()) {
-    const titulo = item.querySelector(".capitulo-form__titulo").value.trim();
-    const confirmado = await perguntar({
-      titulo: "Remover este capítulo?",
-      texto: `${titulo ? `"${titulo}"` : "O capítulo"} sai do livro, com o texto. Nada muda até você salvar a memória.`,
-      confirmar: "Remover",
-      cancelar: "Cancelar",
-      perigo: true,
-    });
-    if (!confirmado) return;
-  }
-  const vizinho = item.nextElementSibling ?? item.previousElementSibling;
-  item.remove();
-  numerarCapitulos();
-  vizinho.querySelector(".capitulo-form__titulo").focus();
-}
-
-// Os capítulos num texto só: o título de cada um vira uma linha em negrito
+// Os capítulos de um livro antigo num texto só: o título de cada um vira uma linha em negrito
 function textoDosCapitulos(capitulos) {
   return capitulos
     .map(({ titulo, texto }) => [titulo && `**${titulo}**`, texto].filter(Boolean).join("\n\n"))
@@ -1472,41 +1834,174 @@ function textoDosCapitulos(capitulos) {
     .join("\n\n");
 }
 
-function trocarClassificacao() {
+// "12,3 MB", ou "40 KB" num arquivo pequeno
+function tamanhoDoArquivo(bytes) {
+  const mega = bytes / (1024 * 1024);
+  if (mega >= 1) return `${mega.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} MB`;
+  return `${Math.max(1, Math.round(bytes / 1024)).toLocaleString("pt-BR")} KB`;
+}
+
+// O livro como está salvo (nada numa memória nova, ou que ainda não é Livro)
+const livroSalvo = () => (edicao.memoria?.tipo === "livro" ? edicao.memoria.livro ?? null : null);
+const livroAntigoNaEdicao = () => edicao.memoria?.tipo === "livro" && edicao.memoria.capitulos?.length > 0;
+
+function mostrarFalhaNoFormulario(texto) {
+  const erro = $("#erro-memoria");
+  erro.textContent = texto;
+  erro.hidden = !texto;
+}
+
+// O PDF: o escolhido (que vai ao salvar), o que o livro já tem, ou nenhum
+function mostrarMiolo() {
+  const texto = $("#livro-miolo-atual");
+  const salvo = livroSalvo()?.miolo;
+  if (edicao.miolo) {
+    const { arquivo, info } = edicao.miolo;
+    texto.textContent = `${arquivo.name}: ${quantasPaginas(info.paginas)}, ${tamanhoDoArquivo(arquivo.size)}. Vai quando você salvar.`;
+  } else if (salvo) {
+    texto.textContent = `${quantasPaginas(salvo.paginas)}, ${tamanhoDoArquivo(salvo.bytes)}.`;
+  } else {
+    texto.textContent = livroAntigoNaEdicao() ? "Nenhum ainda: o livro continua em capítulos." : "Nenhum ainda.";
+  }
+  $("#livro-miolo-escolher").textContent = edicao.miolo || salvo ? "Trocar o PDF" : "Escolher o PDF";
+}
+
+// A miniatura de cada imagem: a escolhida, a que o livro já tem, ou o que aparece sem ela
+function mostrarImagem(parte) {
+  const caixa = $(`.livro-form__imagem[data-parte="${parte}"]`);
+  const escolhida = edicao.imagens[parte];
+  const endereco = escolhida === "tirar" ? null : escolhida?.previa ?? livroSalvo()?.[parte]?.endereco ?? null;
+  const miniatura = caixa.querySelector(".livro-form__miniatura");
+  if (endereco) {
+    const desenho = criar("img");
+    desenho.alt = "";
+    desenho.src = endereco;
+    miniatura.replaceChildren(desenho);
+  } else {
+    miniatura.replaceChildren(criar("span", "livro-form__sem-imagem", IMAGENS_DO_LIVRO.find((i) => i.parte === parte).sem));
+  }
+  caixa.querySelector(".livro-form__tirar").hidden = !endereco;
+  caixa.querySelector(".livro-form__escolher").textContent = endereco ? "Trocar" : "Escolher";
+}
+
+function mostrarLivro() {
+  $("#livro-antigo").hidden = !livroAntigoNaEdicao();
+  mostrarMiolo();
+  for (const { parte } of IMAGENS_DO_LIVRO) mostrarImagem(parte);
+}
+
+function esquecerEscolhas() {
+  for (const escolhida of Object.values(edicao.imagens)) if (escolhida?.previa) URL.revokeObjectURL(escolhida.previa);
+  edicao.miolo = null;
+  edicao.lendoMiolo = null;
+  edicao.imagens = {};
+}
+
+// O PDF escolhido é lido aqui mesmo (as páginas e o tamanho); um arquivo que não serve não fica
+async function escolherMiolo(arquivo) {
+  mostrarFalhaNoFormulario("");
+  if (arquivo.size > LIMITE_DO_MIOLO) return mostrarFalhaNoFormulario(`O PDF passa de 200 MB (tem ${tamanhoDoArquivo(arquivo.size)}).`);
+  $("#livro-miolo-atual").textContent = `Lendo ${arquivo.name}…`;
+  const leitura = lerInfoDoPdf(arquivo);
+  edicao.lendoMiolo = leitura;
+  try {
+    const info = await leitura;
+    if (edicao.lendoMiolo === leitura) edicao.miolo = { arquivo, info };
+  } catch (falha) {
+    if (edicao.lendoMiolo === leitura) mostrarFalhaNoFormulario(falha.message);
+  } finally {
+    if (edicao.lendoMiolo === leitura) edicao.lendoMiolo = null;
+  }
+  mostrarMiolo();
+}
+
+// A imagem escolhida: o tamanho dela (a estante usa a proporção da lombada) e a miniatura
+async function escolherImagem(parte, arquivo) {
+  mostrarFalhaNoFormulario("");
+  if (!TIPOS_DE_IMAGEM.includes(arquivo.type)) return mostrarFalhaNoFormulario("Use imagens PNG, JPG, WEBP, GIF ou AVIF.");
+  if (arquivo.size > LIMITE_DA_IMAGEM) return mostrarFalhaNoFormulario(`A imagem passa de 10 MB (tem ${tamanhoDoArquivo(arquivo.size)}).`);
+  let medidas;
+  try {
+    const desenho = await createImageBitmap(arquivo);
+    medidas = { largura: desenho.width, altura: desenho.height };
+    desenho.close();
+  } catch {
+    return mostrarFalhaNoFormulario(`Não deu para abrir a imagem ${arquivo.name}.`);
+  }
+  const anterior = edicao.imagens[parte];
+  if (anterior?.previa) URL.revokeObjectURL(anterior.previa);
+  edicao.imagens[parte] = { arquivo, ...medidas, previa: URL.createObjectURL(arquivo) };
+  mostrarImagem(parte);
+}
+
+// A que o livro já tem sai ao salvar; a que só foi escolhida, sai agora
+function tirarImagemDoFormulario(parte) {
+  const anterior = edicao.imagens[parte];
+  if (anterior?.previa) URL.revokeObjectURL(anterior.previa);
+  if (livroSalvo()?.[parte]) edicao.imagens[parte] = "tirar";
+  else delete edicao.imagens[parte];
+  mostrarImagem(parte);
+}
+
+// Trocar a classificação pode deixar o texto, ou o PDF, para trás: pergunta antes
+async function trocarClassificacao() {
   const form = formMemoria();
   const nova = form.tipo.value;
-  if (edicao.tipo === "livro" && nova !== "livro") {
-    form.texto.value = textoDosCapitulos(capitulosDoFormulario());
-    mostrarCapitulos([]);
-  } else if (edicao.tipo !== "livro" && nova === "livro") {
-    mostrarCapitulos([{ titulo: "Capítulo 1", texto: form.texto.value.trim() }]);
-    form.texto.value = "";
+  const antiga = edicao.tipo;
+  const confirmar = (titulo, texto) => perguntar({ titulo, texto, confirmar: "Trocar", cancelar: "Cancelar", perigo: true });
+  if (antiga !== "livro" && nova === "livro" && form.texto.value.trim()) {
+    if (!(await confirmar("Trocar para Livro?", "O Livro é um PDF: o texto desta memória sai quando você salvar."))) {
+      form.tipo.value = antiga;
+      return;
+    }
+  }
+  if (antiga === "livro" && nova !== "livro") {
+    if (livroAntigoNaEdicao()) {
+      // O livro antigo: os capítulos viram o texto
+      if (!form.texto.value.trim()) form.texto.value = textoDosCapitulos(edicao.memoria.capitulos);
+    } else if (livroSalvo()?.miolo || edicao.miolo || Object.keys(edicao.imagens).length) {
+      if (!(await confirmar("Deixar de ser Livro?", "O PDF, as imagens e o índice deste livro saem quando você salvar."))) {
+        form.tipo.value = antiga;
+        return;
+      }
+    }
   }
   edicao.tipo = nova;
   mostrarCamposDoTipo();
 }
 
 // O "detalhe" leva o rótulo da classificação e some nas que não têm o campo;
-// no Livro, os capítulos ficam no lugar do texto
+// no Livro, o PDF e as imagens ficam no lugar do texto
 function mostrarCamposDoTipo() {
   const tipo = tipoDeMemoria(formMemoria().tipo.value);
+  const livro = tipo.id === "livro";
   $("#campo-detalhe").hidden = !tipo.detalhe;
   $("#rotulo-detalhe").textContent = tipo.detalhe ?? "";
   $("#ajuda-detalhe").textContent = AJUDA_DO_DETALHE[tipo.id] ?? "";
-  $("#grupo-texto").hidden = tipo.id === "livro";
-  $("#grupo-capitulos").hidden = tipo.id !== "livro";
+  $("#grupo-texto").hidden = livro;
+  $("#ajuda-do-texto").hidden = livro;
+  $("#grupo-livro").hidden = !livro;
+  if (livro) mostrarLivro();
+}
+
+function mostrarTituloDaEdicao() {
+  const alterando = Boolean(edicao.memoria);
+  $("#memoria-form-titulo").textContent = alterando ? "Alterar memória" : "Nova memória";
+  $("#memoria-enviar").textContent = alterando ? "Salvar" : "Escrever";
+  $("#memoria-aviso").hidden = alterando && !edicao.criadaAgora;
+  $("#memoria-apagar").hidden = !alterando;
 }
 
 function abrirEdicao(memoria = null) {
   if (!ehAdmin()) return;
   const form = formMemoria();
   form.reset();
+  esquecerEscolhas();
   edicao.memoria = memoria;
+  edicao.criadaAgora = false;
   $("#erro-memoria").hidden = true;
-  $("#memoria-form-titulo").textContent = memoria ? "Alterar memória" : "Nova memória";
-  $("#memoria-enviar").textContent = memoria ? "Salvar" : "Escrever";
-  $("#memoria-aviso").hidden = Boolean(memoria);
-  $("#memoria-apagar").hidden = !memoria;
+  $("#livro-envio").hidden = true;
+  mostrarTituloDaEdicao();
 
   form.titulo.value = memoria?.titulo ?? "";
   form.tipo.replaceChildren(...TIPOS_DE_MEMORIA.map((t) => new Option(t.nome, t.id)));
@@ -1521,7 +2016,7 @@ function abrirEdicao(memoria = null) {
   form.aprox.checked = Boolean(data?.aprox);
 
   form.texto.value = memoria?.texto ?? "";
-  mostrarCapitulos(memoria?.tipo === "livro" ? memoria.capitulos : []);
+  form.baixar.checked = Boolean(memoria?.livro?.baixar);
   mostrarCamposDoTipo();
 
   $("#dialogo-memoria").showModal();
@@ -1543,6 +2038,7 @@ function dataDoFormulario() {
   return { ano, mes, dia: mes ? Number(form.dia.value) || null : null, aprox: form.aprox.checked };
 }
 
+// Um livro novo (ou que acabou de virar Livro) precisa do PDF; um antigo continua em capítulos sem ele
 function coletarMemoria() {
   const form = formMemoria();
   const titulo = form.titulo.value.trim();
@@ -1550,10 +2046,8 @@ function coletarMemoria() {
   const tipo = tipoDeMemoria(form.tipo.value);
   const dados = { titulo, tipo: tipo.id, data: dataDoFormulario(), detalhe: tipo.detalhe ? form.detalhe.value.trim() : "" };
   if (tipo.id !== "livro") return { ...dados, texto: form.texto.value.trim() };
-  const capitulos = capitulosDoFormulario();
-  const semTitulo = capitulos.findIndex((c) => !c.titulo);
-  if (semTitulo >= 0) throw new Error(`Escreva o título do capítulo ${semTitulo + 1}.`);
-  return { ...dados, capitulos };
+  if (!edicao.miolo && !livroSalvo()?.miolo && !livroAntigoNaEdicao()) throw new Error("Escolha o PDF do miolo do livro.");
+  return { ...dados, baixar: form.baixar.checked };
 }
 
 // Uma falha antes de fechar o formulário aparece nele; depois, num aviso
@@ -1563,33 +2057,93 @@ function mostrarFalha(dialogo, erro, falha) {
   erro.hidden = false;
 }
 
-// Depois de salvar, a leitura mostra a memória como ficou; a memória nova já abre na leitura
+// O andamento do envio do PDF e das imagens, embaixo do formulário
+function mostrarEnvio(rotulo, fracao = null) {
+  const andamento = $("#livro-envio");
+  const barra = andamento.querySelector("progress");
+  andamento.hidden = false;
+  andamento.querySelector(".livro-form__envio-texto").textContent = fracao === null ? `${rotulo}…` : `${rotulo}: ${Math.round(fracao * 100)}%`;
+  if (fracao === null) barra.removeAttribute("value");
+  else barra.value = fracao;
+}
+
+// O PDF e as imagens escolhidas, um de cada vez. O que já foi fica no livro salvo: se um falhar,
+// salvar de novo manda só o que faltou.
+async function enviarArquivosDoLivro(id) {
+  const guardar = (livro) => {
+    if (edicao.memoria) edicao.memoria.livro = livro;
+  };
+  if (edicao.miolo) {
+    const { arquivo, info } = edicao.miolo;
+    mostrarEnvio("Enviando o PDF do miolo", 0);
+    guardar((await api.enviarMiolo(id, arquivo, info, (fracao) => mostrarEnvio("Enviando o PDF do miolo", fracao))).livro);
+    edicao.miolo = null;
+    mostrarMiolo();
+  }
+  for (const { parte, nome } of IMAGENS_DO_LIVRO) {
+    const escolhida = edicao.imagens[parte];
+    if (!escolhida) continue;
+    if (escolhida === "tirar") {
+      mostrarEnvio(`Tirando ${nome}`);
+      guardar((await api.tirarImagem(id, parte)).livro);
+    } else {
+      const rotulo = `Enviando ${nome}`;
+      mostrarEnvio(rotulo, 0);
+      const medidas = { largura: escolhida.largura, altura: escolhida.altura };
+      guardar((await api.enviarImagem(id, parte, escolhida.arquivo, medidas, (fracao) => mostrarEnvio(rotulo, fracao))).livro);
+      URL.revokeObjectURL(escolhida.previa);
+    }
+    delete edicao.imagens[parte];
+    mostrarImagem(parte);
+  }
+}
+
+// Depois de salvar, a leitura mostra a memória como ficou; a memória nova já abre na leitura.
+// Um livro novo é escrito primeiro e recebe os arquivos depois: se um arquivo falhar, o
+// formulário passa a alterar o livro que já existe.
 async function enviarMemoria(evento) {
   evento.preventDefault();
   const dialogo = $("#dialogo-memoria");
   const erro = $("#erro-memoria");
   const enviar = $("#memoria-enviar");
   erro.hidden = true;
-  let dados;
-  try {
-    dados = coletarMemoria();
-  } catch (falha) {
-    return mostrarFalha(dialogo, erro, falha);
-  }
   enviar.disabled = true;
   try {
-    const alterada = edicao.memoria;
-    if (alterada) await api.alterar(alterada.id, dados);
-    const nova = alterada ? null : (await api.escrever(dados)).memoria;
+    if (edicao.lendoMiolo) {
+      mostrarEnvio("Lendo o PDF");
+      await edicao.lendoMiolo.catch(() => {});
+    }
+    let dados;
+    try {
+      dados = coletarMemoria();
+    } catch (falha) {
+      return mostrarFalha(dialogo, erro, falha);
+    }
+    const nova = !edicao.memoria || edicao.criadaAgora;
+    let id = edicao.memoria?.id;
+    if (edicao.memoria) {
+      await api.alterar(id, dados);
+      if (dados.tipo === "livro" && edicao.memoria.tipo !== "livro") {
+        Object.assign(edicao.memoria, { tipo: "livro", capitulos: [], livro: { miolo: null, capa: null, lombada: null, contracapa: null, indice: [], baixar: dados.baixar } });
+      }
+    } else {
+      id = (await api.escrever(dados)).memoria.id;
+      edicao.memoria = { id, titulo: dados.titulo, tipo: dados.tipo, capitulos: [] };
+      if (dados.tipo === "livro") edicao.memoria.livro = { miolo: null, capa: null, lombada: null, contracapa: null, indice: [], baixar: dados.baixar };
+      edicao.criadaAgora = true;
+      mostrarTituloDaEdicao();
+    }
+    if (dados.tipo === "livro") await enviarArquivosDoLivro(id);
     dialogo.close();
     avisoRapido(nova ? "Memória escrita. Ela fica escondida até você revelar." : "Memória salva.");
     await recarregar();
-    if (nova) abrir({ id: nova.id, capitulo: null });
+    if (nova) abrir({ id, capitulo: null });
     else if (navegacao.rota) await mostrarRota(navegacao.rota, { forcar: true });
   } catch (falha) {
     mostrarFalha(dialogo, erro, falha);
   } finally {
     enviar.disabled = false;
+    $("#livro-envio").hidden = true;
   }
 }
 
@@ -1621,30 +2175,48 @@ function configurarEdicao() {
   form.tipo.addEventListener("change", trocarClassificacao);
   $("#memoria-cancelar").addEventListener("click", () => $("#dialogo-memoria").close());
   $("#memoria-apagar").addEventListener("click", apagarMemoria);
-  $("#botao-mais-capitulo").addEventListener("click", adicionarCapitulo);
   $("#citar-texto").addEventListener("click", () => abrirCitar(form.texto));
-  $("#importar-texto").addEventListener("click", () => escolherArquivos(false, importarNoTexto));
-  $("#importar-capitulos").addEventListener("click", () => escolherArquivos(true, importarCapitulos));
+  $("#importar-texto").addEventListener("click", () => escolherArquivos(importarNoTexto));
   const escolha = $("#arquivo-md");
   escolha.addEventListener("change", () => {
     const arquivos = [...escolha.files];
     if (arquivos.length) importacao.aoEscolher?.(arquivos);
   });
+
+  // O livro: o PDF e as imagens
+  const miolo = $("#livro-miolo");
+  $("#livro-miolo-escolher").addEventListener("click", () => {
+    miolo.value = "";
+    miolo.click();
+  });
+  miolo.addEventListener("change", () => {
+    if (miolo.files[0]) escolherMiolo(miolo.files[0]);
+  });
+  for (const caixa of document.querySelectorAll(".livro-form__imagem")) {
+    const parte = caixa.dataset.parte;
+    const entrada = caixa.querySelector("input[type=file]");
+    caixa.querySelector(".livro-form__escolher").addEventListener("click", () => {
+      entrada.value = "";
+      entrada.click();
+    });
+    entrada.addEventListener("change", () => {
+      if (entrada.files[0]) escolherImagem(parte, entrada.files[0]);
+    });
+    caixa.querySelector(".livro-form__tirar").addEventListener("click", () => tirarImagemDoFormulario(parte));
+  }
+  $("#dialogo-memoria").addEventListener("close", esquecerEscolhas);
 }
 
 /* =================================================================
    Importar .md
    -----------------------------------------------------------------
    O texto de um arquivo .md (exportado do Word ou do Google Docs)
-   vai para o formulário: na memória, no capítulo, ou em capítulos
-   novos, um por arquivo. Tudo acontece aqui no navegador; nada vai
-   para o servidor até "Escrever" ou "Salvar".
+   vai para o texto da memória, no formulário. Tudo acontece aqui no
+   navegador; nada vai para o servidor até "Escrever" ou "Salvar".
    ================================================================= */
 
 const LIMITE_DO_ARQUIVO = 5 * 1024 * 1024; // 5 MB
-const LIMITE_DO_TEXTO = 100000; // cada texto e cada capítulo, como no servidor
-const LIMITE_DO_LIVRO = 1000000; // o livro inteiro, como no servidor
-const TITULO_AUTOMATICO = "Capítulo 1"; // o que a troca para Livro põe no primeiro capítulo
+const LIMITE_DO_TEXTO = 100000; // como no servidor
 
 const milhar = (n) => n.toLocaleString("pt-BR");
 
@@ -1862,15 +2434,6 @@ async function lerArquivoDeTexto(arquivo) {
   return texto.includes("�") ? new TextDecoder("windows-1252").decode(bytes) : texto;
 }
 
-// "03 - O cerco.md" vira "O cerco": sem a extensão e sem a numeração do começo
-const tituloDoNome = (nome) =>
-  nome
-    .replace(/\.[^.]*$/, "")
-    .replace(/^\s*\d+\s*[-_.)]\s*/, "")
-    .trim()
-    .slice(0, 120)
-    .trim();
-
 // Lê e converte um arquivo. Todo motivo para não importar vira um erro com a mensagem.
 async function converterArquivo(arquivo, versos) {
   const nome = arquivo.name;
@@ -1881,25 +2444,6 @@ async function converterArquivo(arquivo, versos) {
     throw new Error(`O arquivo ${nome} tem ${milhar(texto.length)} caracteres; o limite é ${milhar(LIMITE_DO_TEXTO)}.`);
   }
   return { nome, titulo, texto };
-}
-
-function conferirLivro(capitulos, caracteres) {
-  if (capitulos > LIMITE_DE_CAPITULOS) {
-    throw new Error(`O livro pode ter no máximo ${LIMITE_DE_CAPITULOS} capítulos, e ficaria com ${capitulos}.`);
-  }
-  if (caracteres > LIMITE_DO_LIVRO) {
-    throw new Error(`O livro inteiro pode ter no máximo ${milhar(LIMITE_DO_LIVRO)} caracteres, e ficaria com ${milhar(caracteres)}.`);
-  }
-}
-
-const textoDoItem = (item) => item.querySelector(".capitulo-form__texto").value.trim();
-const caracteresDe = (itens) => itens.reduce((soma, item) => soma + textoDoItem(item).length, 0);
-
-// O título do capítulo conta como vazio quando está em branco, ou quando é o "Capítulo 1"
-// automático de um capítulo ainda sem texto
-function tituloLivre(item) {
-  const titulo = item.querySelector(".capitulo-form__titulo").value.trim();
-  return !titulo || (titulo === TITULO_AUTOMATICO && !textoDoItem(item));
 }
 
 // Com texto na área, pergunta antes de trocar
@@ -1918,9 +2462,8 @@ async function podeTrocar(area) {
 // cada um diz o que fazer com o que for escolhido
 const importacao = { aoEscolher: null };
 
-function escolherArquivos(varios, aoEscolher) {
+function escolherArquivos(aoEscolher) {
   const escolha = $("#arquivo-md");
-  escolha.multiple = varios;
   escolha.value = "";
   importacao.aoEscolher = aoEscolher;
   escolha.click();
@@ -1935,44 +2478,6 @@ async function importarNoTexto([arquivo]) {
     form.texto.value = texto;
     if (titulo && !form.titulo.value.trim()) form.titulo.value = titulo;
     avisoRapido(`Texto importado de ${nome}.`);
-  } catch (falha) {
-    avisarFalha(falha);
-  }
-}
-
-// Num capítulo: o texto e, se o título estiver vazio, o do arquivo ou o nome dele
-async function importarNoCapitulo(item, [arquivo]) {
-  const area = item.querySelector(".capitulo-form__texto");
-  try {
-    const { nome, titulo, texto } = await converterArquivo(arquivo, false);
-    const outros = [...$("#lista-capitulos").children].filter((outro) => outro !== item);
-    conferirLivro(outros.length + 1, caracteresDe(outros) + texto.length);
-    const livre = tituloLivre(item);
-    if (!(await podeTrocar(area))) return;
-    area.value = texto;
-    if (livre) item.querySelector(".capitulo-form__titulo").value = titulo || tituloDoNome(nome);
-    avisoRapido(`Texto importado de ${nome}.`);
-  } catch (falha) {
-    avisarFalha(falha);
-  }
-}
-
-// Vários arquivos, um capítulo novo para cada, no fim e na ordem dos nomes ("2" antes de "10").
-// Entram todos ou nenhum. Um livro só com um capítulo vazio dá lugar aos importados.
-async function importarCapitulos(arquivos) {
-  const lista = $("#lista-capitulos");
-  try {
-    const ordenados = [...arquivos].sort((a, b) => a.name.localeCompare(b.name, "pt-BR", { numeric: true }));
-    const novos = [];
-    for (const arquivo of ordenados) novos.push(await converterArquivo(arquivo, false));
-    const itens = [...lista.children];
-    const trocarOVazio = itens.length === 1 && !textoDoItem(itens[0]) && tituloLivre(itens[0]);
-    const ficam = trocarOVazio ? [] : itens;
-    conferirLivro(ficam.length + novos.length, caracteresDe(ficam) + novos.reduce((soma, c) => soma + c.texto.length, 0));
-    if (trocarOVazio) itens[0].remove();
-    lista.append(...novos.map(({ nome, titulo, texto }) => campoDoCapitulo({ titulo: titulo || tituloDoNome(nome), texto })));
-    numerarCapitulos();
-    avisoRapido(novos.length === 1 ? "1 capítulo importado." : `${novos.length} capítulos importados.`);
   } catch (falha) {
     avisarFalha(falha);
   }

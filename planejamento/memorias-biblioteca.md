@@ -7,6 +7,8 @@ A entrada da página Memórias deixa de ser uma lista de nomes e vira uma **bibl
 
 A leitura de cada memória, a edição e o "Revelar…" continuam como em `memorias.md` e `memorias-arquivos.md`.
 
+> **Depois (22/11/2026):** o livro em PDF mostra na estante a lombada enviada (na proporção da imagem), com a altura tirada do tamanho da página e, sem a imagem, a largura tirada das páginas. Veja `memorias-livros-pdf.md`, parte 4.
+
 Decisões de 06/11/2026. Uma sessão, a 15.1 (veja "Sessão" no fim).
 
 ## 1. O que a lista traz a mais (`GET /api/memorias`)
