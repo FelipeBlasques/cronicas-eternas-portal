@@ -1,6 +1,8 @@
 # Memórias de Draevor: importar .md e baixar PDF
 
-Duas coisas novas na página Memórias: o administrador **importa** o texto de um arquivo `.md` (no Livro, um arquivo por capítulo), e quem pode ler uma memória **baixa** ela em PDF (no Livro, um capítulo por vez). Decisões fechadas em 29/10/2026. Duas sessões: 8.1 importar e 8.2 PDF (veja "Sessões" no fim). O resto da página continua como em `memorias.md`.
+Duas coisas novas na página Memórias: o administrador **importa** o texto de um arquivo `.md` (no Livro, um arquivo por capítulo), e quem pode ler uma memória **baixa** ela em PDF (no Livro, um capítulo por vez).
+
+> **Depois (22/11/2026):** o Livro virou um PDF (`memorias-livros-pdf.md`). Importar capítulos saiu; o "Baixar PDF" de um capítulo continua só nos livros antigos, e o do livro em PDF é o próprio PDF, se o livro deixar. Decisões fechadas em 29/10/2026. Duas sessões: 8.1 importar e 8.2 PDF (veja "Sessões" no fim). O resto da página continua como em `memorias.md`.
 
 ## Os limites de hoje
 

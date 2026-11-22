@@ -1,0 +1,838 @@
+/* =================================================================
+   O folheador dos livros em PDF (Memórias)
+   -----------------------------------------------------------------
+   A leitura do livro ocupa a altura da tela: o livro aberto no
+   meio, a barra do folheador embaixo e o índice preso à direita.
+   As páginas são canvas desenhados pelo pdf.js; a folha que vira é
+   um elemento com duas faces, girando em 3D em volta da lombada
+   (o folheador.js muda o ângulo a cada quadro). Capa e contracapa
+   sem imagem usam o couro da capa dos livros antigos.
+   ================================================================= */
+
+/* A página da Memórias, com um livro em PDF aberto: a largura toda, e o lado direito para o índice */
+.pagina-memorias--livro {
+  --largura-do-indice: 17.5rem;
+  width: auto;
+  max-width: none;
+  margin: 0;
+  padding: 0.9rem calc(var(--largura-do-indice) + 1rem) 0.4rem clamp(0.75rem, 2vw, 1.5rem);
+}
+
+.leitura--livro {
+  display: flex;
+  flex-direction: column;
+  max-width: none;
+  height: calc(100dvh - var(--altura-topo) - 1.3rem);
+  min-height: 24rem;
+}
+
+/* O nome do livro e a classificação, numa linha só, para sobrar altura para o livro */
+.livro-pdf__cabeca {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.1rem 0.9rem;
+  margin: 0.5rem 0 0;
+}
+
+.livro-pdf__titulo {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-family: var(--fonte-gotica);
+  font-weight: 500;
+  font-size: clamp(1.35rem, 2.6vw, 1.8rem);
+  line-height: 1.1;
+  color: var(--pergaminho);
+  text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.7), 0 6px 26px rgba(0, 0, 0, 0.85);
+}
+
+.livro-pdf__classificacao {
+  margin: 0;
+  font-size: 0.92rem;
+  font-style: italic;
+  color: var(--pergaminho-apagado);
+}
+
+/* Sem o PDF ainda (só o administrador chega aqui) */
+.livro-pdf__sem-miolo {
+  margin: 2.4rem 0 0;
+  font-style: italic;
+  color: var(--pergaminho-apagado);
+}
+
+/* =================================================================
+   O folheador
+   ================================================================= */
+
+.folheador {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  margin-top: 0.4rem;
+  border-radius: var(--raio);
+}
+
+.folheador:focus {
+  outline: none;
+}
+
+.folheador:focus-visible {
+  box-shadow: 0 0 0 1px rgba(196, 106, 53, 0.22);
+}
+
+.folheador__palco {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.folheador--ampliado .folheador__palco {
+  overflow: auto;
+}
+
+/* Um aviso no meio do palco: o PDF que não abriu */
+.folheador__aviso {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 5;
+  width: min(26rem, 90%);
+  margin: 0;
+  padding: 1rem 1.2rem;
+  text-align: center;
+  font-style: italic;
+  color: var(--pergaminho);
+  background: rgba(14, 12, 11, 0.92);
+  border: 1px solid var(--ferro);
+  border-radius: var(--raio);
+  transform: translate(-50%, -50%);
+}
+
+/* -----------------------------------------------------------------
+   O livro aberto: duas páginas (ou uma), a folha que vira por cima
+   e a sombra que ela faz
+   ----------------------------------------------------------------- */
+
+.livro-aberto {
+  --largura-pagina: 300px;
+  --altura-pagina: 420px;
+  --deslocamento: 0px;
+  --dobra: 0;
+  --lidas: 0;
+  position: relative;
+  flex: none;
+  width: calc(2 * var(--largura-pagina));
+  height: var(--altura-pagina);
+  margin: auto;
+  perspective: calc(5 * var(--largura-pagina));
+  transform: translateX(var(--deslocamento));
+  cursor: pointer;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.folheador--sozinha .livro-aberto {
+  width: var(--largura-pagina);
+}
+
+.folheador--ampliado .livro-aberto {
+  cursor: grab;
+  touch-action: pan-x pan-y;
+}
+
+.livro-aberto__lado {
+  position: absolute;
+  top: 0;
+  width: var(--largura-pagina);
+  height: 100%;
+}
+
+.livro-aberto__lado--esquerdo {
+  left: 0;
+}
+
+.livro-aberto__lado--direito {
+  right: 0;
+}
+
+/* O bloco das páginas: na esquerda, engrossa com o que já foi lido; na direita, com o que falta */
+.livro-aberto__lado--esquerdo:not(.livro-aberto__vazio) {
+  box-shadow:
+    -1px 1px 0 -0.5px #e9e0cf,
+    calc(-2px - var(--lidas) * 3px) calc(1px + var(--lidas) * 1px) 0 -1px #d9cdb7,
+    calc(-3px - var(--lidas) * 6px) calc(2px + var(--lidas) * 2px) 0 -1px #c6b79d,
+    -14px 20px 34px -12px rgba(0, 0, 0, 0.85);
+}
+
+.livro-aberto__lado--direito:not(.livro-aberto__vazio) {
+  box-shadow:
+    1px 1px 0 -0.5px #e9e0cf,
+    calc(2px + (1 - var(--lidas)) * 3px) calc(1px + (1 - var(--lidas)) * 1px) 0 -1px #d9cdb7,
+    calc(3px + (1 - var(--lidas)) * 6px) calc(2px + (1 - var(--lidas)) * 2px) 0 -1px #c6b79d,
+    14px 20px 34px -12px rgba(0, 0, 0, 0.85);
+}
+
+/* A curva do papel perto da lombada */
+.livro-aberto__lado::after,
+.livro-aberto__face::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.livro-aberto__lado--esquerdo::after,
+.livro-aberto__face--verso::after {
+  background: linear-gradient(270deg, rgba(40, 25, 10, 0.32) 0, rgba(40, 25, 10, 0.1) 4%, transparent 11%);
+}
+
+.livro-aberto__lado--direito::after,
+.livro-aberto__face--frente::after {
+  background: linear-gradient(90deg, rgba(40, 25, 10, 0.32) 0, rgba(40, 25, 10, 0.1) 4%, transparent 11%);
+}
+
+/* Uma página por vez: a página fica sozinha, sem a lombada ao lado */
+.folheador--sozinha .livro-aberto__lado--direito::after,
+.folheador--sozinha .livro-aberto__face--frente::after {
+  background: linear-gradient(90deg, rgba(40, 25, 10, 0.14) 0, transparent 5%);
+}
+
+.livro-aberto__vazio::after {
+  display: none;
+}
+
+/* A capa e a contracapa ficam sem a curva do papel */
+.livro-aberto__lado:has(> .face--capa, > .face--contracapa, > .face--guarda)::after,
+.livro-aberto__face:has(> .face--capa, > .face--contracapa, > .face--guarda)::after {
+  background: linear-gradient(90deg, rgba(0, 0, 0, 0.28) 0, transparent 6%);
+}
+
+.livro-aberto__lado--esquerdo:has(> .face--capa, > .face--contracapa, > .face--guarda)::after,
+.livro-aberto__face--verso:has(> .face--capa, > .face--contracapa, > .face--guarda)::after {
+  background: linear-gradient(270deg, rgba(0, 0, 0, 0.28) 0, transparent 6%);
+}
+
+/* A folha que vira, em volta da lombada (a borda esquerda dela) */
+.livro-aberto__folha {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 3;
+  width: var(--largura-pagina);
+  height: 100%;
+  transform-origin: left center;
+  transform-style: preserve-3d;
+}
+
+.livro-aberto__face {
+  position: absolute;
+  inset: 0;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  background: #f4efe4;
+}
+
+.livro-aberto__face--verso {
+  transform: rotateY(180deg);
+}
+
+/* A luz na folha: mais escura quanto mais em pé ela está */
+.livro-aberto__face::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background: linear-gradient(90deg, rgba(25, 15, 5, 0.5), rgba(25, 15, 5, 0.15) 55%, rgba(255, 245, 225, 0.12));
+  opacity: calc(var(--dobra) * 0.75);
+}
+
+.livro-aberto__face--verso::before {
+  background: linear-gradient(270deg, rgba(25, 15, 5, 0.5), rgba(25, 15, 5, 0.15) 55%, rgba(255, 245, 225, 0.12));
+}
+
+/* A sombra da folha na página de baixo, do lado em que a folha está */
+.livro-aberto__sombra {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 2;
+  display: none;
+  width: var(--largura-pagina);
+  height: 100%;
+  pointer-events: none;
+  background: linear-gradient(90deg, rgba(0, 0, 0, 0.42), rgba(0, 0, 0, 0.12) 45%, transparent 80%);
+  opacity: var(--dobra);
+}
+
+.livro-aberto--folha-a-esquerda .livro-aberto__sombra {
+  right: auto;
+  left: 0;
+  background: linear-gradient(270deg, rgba(0, 0, 0, 0.42), rgba(0, 0, 0, 0.12) 45%, transparent 80%);
+}
+
+.folheador--virando .livro-aberto__sombra {
+  display: block;
+}
+
+.folheador--sozinha .livro-aberto__sombra {
+  left: 0;
+  right: auto;
+}
+
+/* -----------------------------------------------------------------
+   As faces: páginas do PDF, capa, contracapa, guardas
+   ----------------------------------------------------------------- */
+
+.face {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.face--papel {
+  background: #fbf8f1;
+}
+
+.face__desenho {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* A página ainda sendo desenhada: três pontinhos apagados no meio */
+.face--pagina:not(.face--pronta)::after {
+  content: "…";
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 2.2rem;
+  color: rgba(70, 52, 34, 0.32);
+}
+
+.face--falhou:not(.face--pronta)::after {
+  content: "Esta página não abriu.";
+  padding: 1rem;
+  font-size: 0.95rem;
+  font-style: italic;
+  text-align: center;
+}
+
+.face__imagem {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+}
+
+/* Sem imagem: o couro da capa dos livros antigos, com os cantos de ferro */
+.face--couro {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14% 11% 14% 13%;
+  text-align: center;
+  background:
+    var(--grao),
+    radial-gradient(ellipse 70% 55% at 55% 35%, rgba(150, 100, 60, 0.22), transparent 70%),
+    linear-gradient(160deg, #3a2618 0%, #2a1a10 55%, #1d120b 100%);
+  background-blend-mode: overlay, normal, normal;
+  box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 220, 180, 0.08);
+}
+
+.face--couro::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--moldura-card) center / 100% 100% no-repeat;
+  pointer-events: none;
+}
+
+.face__titulo {
+  position: relative;
+  overflow-wrap: anywhere;
+  font-family: var(--fonte-gotica);
+  font-weight: 500;
+  font-size: calc(var(--largura-pagina) * 0.12);
+  line-height: 1.08;
+  color: var(--pergaminho);
+  text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.8), 0 1px 0 rgba(255, 230, 190, 0.12), 0 4px 18px rgba(0, 0, 0, 0.7);
+}
+
+/* As guardas: o papel marmorizado do verso da capa e da contracapa */
+.face--guarda {
+  background:
+    radial-gradient(ellipse 60% 40% at 18% 22%, rgba(168, 74, 48, 0.42), transparent 70%),
+    radial-gradient(ellipse 50% 60% at 78% 38%, rgba(94, 42, 58, 0.5), transparent 70%),
+    radial-gradient(ellipse 70% 45% at 40% 82%, rgba(176, 122, 64, 0.32), transparent 70%),
+    radial-gradient(ellipse 35% 30% at 70% 85%, rgba(40, 54, 62, 0.45), transparent 70%),
+    var(--grao),
+    #351a15;
+  background-blend-mode: normal, normal, normal, normal, overlay, normal;
+}
+
+/* Editando o índice: o "+ Capítulo aqui" no alto de cada página à vista */
+.face__marcar {
+  position: absolute;
+  left: 50%;
+  top: 0.55rem;
+  z-index: 3;
+  display: none;
+  padding: 0.3rem 0.75rem;
+  white-space: nowrap;
+  color: var(--pergaminho);
+  background: rgba(30, 24, 19, 0.9);
+  border: 1px solid var(--ferro-forte);
+  border-radius: 999px;
+  box-shadow: 0 6px 16px -6px rgba(0, 0, 0, 0.8);
+  transform: translateX(-50%);
+}
+
+.face__marcar:hover {
+  border-color: var(--brasa);
+}
+
+.folheador--editando .face__marcar {
+  display: inline-flex;
+}
+
+.folheador--virando .face__marcar {
+  visibility: hidden;
+}
+
+/* -----------------------------------------------------------------
+   A barra do folheador
+   ----------------------------------------------------------------- */
+
+.folheador__barra {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2rem 1.6rem;
+  padding: 0.35rem 0 0.15rem;
+}
+
+.folheador__navegar,
+.folheador__ferramentas {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+}
+
+.folheador__botao {
+  display: grid;
+  place-items: center;
+  width: 2.3rem;
+  height: 2.3rem;
+  padding: 0;
+  border-bottom: 0;
+}
+
+.folheador__botao:hover:not(:disabled) {
+  color: var(--pergaminho);
+  background: rgba(232, 221, 200, 0.06);
+}
+
+.folheador__botao svg {
+  width: 1.15rem;
+  height: 1.15rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.folheador__botao:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.folheador__botao[hidden] {
+  display: none;
+}
+
+.folheador__rotulo {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0 0.4rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--pergaminho-apagado);
+}
+
+.folheador__pagina {
+  width: 4.2rem;
+  padding: 0.2rem 0.3rem;
+  font: inherit;
+  text-align: center;
+  color: var(--pergaminho);
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--ferro-fraco);
+  border-radius: var(--raio);
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.folheador__pagina::-webkit-outer-spin-button,
+.folheador__pagina::-webkit-inner-spin-button {
+  margin: 0;
+  -webkit-appearance: none;
+}
+
+.folheador__pagina:focus-visible {
+  outline: none;
+  border-color: var(--brasa);
+}
+
+.folheador__abrir-indice {
+  display: none;
+  margin-left: 0.4rem;
+}
+
+/* Só para os leitores de tela: a página que está à vista */
+.folheador__anuncio {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* =================================================================
+   O índice, preso à direita da tela
+   ================================================================= */
+
+.indice-livro {
+  position: fixed;
+  top: var(--altura-topo);
+  right: 0;
+  bottom: 0;
+  z-index: 8;
+  display: flex;
+  flex-direction: column;
+  width: var(--largura-do-indice, 17.5rem);
+  padding: 1.1rem 0.9rem 1.4rem 1rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: linear-gradient(270deg, rgba(14, 12, 11, 0.96), rgba(14, 12, 11, 0.88));
+  border-left: 1px solid var(--ferro-fraco);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+
+.indice-livro__cabeca {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0 0 0.7rem;
+  padding-bottom: 0.55rem;
+  border-bottom: 1px solid var(--ferro-fraco);
+}
+
+.indice-livro__titulo {
+  margin: 0 auto 0 0;
+  font-family: var(--fonte-gotica);
+  font-weight: 500;
+  font-size: 1.55rem;
+  line-height: 1;
+  color: var(--pergaminho);
+}
+
+.indice-livro__editar[hidden],
+.indice-livro__fechar {
+  display: none;
+}
+
+.indice-livro__fechar svg,
+.indice-livro__tirar svg {
+  width: 1rem;
+  height: 1rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.indice-livro__lista {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.indice-livro__lista[hidden] {
+  display: none;
+}
+
+.indice-livro__capitulo {
+  display: flex;
+  align-items: baseline;
+  gap: 0.7rem;
+  width: 100%;
+  padding: 0.5rem 0.55rem 0.5rem 0.65rem;
+  font: inherit;
+  line-height: 1.3;
+  text-align: left;
+  color: var(--pergaminho-apagado);
+  background: none;
+  border: 0;
+  border-radius: var(--raio);
+  cursor: pointer;
+  transition: color 0.2s, background-color 0.2s;
+}
+
+.indice-livro__capitulo:hover {
+  color: var(--pergaminho);
+  background: rgba(232, 221, 200, 0.05);
+}
+
+.indice-livro__capitulo:focus-visible {
+  outline: 2px solid var(--brasa);
+  outline-offset: 1px;
+}
+
+/* O capítulo em que se está: a brasa da página atual */
+.indice-livro__capitulo[aria-current="true"] {
+  color: var(--pergaminho);
+  background: rgba(232, 221, 200, 0.07);
+  box-shadow: inset 2px 0 0 var(--brasa);
+}
+
+.indice-livro__nome {
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+
+.indice-livro__numero {
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--cinza);
+}
+
+.indice-livro__vazio {
+  margin: 0.3rem 0 0;
+  font-style: italic;
+  line-height: 1.45;
+  color: var(--cinza);
+}
+
+/* ---------- Editando (só o administrador) ---------- */
+
+.indice-livro__edicao {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.indice-livro__edicao[hidden] {
+  display: none;
+}
+
+.indice-livro__ajuda {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  color: var(--cinza);
+}
+
+.indice-livro__linhas {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.indice-livro__linha {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.indice-livro__rotulo-pagina {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  font-size: 0.9rem;
+  color: var(--cinza);
+}
+
+.indice-livro__campo-pagina,
+.indice-livro__campo-nome {
+  min-width: 0;
+  padding: 0.3rem 0.35rem;
+  font: inherit;
+  font-size: 0.95rem;
+  color: var(--pergaminho);
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--ferro-fraco);
+  border-radius: var(--raio);
+}
+
+.indice-livro__campo-pagina {
+  width: 3.4rem;
+  text-align: center;
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.indice-livro__campo-pagina::-webkit-outer-spin-button,
+.indice-livro__campo-pagina::-webkit-inner-spin-button {
+  margin: 0;
+  -webkit-appearance: none;
+}
+
+.indice-livro__campo-pagina:focus-visible,
+.indice-livro__campo-nome:focus-visible {
+  outline: none;
+  border-color: var(--brasa);
+}
+
+.indice-livro__tirar {
+  display: grid;
+  place-items: center;
+  width: 1.8rem;
+  height: 1.8rem;
+  padding: 0;
+  border-bottom: 0;
+}
+
+.indice-livro__mais {
+  align-self: flex-start;
+}
+
+.indice-livro__erro {
+  margin: 0;
+}
+
+.indice-livro__erro[hidden] {
+  display: none;
+}
+
+/* Cancelar e Salvar ficam à vista no pé do painel, mesmo com muitos capítulos */
+.indice-livro__acoes {
+  position: sticky;
+  bottom: -1.4rem;
+  display: flex;
+  justify-content: flex-end;
+  gap: 1rem;
+  margin: 0.3rem -0.9rem -1.4rem -1rem;
+  padding: 0.7rem 0.9rem 1.1rem 1rem;
+  background: linear-gradient(180deg, rgba(14, 12, 11, 0.85), #0e0c0b 40%);
+  border-top: 1px solid var(--ferro-fraco);
+}
+
+/* Na prévia, o painel da prévia fica no canto de baixo: o índice termina acima dele */
+body:has(#simulacao:not([hidden])) .indice-livro {
+  bottom: 4.6rem;
+}
+
+/* =================================================================
+   Tela cheia
+   ================================================================= */
+
+.folheador--tela-cheia {
+  margin: 0;
+  padding: 0.6rem calc(var(--largura-do-indice, 17.5rem) + 0.6rem) 0.4rem 0.6rem;
+  background: radial-gradient(ellipse 80% 70% at 45% 45%, #1d1814, #0b0908);
+  border-radius: 0;
+}
+
+.folheador--tela-cheia .indice-livro {
+  top: 0;
+}
+
+body:has(#simulacao:not([hidden])) .folheador--tela-cheia .indice-livro {
+  bottom: 0;
+}
+
+/* =================================================================
+   Tela estreita: o índice abre por cima, pelo botão da barra
+   ================================================================= */
+
+@media (max-width: 900px) {
+  .pagina-memorias--livro {
+    padding-right: clamp(0.75rem, 2vw, 1.5rem);
+  }
+
+  .folheador--tela-cheia {
+    padding-right: 0.6rem;
+  }
+
+  .indice-livro {
+    z-index: 30;
+    width: min(20rem, 88vw);
+    visibility: hidden;
+    transform: translateX(100%);
+    transition: transform 0.25s ease, visibility 0.25s;
+    box-shadow: -24px 0 40px -10px rgba(0, 0, 0, 0.8);
+  }
+
+  .folheador--indice-aberto .indice-livro {
+    visibility: visible;
+    transform: none;
+  }
+
+  .indice-livro__fechar {
+    display: grid;
+    place-items: center;
+    width: 2rem;
+    height: 2rem;
+    padding: 0;
+    border-bottom: 0;
+  }
+
+  .folheador__abrir-indice {
+    display: inline-flex;
+  }
+}
+
+@media (max-width: 760px) {
+  /* A barra lateral vira o rodapé */
+  .leitura--livro {
+    height: calc(100dvh - var(--altura-topo) - 4.9rem - 0.9rem);
+    min-height: 20rem;
+  }
+
+  .indice-livro {
+    bottom: calc(4.9rem + env(safe-area-inset-bottom));
+  }
+
+  body:has(#simulacao:not([hidden])) .indice-livro {
+    bottom: 9.4rem;
+  }
+
+  .folheador--tela-cheia .indice-livro,
+  body:has(#simulacao:not([hidden])) .folheador--tela-cheia .indice-livro {
+    bottom: 0;
+  }
+
+  .folheador__barra {
+    gap: 0.2rem 0.6rem;
+  }
+
+  .folheador__botao {
+    width: 2.1rem;
+    height: 2.1rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .indice-livro {
+    transition: none;
+  }
+}

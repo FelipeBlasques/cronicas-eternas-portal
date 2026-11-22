@@ -9,8 +9,10 @@
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alegreya:ital,wght@0,400;0,500;0,700;1,400;1,500&family=Grenze+Gotisch:wght@400;500;600;700&display=swap">
   <link rel="stylesheet" href="../style.css">
   <link rel="stylesheet" href="memorias.css">
+  <link rel="stylesheet" href="folheador.css">
   <script src="../comum.js" defer></script>
   <script src="../calendario.js" defer></script>
+  <script src="folheador.js" defer></script>
   <script src="memorias.js" defer></script>
 </head>
 <body class="com-barra" data-pagina="memorias" data-raiz="../">
@@ -29,6 +31,15 @@
     <defs>
       <symbol id="vigia" viewBox="0 0 24 24"><path d="M2.5 12C5.5 7.4 8.6 5.6 12 5.6S18.5 7.4 21.5 12C18.5 16.6 15.4 18.4 12 18.4S5.5 16.6 2.5 12Z"/><circle cx="12" cy="12" r="3.2"/><path d="M12 1.8V3.4M12 20.6V22.2"/></symbol>
       <symbol id="icone-oculto" viewBox="0 0 24 24"><path d="M2.5 12C5.5 7.4 8.6 5.6 12 5.6S18.5 7.4 21.5 12C18.5 16.6 15.4 18.4 12 18.4S5.5 16.6 2.5 12ZM4 20L20 4"/></symbol>
+      <!-- A barra do folheador (o livro em PDF) -->
+      <symbol id="folhear-inicio" viewBox="0 0 24 24"><path d="M6 5V19M18 6L11 12L18 18"/></symbol>
+      <symbol id="folhear-voltar" viewBox="0 0 24 24"><path d="M15 5L8 12L15 19"/></symbol>
+      <symbol id="folhear-avancar" viewBox="0 0 24 24"><path d="M9 5L16 12L9 19"/></symbol>
+      <symbol id="folhear-fim" viewBox="0 0 24 24"><path d="M18 5V19M6 6L13 12L6 18"/></symbol>
+      <symbol id="folhear-menos" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L20.5 20.5M7.5 10.5H13.5"/></symbol>
+      <symbol id="folhear-mais" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L20.5 20.5M7.5 10.5H13.5M10.5 7.5V13.5"/></symbol>
+      <symbol id="folhear-tela-cheia" viewBox="0 0 24 24"><path d="M4 9V4H9M15 4H20V9M20 15V20H15M9 20H4V15"/></symbol>
+      <symbol id="folhear-fechar" viewBox="0 0 24 24"><path d="M6 6L18 18M18 6L6 18"/></symbol>
     </defs>
   </svg>
 
@@ -154,25 +165,73 @@
           <textarea id="campo-texto" name="texto" rows="14" maxlength="100000"></textarea>
         </div>
 
-        <!-- No Livro, os capítulos (montados pelo memorias.js) -->
-        <fieldset id="grupo-capitulos" class="grupo" hidden>
-          <legend class="campo__rotulo">Capítulos</legend>
-          <ol id="lista-capitulos" class="capitulos-form"></ol>
-          <div class="capitulos-form__botoes">
-            <button id="botao-mais-capitulo" class="botao botao--leve capitulos-form__mais" type="button">+ Capítulo</button>
-            <button id="importar-capitulos" class="botao botao--leve capitulos-form__mais" type="button">Importar capítulos (.md)</button>
+        <!-- No Livro: o PDF do miolo e as imagens da capa, da lombada e da contracapa -->
+        <fieldset id="grupo-livro" class="grupo livro-form" hidden>
+          <legend class="campo__rotulo">O livro</legend>
+          <p id="livro-antigo" class="livro-form__antigo" hidden>Este livro foi escrito por capítulos e continua assim até você mandar o PDF do miolo. Quando o PDF chegar, os capítulos saem.</p>
+
+          <div class="livro-form__miolo">
+            <div class="livro-form__linha">
+              <span class="livro-form__rotulo">PDF do miolo</span>
+              <button id="livro-miolo-escolher" class="botao botao--leve botao--pequeno" type="button">Escolher o PDF</button>
+            </div>
+            <p id="livro-miolo-atual" class="livro-form__atual" role="status"></p>
+            <input id="livro-miolo" type="file" accept="application/pdf,.pdf" hidden>
+            <span class="campo__ajuda">As páginas como vão para a gráfica, já diagramadas: a página 1 fica à direita, como num livro aberto. Até 200 MB.</span>
           </div>
+
+          <div class="livro-form__imagens">
+            <div class="livro-form__imagem" data-parte="capa">
+              <span class="livro-form__rotulo">Capa</span>
+              <div class="livro-form__miniatura"></div>
+              <div class="livro-form__botoes">
+                <button class="botao botao--leve botao--pequeno livro-form__escolher" type="button" aria-label="Escolher a imagem da capa">Escolher</button>
+                <button class="botao botao--leve botao--pequeno botao--perigo livro-form__tirar" type="button" aria-label="Tirar a imagem da capa" hidden>Tirar</button>
+              </div>
+              <input type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/avif" hidden>
+            </div>
+            <div class="livro-form__imagem livro-form__imagem--lombada" data-parte="lombada">
+              <span class="livro-form__rotulo">Lombada</span>
+              <div class="livro-form__miniatura"></div>
+              <div class="livro-form__botoes">
+                <button class="botao botao--leve botao--pequeno livro-form__escolher" type="button" aria-label="Escolher a imagem da lombada">Escolher</button>
+                <button class="botao botao--leve botao--pequeno botao--perigo livro-form__tirar" type="button" aria-label="Tirar a imagem da lombada" hidden>Tirar</button>
+              </div>
+              <input type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/avif" hidden>
+            </div>
+            <div class="livro-form__imagem" data-parte="contracapa">
+              <span class="livro-form__rotulo">Contracapa</span>
+              <div class="livro-form__miniatura"></div>
+              <div class="livro-form__botoes">
+                <button class="botao botao--leve botao--pequeno livro-form__escolher" type="button" aria-label="Escolher a imagem da contracapa">Escolher</button>
+                <button class="botao botao--leve botao--pequeno botao--perigo livro-form__tirar" type="button" aria-label="Tirar a imagem da contracapa" hidden>Tirar</button>
+              </div>
+              <input type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/avif" hidden>
+            </div>
+          </div>
+          <span class="campo__ajuda">As três são opcionais, em PNG, JPG, WEBP, GIF ou AVIF, até 10 MB cada. A lombada aparece na estante, na proporção da imagem; a capa e a contracapa, no livro fechado.</span>
+
+          <label class="caixa livro-form__baixar">
+            <input name="baixar" type="checkbox">
+            <span class="caixa__marca" aria-hidden="true"></span>
+            <span>Deixar baixar o PDF</span>
+          </label>
+          <span class="campo__ajuda">Quem pode ler o livro ganha o botão "Baixar PDF". Desmarcado, só você baixa. Para mostrar as páginas, o PDF chega ao navegador de quem lê: desmarcar tira o botão, mas não impede quem souber copiar o arquivo.</span>
         </fieldset>
 
-        <!-- A escolha de arquivo que os botões "Importar" abrem -->
+        <!-- A escolha de arquivo que o botão "Importar .md" abre -->
         <input id="arquivo-md" type="file" accept=".md,.markdown,.txt,text/markdown,text/plain" hidden>
 
-        <div class="memoria-form__ajuda">
+        <div id="ajuda-do-texto" class="memoria-form__ajuda">
           <p class="campo__ajuda">Use **negrito** e *itálico*. Uma linha em branco separa parágrafos; linhas que começam com "- " ou "1. " viram lista. No Poema, cada linha é um verso e a linha em branco separa as estrofes.</p>
           <p class="campo__ajuda">Links: o "Citar" põe [[evento:id|título]] ou [[personagem:id|nome]] onde está o cursor. O que vem depois da barra é o que aparece no texto, e pode ser mudado à vontade. Quem não vê o acontecimento ou o personagem lê só o texto, sem link.</p>
         </div>
       </div>
 
+      <div id="livro-envio" class="livro-form__envio" hidden>
+        <progress max="1"></progress>
+        <span class="livro-form__envio-texto" role="status"></span>
+      </div>
       <p id="erro-memoria" class="mensagem-erro" role="alert" hidden></p>
       <div class="dialogo__acoes">
         <button id="memoria-apagar" class="botao botao--leve botao--perigo dialogo__apagar" type="button" hidden>Apagar</button>
@@ -261,7 +320,7 @@
       </select>
     </label>
     <button id="sim-restaurar" class="botao botao--leve" type="button">Restaurar os exemplos</button>
-    <p class="simulacao__nota">Só existe na prévia. As memórias são exemplos para ver o visual: uma de cada classificação, duas escondidas e uma revelada só para a Neia.</p>
+    <p class="simulacao__nota">Só existe na prévia. As memórias são exemplos para ver o visual: uma de cada classificação, duas escondidas e uma revelada só para a Neia. Os dois livros em PDF são feitos aqui mesmo; um PDF escolhido no formulário fica só na memória da página.</p>
   </details>
 </body>
 </html>

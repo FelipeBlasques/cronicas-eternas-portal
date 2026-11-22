@@ -1,6 +1,6 @@
 # Crônicas Eternas: portal
 
-Portal do grupo de RPG em https://cronicaseternas.com. Cada jogador tem conta, vê os personagens na página **Mesas** e entra no mundo certo do Foundry com um clique. Também tem a **Linha do Tempo** do mundo de Draevor, as **Regras da casa**, a galeria de **Personagens**, os **Mapas**, as **Memórias de Draevor** (textos do cenário) e o **Mural** (as notas do Caderno que o grupo prega para todos lerem). As especificações de cada página estão em `planejamento/`.
+Portal do grupo de RPG em https://cronicaseternas.com. Cada jogador tem conta, vê os personagens na página **Mesas** e entra no mundo certo do Foundry com um clique. Também tem a **Linha do Tempo** do mundo de Draevor, as **Regras da casa**, a galeria de **Personagens**, os **Mapas**, as **Memórias de Draevor** (textos do cenário, e livros em PDF que se folheiam) e o **Mural** (as notas do Caderno que o grupo prega para todos lerem). As especificações de cada página estão em `planejamento/`.
 
 ## Onde roda
 
@@ -9,6 +9,8 @@ Portal do grupo de RPG em https://cronicaseternas.com. Cada jogador tem conta, v
 - Os dados ficam fora do código, em `/var/lib/portal`: `dados.json`, `segredo` e `uploads/`. Eles nunca entram no repositório.
 - Os cadernos ficam em `/var/lib/portal/cadernos/` (`<usuario>/caderno.json` e `<usuario>/imagens/`), fora do `dados.json`.
 - O tempo no portal de cada conta (o painel do Mural) fica em `/var/lib/portal/uso.json`, fora do `dados.json`.
+- Os livros em PDF das Memórias (o PDF do miolo e as imagens da capa, da lombada e da contracapa) ficam em `/var/lib/portal/livros/<id da memória>/`, fora do `dados.json`.
+- O nginx do portal aceita envios de até 210 MB (`client_max_body_size 210M`), por causa do PDF do miolo dos livros (até 200 MB). Cada rota confere o próprio limite.
 - As imagens fixas das campanhas (`publico/imagens/`) não estão no repositório. Se existirem no servidor, a atualização não as apaga.
 - O **chat** abre em chat.cronicaseternas.com, servido pelo mesmo portal (porta 3000), num bloco próprio do nginx. As mensagens ficam em `/var/lib/portal/chat/` (`canais/`, `privadas/`, `estado.json`, `reacoes.json`, `fixadas.json` e `imagens/`), fora do `dados.json`; só a estrutura (categorias e canais) e os perfis do chat (`dados.chat.perfis`, com a foto e a faixa em `uploads/`) ficam em `dados.chat`.
 - Os **emojis** do chat usam a fonte Noto Color Emoji, do Google Fonts (como as outras fontes), só no chat. Sem acesso ao Google Fonts, aparecem os do sistema.
@@ -33,7 +35,9 @@ O `unzip -o` só cria e substitui arquivos, nunca apaga. Se uma mudança tirar a
 ## Regras do código (obrigatórias)
 
 - **Sem bibliotecas externas**, nem no servidor nem nas páginas. Nada de npm, CDN ou framework.
-  - **A exceção única:** `publico/chat/livekit-client.js`, cópia do arquivo UMD do pacote npm `livekit-client` (Apache 2.0) numa versão fixa (hoje a **2.23.0**, `dist/livekit-client.umd.js`), com a licença e a versão em `publico/chat/LICENCA-livekit.txt`. Fica no repositório e é servido pelo portal, sem CDN. Ninguém o atualiza de passagem: só numa sessão que peça isso. No servidor do portal continua sem biblioteca nenhuma (o passe do LiveKit é um JWT feito com `node:crypto`).
+  - **As duas exceções**, cópias fixas no repositório, servidas pelo portal, sem CDN. Ninguém as atualiza de passagem: só numa sessão que peça isso. No servidor do portal continua sem biblioteca nenhuma.
+    - `publico/chat/livekit-client.js`: o arquivo UMD do pacote npm `livekit-client` (Apache 2.0), hoje na **2.23.0** (`dist/livekit-client.umd.js`), com a licença e a versão em `publico/chat/LICENCA-livekit.txt`. O passe do LiveKit, no servidor, é um JWT feito com `node:crypto`.
+    - `publico/memorias/pdf.min.js` e `pdf.worker.min.js`: o pdf.js da Mozilla (pacote npm `pdfjs-dist`, Apache 2.0), na **3.11.174** (`build/pdf.min.js` e `build/pdf.worker.min.js`), a última com os arquivos clássicos; da 4 em diante só há módulos, que não abrem na prévia. A licença, a versão e o sha256 ficam em `publico/memorias/LICENCA-pdfjs.txt`. Desenha as páginas dos livros em PDF das Memórias, sempre com `isEvalSupported: false` (o `OPCOES_DO_PDF` do `folheador.js`).
 - **A CSP proíbe script e estilo inline.** Nada de `<script>` com código, atributo `style="..."` ou `<style>` no HTML. Tudo fica em arquivos `.js` e `.css`. Mudar estilo pelo JS com `elemento.style.setProperty(...)` pode.
 - **Nomes no código e textos da interface em português.**
 - Os scripts das páginas são clássicos (não módulos) e usam `defer`, para a prévia funcionar abrindo o arquivo direto no navegador.
@@ -82,7 +86,15 @@ portal/
                     fica no mapa (escala). Os links e o Citar da página vêm das funções do caderno.js, pedido
                     só dentro das funções (const caderno = () => require("./caderno"))
     memorias.js     /api/memorias/... (Memórias de Draevor: textos que só o administrador escreve e revela;
-                    exporta podeLer)
+                    exporta podeLer). O Livro é um PDF: o miolo e as imagens chegam crus, sem formulário, em
+                    PUT /api/memorias/<id>/livro/<miolo|capa|lombada|contracapa> (o administrador; as páginas e o
+                    tamanho delas vêm no endereço, lidos pelo pdf.js no navegador dele); o índice em
+                    PUT .../livro/indice; os arquivos saem por GET .../livro/<arquivo>, só para quem pode ler, com
+                    faixas (Range) para o pdf.js ler só o que precisa, e com ?baixar=1 para salvar (se o livro
+                    deixar). Os livros antigos, escritos por capítulos, continuam assim até o PDF chegar
+    livros.js       os arquivos dos livros em PDF, em livros/<id>/ (fora do dados.json), com nomes aleatórios que
+                    mudam a cada envio: receber o corpo cru com limite, mandar com faixas, apagar, e arrumar as
+                    pastas ao ligar. Só arquivos: quem pode o quê fica no memorias.js
     chat.js         /api/chat/... (Chat: canais, privadas, lidas, personas, perfis, reações, fixadas, GIFs e
                     eventos SSE; a estrutura e os perfis em dados.chat e as mensagens em chat/canais/*.jsonl e
                     chat/privadas/*.jsonl, fora do dados.json; as reações e as fixadas em chat/reacoes.json e
@@ -140,7 +152,12 @@ portal/
     personagens/                 index.html, personagens.js, personagens.css
     mapas/                       index.html, visor.js, mapas.js (a galeria, os lugares, a página do lugar, a escala,
                                  a régua e o medir distância com a viagem do Pathfinder 2e), mapas.css
-    memorias/                    index.html, memorias.js, memorias.css
+    memorias/                    index.html, memorias.js, memorias.css; folheador.js e folheador.css (o livro em PDF
+                                 que se folheia: as páginas do pdf.js, a folha que vira em 3D ao clicar, puxar ou com as
+                                 setas, uma página por vez na tela estreita, o zoom, a tela cheia e o índice preso à
+                                 direita, que o administrador edita ali mesmo; declara criarFolheador, carregarPdfJs,
+                                 OPCOES_DO_PDF e lerInfoDoPdf); pdf.min.js, pdf.worker.min.js e LICENCA-pdfjs.txt (a
+                                 cópia fixa do pdf.js, carregada só quando um livro abre)
     caderno/                     index.html, caderno.js, caderno.css (carrega também ../marcas.js, ../marcas.css,
                                  ../editor-de-marcas.js e ../editor-de-marcas.css); grafo.js (o grafo das notas em
                                  #grafo e #grafo-<id>: o canvas, a simulação por forças e o painel; usa o estado,

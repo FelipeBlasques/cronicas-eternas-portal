@@ -8,11 +8,21 @@
    administrador revelar; para os outros, ela não existe.
    O texto pode mencionar acontecimentos da Linha do Tempo e
    personagens da galeria com links.
+
+   O Livro é um PDF: o miolo, como vai para a gráfica, e as imagens
+   opcionais da capa, da lombada e da contracapa, cada uma enviada
+   crua (sem formulário) para /api/memorias/<id>/livro/<parte>. Os
+   arquivos ficam em livros/<id>/ (veja o servidor/livros.js) e
+   saem pela rota protegida, só para quem pode ler o livro. O índice
+   (a página e o nome de cada capítulo) o administrador monta à mão.
+   Os livros antigos, escritos por capítulos, continuam como estão
+   até o PDF chegar; ninguém escreve capítulos novos.
    ================================================================= */
 
 const crypto = require("node:crypto");
-const { dados, salvarDados, ganchos, ErroHttp, enviarJson, lerJson, texto } = require("./base");
+const { CONFIG, dados, salvarDados, ganchos, ErroHttp, enviarJson, lerJson, texto, TIPOS_IMAGEM } = require("./base");
 const { iniciar: garantirLinha, lerDataDaLinha, podeVer, dataPublica, chaveDaData, textoOpcional, anoDeHoje } = require("./linha");
+const livros = require("./livros");
 
 // As classificações e o rótulo do campo "detalhe" de cada uma (null: não tem o campo)
 const TIPOS = new Map([
@@ -26,8 +36,20 @@ const TIPOS = new Map([
   ["documento", "Emitido por"],
   ["inscricao", "Onde está gravada"],
 ]);
-const LIMITES = { memorias: 500, capitulos: 80, texto: 100000, livro: 1000000, link: 120, inicio: 160 };
-const LIMITE_JSON = 4 * 1024 * 1024; // um livro inteiro, com acentos, passa de 1 MB
+const LIMITES = {
+  memorias: 500,
+  texto: 100000,
+  link: 120,
+  inicio: 160,
+  miolo: 200 * 1024 * 1024, // o PDF do miolo, em bytes (o nginx precisa aceitar um pouco mais)
+  paginas: 5000,
+  indice: 300, // capítulos no índice do livro
+};
+const LIMITE_JSON = 4 * 1024 * 1024; // um texto de 100.000 caracteres, com acentos e links, cabe com folga
+
+// As imagens opcionais do livro; sem a capa e a contracapa, o folheador desenha o couro, e sem
+// a lombada, a estante desenha uma
+const PARTES_DO_LIVRO = ["capa", "lombada", "contracapa"];
 
 // Uma menção no texto: [[evento:<id>|o que aparece]] ou [[personagem:<id>|o que aparece]]
 const REGEX_LINK = /\[\[(evento|personagem):([^\]|\n]+)\|([^\]\n]*)\]\]/g;
@@ -52,6 +74,53 @@ function cargoDe(conta) {
 
 const escondida = () => ({ todos: null, contas: {} });
 
+/* ---------- O livro em PDF ---------- */
+
+// miolo: { arquivo, paginas, largura, altura (da página 1, em pontos), bytes } ou null;
+// capa, lombada, contracapa: { arquivo, largura, altura (em pixels) } ou null;
+// indice: [{ pagina, titulo }], em ordem de página; baixar: quem lê pode baixar o PDF
+const livroVazio = () => ({ miolo: null, capa: null, lombada: null, contracapa: null, indice: [], baixar: false });
+
+// O livro antigo, escrito por capítulos no formulário: continua assim até o PDF do miolo chegar
+const livroAntigo = (m) => m.tipo === "livro" && m.capitulos.length > 0;
+
+const numeroEntre = (valor, minimo, maximo) => typeof valor === "number" && Number.isFinite(valor) && valor >= minimo && valor <= maximo;
+const inteiroEntre = (valor, minimo, maximo) => Number.isInteger(valor) && valor >= minimo && valor <= maximo;
+
+// Confere o livro salvo; o que não estiver no formato sai (um arquivo que falta, um capítulo
+// do índice sem página). Devolve o livro certo.
+function livroConferido(livro) {
+  const certo = livroVazio();
+  if (!livro || typeof livro !== "object") return certo;
+  const miolo = livro.miolo;
+  if (
+    miolo &&
+    livros.arquivoValido(miolo.arquivo) &&
+    inteiroEntre(miolo.paginas, 1, LIMITES.paginas) &&
+    numeroEntre(miolo.largura, 1, 20000) &&
+    numeroEntre(miolo.altura, 1, 20000)
+  ) {
+    certo.miolo = { arquivo: miolo.arquivo, paginas: miolo.paginas, largura: miolo.largura, altura: miolo.altura, bytes: Number(miolo.bytes) || 0 };
+  }
+  for (const parte of PARTES_DO_LIVRO) {
+    const imagem = livro[parte];
+    if (imagem && livros.arquivoValido(imagem.arquivo) && inteiroEntre(imagem.largura, 1, 20000) && inteiroEntre(imagem.altura, 1, 20000)) {
+      certo[parte] = { arquivo: imagem.arquivo, largura: imagem.largura, altura: imagem.altura };
+    }
+  }
+  if (Array.isArray(livro.indice) && certo.miolo) {
+    certo.indice = livro.indice
+      .filter((e) => e && inteiroEntre(e.pagina, 1, certo.miolo.paginas) && typeof e.titulo === "string" && e.titulo.trim())
+      .map((e) => ({ pagina: e.pagina, titulo: e.titulo.trim().slice(0, 120) }))
+      .slice(0, LIMITES.indice);
+  }
+  certo.baixar = livro.baixar === true;
+  return certo;
+}
+
+// Os arquivos que o livro usa agora
+const arquivosDoLivro = (livro) => [livro?.miolo, ...PARTES_DO_LIVRO.map((parte) => livro?.[parte])].filter(Boolean).map((a) => a.arquivo);
+
 // Cria a lista na primeira vez e confere o formato do que está salvo.
 // Devolve true quando precisou mudar alguma coisa.
 function garantirMemorias() {
@@ -70,7 +139,26 @@ function garantirMemorias() {
       m.capitulos = [];
       mudou = true;
     }
+    // Todo Livro tem o "livro" (o antigo também, vazio até o PDF chegar); as outras classificações, não
+    if (m.tipo === "livro") {
+      const certo = livroConferido(m.livro);
+      if (JSON.stringify(certo) !== JSON.stringify(m.livro)) {
+        m.livro = certo;
+        mudou = true;
+      }
+    } else if ("livro" in m) {
+      delete m.livro;
+      mudou = true;
+    }
   }
+  return mudou;
+}
+
+// Ao ligar o portal: confere os dados e arruma as pastas dos livros (sem esperar)
+function iniciarMemorias() {
+  const mudou = garantirMemorias();
+  const emUso = new Map(dados.memorias.filter((m) => m.tipo === "livro").map((m) => [m.id, new Set(arquivosDoLivro(m.livro))]));
+  livros.arrumarPastas(emUso).catch((erro) => console.error("Não foi possível arrumar as pastas dos livros:", erro));
   return mudou;
 }
 
@@ -185,8 +273,43 @@ function citaveis() {
   return { acontecimentos, personagens };
 }
 
+/* ---------- O livro, para a página ---------- */
+
+// Os arquivos saem pela rota protegida, com o nome do arquivo no fim (ele muda a cada envio)
+const enderecoDoArquivo = (m, arquivo) => `/api/memorias/${encodeURIComponent(m.id)}/livro/${arquivo}`;
+
+function imagemPublica(m, parte) {
+  const imagem = m.livro?.[parte];
+  return imagem ? { endereco: enderecoDoArquivo(m, imagem.arquivo), largura: imagem.largura, altura: imagem.altura } : null;
+}
+
+// Na estante: o livro antigo leva quantos capítulos tem; o de PDF, as páginas (0 sem o miolo),
+// o tamanho da página e a imagem da lombada
+function livroNaLista(m) {
+  if (livroAntigo(m)) return { capitulos: m.capitulos.length };
+  const miolo = m.livro.miolo;
+  return {
+    paginas: miolo?.paginas ?? 0,
+    formato: miolo ? { largura: miolo.largura, altura: miolo.altura } : null,
+    lombada: imagemPublica(m, "lombada"),
+  };
+}
+
+// Na leitura: o PDF, as imagens, o índice e se quem lê pode baixar o PDF
+function livroPublico(m) {
+  const miolo = m.livro.miolo;
+  return {
+    miolo: miolo
+      ? { endereco: enderecoDoArquivo(m, miolo.arquivo), paginas: miolo.paginas, largura: miolo.largura, altura: miolo.altura, bytes: miolo.bytes }
+      : null,
+    ...Object.fromEntries(PARTES_DO_LIVRO.map((parte) => [parte, imagemPublica(m, parte)])),
+    indice: m.livro.indice.map((e) => ({ pagina: e.pagina, titulo: e.titulo })),
+    baixar: m.livro.baixar,
+  };
+}
+
 // A lista vai sem os textos, só com o que a biblioteca precisa: o começo do texto e, no Livro,
-// quantos capítulos ele tem
+// o que a lombada precisa
 function dadosDasMemorias(conta) {
   const memorias = dados.memorias
     .filter((m) => podeLer(conta, m))
@@ -198,7 +321,7 @@ function dadosDasMemorias(conta) {
         data: m.data ? dataPublica(m.data, true) : null,
         detalhe: TIPOS.get(m.tipo) ? m.detalhe || "" : "",
       };
-      if (m.tipo === "livro") item.capitulos = m.capitulos.length;
+      if (m.tipo === "livro") Object.assign(item, livroNaLista(m));
       else item.inicio = inicioDoTexto(m.texto, m.tipo === "poema");
       item.reveladaEm = reveladaEm(m, conta);
       if (conta.admin) Object.assign(item, { alteradoEm: m.alteradoEm, revelacao: revelacaoPublica(m) });
@@ -221,8 +344,10 @@ function memoriaPublica(m, conta) {
     data: m.data ? dataPublica(m.data, true) : null,
     detalhe: TIPOS.get(m.tipo) ? m.detalhe || "" : "",
   };
-  if (m.tipo === "livro") publica.capitulos = m.capitulos.map((c) => ({ titulo: c.titulo, texto: c.texto }));
-  else publica.texto = m.texto;
+  if (m.tipo === "livro") {
+    publica.livro = livroPublico(m);
+    if (livroAntigo(m)) publica.capitulos = m.capitulos.map((c) => ({ titulo: c.titulo, texto: c.texto }));
+  } else publica.texto = m.texto;
   publica.reveladaEm = reveladaEm(m, conta);
   if (conta.admin) publica.revelacao = revelacaoPublica(m);
   return publica;
@@ -248,27 +373,9 @@ function textoDaMemoria(valor, campo) {
   return limpo;
 }
 
-function capitulosDoLivro(lista) {
-  if (!Array.isArray(lista) || !lista.length) throw new ErroHttp(400, "O livro precisa ter pelo menos um capítulo.");
-  if (lista.length > LIMITES.capitulos) {
-    throw new ErroHttp(400, `O livro pode ter no máximo ${LIMITES.capitulos} capítulos.`);
-  }
-  let total = 0;
-  const capitulos = lista.map((bruto, i) => {
-    const capitulo = bruto && typeof bruto === "object" ? bruto : {};
-    const titulo = texto(capitulo.titulo, `Título do capítulo ${i + 1}`, 120);
-    const textoDoCapitulo = textoDaMemoria(capitulo.texto, `Texto do capítulo ${i + 1}`);
-    total += textoDoCapitulo.length;
-    return { titulo, texto: textoDoCapitulo };
-  });
-  if (total > LIMITES.livro) {
-    throw new ErroHttp(400, `O livro inteiro pode ter no máximo ${LIMITES.livro} caracteres.`);
-  }
-  return capitulos;
-}
-
 // Confere e limpa o que veio do formulário de uma memória.
-// No Livro vale "capitulos" e o texto fica vazio; nos outros, o contrário.
+// No Livro não há texto: o PDF e as imagens vão pelas rotas do livro, e do formulário vem só o
+// "baixar". Os capítulos de um livro antigo ficam como estão (quem decide é o alterarMemoria).
 // O "detalhe" só fica nas classificações que têm o campo.
 function valoresDaMemoria(corpo) {
   const titulo = texto(corpo.titulo, "Título", 120);
@@ -279,8 +386,8 @@ function valoresDaMemoria(corpo) {
   const data = corpo.data ? lerDataDaLinha(corpo.data, anoDeHoje(), true) : null;
   const rotulo = TIPOS.get(tipo);
   const detalhe = rotulo ? textoOpcional(corpo.detalhe, rotulo, 120).replace(/\s*\n\s*/g, " ") : "";
-  if (tipo === "livro") return { titulo, tipo, data, detalhe, texto: "", capitulos: capitulosDoLivro(corpo.capitulos) };
-  return { titulo, tipo, data, detalhe, texto: textoDaMemoria(corpo.texto, "Texto"), capitulos: [] };
+  if (tipo === "livro") return { titulo, tipo, data, detalhe, texto: "", baixar: corpo.baixar === true };
+  return { titulo, tipo, data, detalhe, texto: textoDaMemoria(corpo.texto, "Texto") };
 }
 
 // Repete usuários à vontade; uma conta que não existe, ou de administrador, é recusada
@@ -318,7 +425,137 @@ async function tratarMemorias(req, res, rota, metodo, conta) {
     }
     if (id && acao === "revelacao" && metodo === "PUT") return mudarRevelacao(req, res, conta, id);
   }
+  if (id && acao === "livro" && resto.length === 1) return tratarLivro(req, res, conta, metodo, id, resto[0]);
   throw new ErroHttp(404, "Endereço não encontrado.");
+}
+
+/* ---------- As rotas do livro: /api/memorias/<id>/livro/<parte ou arquivo> ---------- */
+
+// GET <arquivo>: o PDF ou uma imagem, para quem pode ler (com ?baixar=1, o PDF para salvar).
+// Só o administrador: PUT miolo, PUT e DELETE capa/lombada/contracapa e PUT indice.
+async function tratarLivro(req, res, conta, metodo, id, alvo) {
+  if (metodo === "GET" || metodo === "HEAD") return mandarArquivoDoLivro(req, res, conta, id, alvo);
+  exigirAdmin(conta);
+  const memoria = memoriaVisivel(conta, id);
+  if (memoria.tipo !== "livro") throw new ErroHttp(400, "Essa memória não é um livro.");
+  if (alvo === "miolo" && metodo === "PUT") return receberMiolo(req, res, conta, memoria);
+  if (PARTES_DO_LIVRO.includes(alvo) && metodo === "PUT") return receberImagem(req, res, memoria, alvo);
+  if (PARTES_DO_LIVRO.includes(alvo) && metodo === "DELETE") return tirarImagem(res, memoria, alvo);
+  if (alvo === "indice" && metodo === "PUT") return salvarIndice(req, res, memoria);
+  throw new ErroHttp(404, "Endereço não encontrado.");
+}
+
+const parametrosDe = (req) => new URL(req.url, "http://portal.local").searchParams;
+
+async function mandarArquivoDoLivro(req, res, conta, id, arquivo) {
+  const memoria = memoriaVisivel(conta, id);
+  if (memoria.tipo !== "livro" || !arquivosDoLivro(memoria.livro).includes(arquivo)) {
+    throw new ErroHttp(404, "Esse arquivo não existe.");
+  }
+  const baixar = parametrosDe(req).get("baixar") === "1";
+  if (baixar) {
+    if (arquivo !== memoria.livro.miolo?.arquivo) throw new ErroHttp(404, "Esse arquivo não existe.");
+    if (!conta.admin && !memoria.livro.baixar) throw new ErroHttp(403, "Este livro não pode ser baixado.", "proibido");
+  }
+  return livros.mandarArquivo(req, res, memoria.id, arquivo, { baixarComo: baixar ? `${memoria.titulo}.pdf` : null });
+}
+
+// Um número do endereço (?paginas=240&largura=419.5...), entre os limites
+function numeroDoEndereco(parametros, nome, { minimo, maximo, inteiro, rotulo }) {
+  const valor = Number(parametros.get(nome));
+  const certo = inteiro ? inteiroEntre(valor, minimo, maximo) : numeroEntre(valor, minimo, maximo);
+  if (!parametros.has(nome) || !certo) throw new ErroHttp(400, `Não deu para ler ${rotulo} do arquivo. Escolha-o de novo.`);
+  return inteiro ? valor : Math.round(valor * 100) / 100;
+}
+
+// Enquanto o arquivo chegava, a memória pode ter sido apagada ou deixado de ser livro
+function conferirQueAindaELivro(memoria, arquivo) {
+  if (dados.memorias.includes(memoria) && memoria.tipo === "livro") return;
+  livros.apagarArquivo(memoria.id, arquivo);
+  throw new ErroHttp(409, "O livro mudou enquanto o arquivo chegava. Abra o livro de novo.");
+}
+
+// O PDF do miolo, cru (Content-Type: application/pdf). Quantas páginas ele tem e o tamanho da
+// página 1 vêm no endereço: o navegador do administrador leu com o pdf.js antes de mandar.
+// Com o PDF, um livro antigo deixa os capítulos; o índice perde o que passou da última página.
+async function receberMiolo(req, res, conta, memoria) {
+  if (!String(req.headers["content-type"] || "").startsWith("application/pdf")) {
+    throw new ErroHttp(415, "Mande o miolo em PDF.");
+  }
+  const parametros = parametrosDe(req);
+  const paginas = numeroDoEndereco(parametros, "paginas", { minimo: 1, maximo: LIMITES.paginas, inteiro: true, rotulo: "as páginas" });
+  const largura = numeroDoEndereco(parametros, "largura", { minimo: 1, maximo: 20000, rotulo: "o tamanho da página" });
+  const altura = numeroDoEndereco(parametros, "altura", { minimo: 1, maximo: 20000, rotulo: "o tamanho da página" });
+  const { arquivo, bytes } = await livros.receberArquivo(req, memoria.id, "miolo", ".pdf", {
+    limite: LIMITES.miolo,
+    inicioValido: (inicio) => inicio.includes("%PDF-"),
+    mensagemDoTipo: "Esse arquivo não é um PDF.",
+  });
+  conferirQueAindaELivro(memoria, arquivo);
+  const antigo = memoria.livro.miolo?.arquivo;
+  memoria.livro.miolo = { arquivo, paginas, largura, altura, bytes };
+  memoria.livro.indice = memoria.livro.indice.filter((e) => e.pagina <= paginas);
+  memoria.capitulos = [];
+  memoria.alteradoEm = carimbo();
+  await salvarDados();
+  if (antigo) await livros.apagarArquivo(memoria.id, antigo);
+  console.log(`${conta.usuario} mandou o PDF do livro "${memoria.titulo}" (${paginas} páginas)`);
+  enviarJson(res, 200, { livro: livroPublico(memoria) });
+}
+
+// A capa, a lombada ou a contracapa, crua (Content-Type da imagem). A largura e a altura da imagem,
+// em pixels, vêm no endereço; a estante usa a proporção da lombada.
+async function receberImagem(req, res, memoria, parte) {
+  const tipo = String(req.headers["content-type"] || "").split(";")[0].trim().toLowerCase();
+  const extensao = TIPOS_IMAGEM[tipo];
+  if (!extensao) throw new ErroHttp(415, "Use imagens PNG, JPG, WEBP, GIF ou AVIF.");
+  const parametros = parametrosDe(req);
+  const largura = numeroDoEndereco(parametros, "largura", { minimo: 1, maximo: 20000, inteiro: true, rotulo: "o tamanho da imagem" });
+  const altura = numeroDoEndereco(parametros, "altura", { minimo: 1, maximo: 20000, inteiro: true, rotulo: "o tamanho da imagem" });
+  const { arquivo } = await livros.receberArquivo(req, memoria.id, parte, extensao, {
+    limite: CONFIG.maxImagem,
+    inicioValido: () => true,
+    mensagemDoTipo: "",
+  });
+  conferirQueAindaELivro(memoria, arquivo);
+  const antigo = memoria.livro[parte]?.arquivo;
+  memoria.livro[parte] = { arquivo, largura, altura };
+  memoria.alteradoEm = carimbo();
+  await salvarDados();
+  if (antigo) await livros.apagarArquivo(memoria.id, antigo);
+  enviarJson(res, 200, { livro: livroPublico(memoria) });
+}
+
+async function tirarImagem(res, memoria, parte) {
+  const antigo = memoria.livro[parte]?.arquivo;
+  if (antigo) {
+    memoria.livro[parte] = null;
+    memoria.alteradoEm = carimbo();
+    await salvarDados();
+    await livros.apagarArquivo(memoria.id, antigo);
+  }
+  enviarJson(res, 200, { livro: livroPublico(memoria) });
+}
+
+// O índice inteiro de uma vez: [{ pagina, titulo }], em qualquer ordem. Fica em ordem de página
+// (capítulos na mesma página ficam na ordem em que vieram).
+async function salvarIndice(req, res, memoria) {
+  const corpo = await lerJson(req, LIMITE_JSON);
+  const miolo = memoria.livro.miolo;
+  if (!miolo) throw new ErroHttp(400, "Mande o PDF do miolo antes de montar o índice.");
+  if (!Array.isArray(corpo.indice)) throw new ErroHttp(400, "Mande o índice como uma lista.");
+  if (corpo.indice.length > LIMITES.indice) throw new ErroHttp(400, `O índice pode ter no máximo ${LIMITES.indice} capítulos.`);
+  const indice = corpo.indice.map((bruto, i) => {
+    const entrada = bruto && typeof bruto === "object" ? bruto : {};
+    if (!inteiroEntre(entrada.pagina, 1, miolo.paginas)) {
+      throw new ErroHttp(400, `A página do capítulo ${i + 1} do índice precisa ser de 1 a ${miolo.paginas}.`);
+    }
+    return { pagina: entrada.pagina, titulo: texto(entrada.titulo, `nome do capítulo ${i + 1} do índice`, 120) };
+  });
+  memoria.livro.indice = indice.map((e, i) => ({ ...e, i })).sort((a, b) => a.pagina - b.pagina || a.i - b.i).map(({ pagina, titulo }) => ({ pagina, titulo }));
+  memoria.alteradoEm = carimbo();
+  await salvarDados();
+  enviarJson(res, 200, { livro: livroPublico(memoria) });
 }
 
 function lerMemoria(res, conta, id) {
@@ -326,10 +563,10 @@ function lerMemoria(res, conta, id) {
   enviarJson(res, 200, { memoria: memoriaPublica(memoria, conta), links: linksPara(conta, textosDe(memoria)) });
 }
 
-// Toda memória nasce escondida
+// Toda memória nasce escondida. O Livro nasce sem o PDF: ele vem depois, pela rota do miolo.
 async function escreverMemoria(req, res, conta) {
   exigirAdmin(conta);
-  const valores = valoresDaMemoria(await lerJson(req, LIMITE_JSON));
+  const { baixar, ...valores } = valoresDaMemoria(await lerJson(req, LIMITE_JSON));
   if (dados.memorias.length >= LIMITES.memorias) {
     throw new ErroHttp(400, `Podem existir no máximo ${LIMITES.memorias} memórias.`);
   }
@@ -337,24 +574,40 @@ async function escreverMemoria(req, res, conta) {
   const memoria = {
     id: novoId("mem-", new Set(dados.memorias.map((m) => m.id))),
     ...valores,
+    capitulos: [],
     revelacao: escondida(),
     criadoEm: quando,
     alteradoEm: quando,
   };
+  if (memoria.tipo === "livro") memoria.livro = { ...livroVazio(), baixar };
   dados.memorias.push(memoria);
   await salvarDados();
   console.log(`${conta.usuario} escreveu nas Memórias de Draevor: ${memoria.titulo}`);
   enviarJson(res, 201, { memoria: { id: memoria.id } });
 }
 
-// Alterar não mexe na revelação
+// Alterar não mexe na revelação. Num Livro, os capítulos de um livro antigo e os arquivos ficam
+// como estão. Trocar para outra classificação apaga o PDF e as imagens (o texto de um livro antigo
+// vem do formulário, com os capítulos juntos); trocar para Livro deixa o texto para trás.
 async function alterarMemoria(req, res, conta, id) {
   exigirAdmin(conta);
-  const valores = valoresDaMemoria(await lerJson(req, LIMITE_JSON));
+  const { baixar, ...valores } = valoresDaMemoria(await lerJson(req, LIMITE_JSON));
   const memoria = memoriaVisivel(conta, id);
+  const deixaDeSerLivro = memoria.tipo === "livro" && valores.tipo !== "livro";
+  if (valores.tipo === "livro") {
+    if (memoria.tipo !== "livro") {
+      memoria.capitulos = [];
+      memoria.livro = livroVazio();
+    }
+    memoria.livro.baixar = baixar;
+  } else {
+    memoria.capitulos = [];
+    delete memoria.livro;
+  }
   Object.assign(memoria, valores);
   memoria.alteradoEm = carimbo();
   await salvarDados();
+  if (deixaDeSerLivro) await livros.apagarLivro(memoria.id);
   enviarJson(res, 200, { ok: true });
 }
 
@@ -363,6 +616,7 @@ async function apagarMemoria(res, conta, id) {
   const memoria = memoriaVisivel(conta, id);
   dados.memorias = dados.memorias.filter((m) => m !== memoria);
   await salvarDados();
+  await livros.apagarLivro(memoria.id);
   console.log(`${conta.usuario} apagou das Memórias de Draevor: ${memoria.titulo}`);
   enviarJson(res, 200, { ok: true });
 }
@@ -373,6 +627,9 @@ async function mudarRevelacao(req, res, conta, id) {
   exigirAdmin(conta);
   const corpo = await lerJson(req, LIMITE_JSON);
   const memoria = memoriaVisivel(conta, id);
+  if (corpo.para !== "ninguem" && memoria.tipo === "livro" && !livroAntigo(memoria) && !memoria.livro.miolo) {
+    throw new ErroHttp(400, "Mande o PDF do miolo antes de revelar o livro.");
+  }
   const atual = memoria.revelacao;
   const agora = carimbo();
   if (corpo.para === "ninguem") {
@@ -412,6 +669,6 @@ ganchos.renomearConta.push(renomearNasMemorias);
 ganchos.excluirConta.push(desligarContaDasMemorias);
 
 // Os endereços /api/memorias/... são desta página. "iniciar" confere os dados ao ligar o portal
-// e devolve true quando precisou mudar alguma coisa. Os links servem também à página Personagens;
-// "podeLer" serve aos links do Caderno.
-module.exports = { prefixo: "/api/memorias", tratar: tratarMemorias, iniciar: garantirMemorias, linksPara, conferirLinks, podeLer };
+// (e arruma as pastas dos livros) e devolve true quando precisou mudar alguma coisa. Os links
+// servem também à página Personagens; "podeLer" serve aos links do Caderno.
+module.exports = { prefixo: "/api/memorias", tratar: tratarMemorias, iniciar: iniciarMemorias, linksPara, conferirLinks, podeLer };
